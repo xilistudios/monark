@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri"
+    "preview": "vitepreview",
+    "tauri": "tauri",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml -p monark_lib"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
