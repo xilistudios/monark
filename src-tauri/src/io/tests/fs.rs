@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::{self, Read, Write};
-use crate::io::error;
 use crate::io::error::IoError;
 use crate::io::fs::{
     read_file,
