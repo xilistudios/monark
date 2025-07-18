@@ -79,3 +79,55 @@ pub fn create_vault(
     Ok(())
 }
 
+pub fn open_vault(
+    file_path: String,
+    password: String,
+) -> Result<Vault, CommandError> {
+    // 1. Read VaultFile from disk
+    let vault_file = io::vault::read_vault(file_path)?;
+
+    // 2. Derive KDF Key from Password using stored Argon2 params
+    let user_salt = URL_SAFE_NO_PAD
+        .decode(&vault_file.argon2_params.salt)
+        .map_err(|e| CommandError::Crypto(format!("Failed to decode salt: {}", e)))?;
+    
+    let kdf_key = crypto::argon2::derive_key_argon2id(
+        password.as_bytes(),
+        &user_salt,
+        vault_file.argon2_params.memory_cost_kib,
+        vault_file.argon2_params.iterations,
+        vault_file.argon2_params.parallelism,
+        32, // 32 bytes for KDF key
+    )?;
+
+    // 3. Decrypt Master Key using KDF Key
+    let mk_nonce = URL_SAFE_NO_PAD
+        .decode(&vault_file.credentials.nonce)
+        .map_err(|e| CommandError::Crypto(format!("Failed to decode master key nonce: {}", e)))?;
+    
+    let mk_ciphertext = URL_SAFE_NO_PAD
+        .decode(&vault_file.credentials.ciphertext)
+        .map_err(|e| CommandError::Crypto(format!("Failed to decode master key ciphertext: {}", e)))?;
+    
+    let master_key_vec = crypto::chacha::decrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &mk_ciphertext)?;
+    let master_key: [u8; 32] = master_key_vec.try_into()
+        .map_err(|_| CommandError::Crypto("Invalid decrypted master key length".to_string()))?;
+
+    // 4. Decrypt Vault using Master Key
+    let vault_nonce = URL_SAFE_NO_PAD
+        .decode(&vault_file.vault.nonce)
+        .map_err(|e| CommandError::Crypto(format!("Failed to decode vault nonce: {}", e)))?;
+    
+    let vault_ciphertext = URL_SAFE_NO_PAD
+        .decode(&vault_file.vault.ciphertext)
+        .map_err(|e| CommandError::Crypto(format!("Failed to decode vault ciphertext: {}", e)))?;
+    
+    let vault_json_bytes = crypto::chacha::decrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_ciphertext)?;
+
+    // 5. Deserialize Vault
+    let vault: Vault = serde_json::from_slice(&vault_json_bytes)
+        .map_err(|e| CommandError::Io(format!("Failed to deserialize vault: {}", e)))?;
+
+    Ok(vault)
+}
+
