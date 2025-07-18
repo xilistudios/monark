@@ -9,6 +9,7 @@ pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
         .map_err(|e| CommandError::Io(format!("Failed to read vault file: {}", e)))?;
 
     // 2. Validate the signature first
+    // The signature is appended to the content, so we pass the entire file content to the validation function.
     if !io::signature::is_valid_signature(&signed_content) {
         return Err(CommandError::Io("Invalid vault file signature".to_string()));
     }
