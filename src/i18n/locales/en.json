@@ -1,1 +1,56 @@
-{}
+{
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "resetButton": "Reset to Defaults",
+    "backButton": "Back to Home",
+    "errors": {
+      "invalidLanguage": "Invalid language selection"
+    },
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "cupcake": "Cupcake",
+      "bumblebee": "Bumblebee",
+      "emerald": "Emerald",
+      "corporate": "Corporate",
+      "synthwave": "Synthwave",
+      "retro": "Retro",
+      "cyberpunk": "Cyberpunk",
+      "valentine": "Valentine",
+      "halloween": "Halloween",
+      "garden": "Garden",
+      "forest": "Forest",
+      "aqua": "Aqua",
+      "lofi": "Lofi",
+      "pastel": "Pastel",
+      "fantasy": "Fantasy",
+      "wireframe": "Wireframe",
+      "black": "Black",
+      "luxury": "Luxury",
+      "dracula": "Dracula",
+      "cmyk": "CMYK",
+      "autumn": "Autumn",
+      "business": "Business",
+      "acid": "Acid",
+      "lemonade": "Lemonade",
+      "night": "Night",
+      "coffee": "Coffee",
+      "winter": "Winter"
+    }
+  },
+  "home": {
+    "vaultSelector": {
+      "title": "Select Vault",
+      "createNew": "Create New Vault",
+      "importExisting": "Import Existing Vault",
+      "addVault": "Add Vault",
+      "settings": "Settings",
+      "noVaults": "No vaults found",
+      "emptyState": "Create a new vault to get started",
+      "lastAccessed": "Last accessed",
+      "never": "Never"
+    }
+  }
+}

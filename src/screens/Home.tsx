@@ -1,5 +1,5 @@
 import VaultSelector from "../components/Vault/VaultSelector";
-
+ 
 const HomeScreen = () => {
     return (
         <div className="flex h-screen w-screen">
@@ -10,5 +10,5 @@ const HomeScreen = () => {
         </div>
     );
 };
-
+ 
 export default HomeScreen;

@@ -1,1 +1,56 @@
-{}
+{
+  "settings": {
+    "title": "Configuración",
+    "language": "Idioma",
+    "theme": "Tema",
+    "resetButton": "Restablecer valores",
+    "backButton": "Volver al inicio",
+    "errors": {
+      "invalidLanguage": "Selección de idioma inválida"
+    },
+    "themes": {
+      "light": "Claro",
+      "dark": "Oscuro",
+      "cupcake": "Cupcake",
+      "bumblebee": "Abeja",
+      "emerald": "Esmeralda",
+      "corporate": "Corporativo",
+      "synthwave": "Synthwave",
+      "retro": "Retro",
+      "cyberpunk": "Cyberpunk",
+      "valentine": "San Valentín",
+      "halloween": "Halloween",
+      "garden": "Jardín",
+      "forest": "Bosque",
+      "aqua": "Aqua",
+      "lofi": "Lofi",
+      "pastel": "Pastel",
+      "fantasy": "Fantasía",
+      "wireframe": "Wireframe",
+      "black": "Negro",
+      "luxury": "Lujo",
+      "dracula": "Drácula",
+      "cmyk": "CMYK",
+      "autumn": "Otoño",
+      "business": "Negocios",
+      "acid": "Ácido",
+      "lemonade": "Limonada",
+      "night": "Noche",
+      "coffee": "Café",
+      "winter": "Invierno"
+    }
+  },
+  "home": {
+    "vaultSelector": {
+      "title": "Seleccionar Bóveda",
+      "createNew": "Crear Nueva Bóveda",
+      "importExisting": "Importar Bóveda Existente",
+      "addVault": "Agregar Bóveda",
+      "settings": "Configuración",
+      "noVaults": "No se encontraron bóvedas",
+      "emptyState": "Crea una nueva bóveda para comenzar",
+      "lastAccessed": "Último acceso",
+      "never": "Nunca"
+    }
+  }
+}

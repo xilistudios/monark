@@ -6,7 +6,7 @@ import { store, initializeVaultState } from './redux/store'
 import { routeTree } from './routeTree.gen'
 import "./styles.css";
 import { ThemeProvider } from "./hooks/withTheme";
-
+import  "./i18n";
 const router = createRouter({ routeTree })
 declare module '@tanstack/react-router' {
   interface Register {

@@ -8,7 +8,10 @@ import { VaultTabs } from './VaultTabs';
 import ThemeSwitcher from '../UI/ThemeSwitcher';
 import { Link } from '@tanstack/react-router';
 
+import { useTranslation } from "react-i18next";
+
 const VaultSelector = () => {
+    const { t } = useTranslation("home");
     const dispatch = useDispatch();
     const { savedVaults, currentVault, loading } = useSelector((state: RootState) => state.vault);
     const [modalOpen, setModalOpen] = useState(false);
@@ -18,7 +21,7 @@ const VaultSelector = () => {
     };
 
     const formatLastAccessed = (date?: Date) => {
-        if (!date) return 'Never';
+        if (!date) return t("vaultSelector.never");
         return date.toLocaleDateString();
     };
 
@@ -38,17 +41,17 @@ const VaultSelector = () => {
                         •••
                     </div>
                     <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                        <li><a onClick={() => setModalOpen(true)}>Add Vault</a></li>
+                        <li><a onClick={() => setModalOpen(true)}>{t("vaultSelector.addVault")}</a></li>
                         <li>
-                            <Link to="/settings">Settings</Link>
+                            <Link to="/settings">{t("vaultSelector.settings")}</Link>
                         </li>
                     </ul>
                 </div>
             </div>
             {savedVaults.length === 0 && (
                 <div className="text-center p-4">
-                    <div className="text-base-content/60 mb-2">No vaults found</div>
-                    <div className="text-sm text-base-content/40">Create a new vault to get started</div>
+                    <div className="text-base-content/60 mb-2">{t("vaultSelector.noVaults")}</div>
+                    <div className="text-sm text-base-content/40">{t("vaultSelector.emptyState")}</div>
                 </div>
             )}
             <ul className="menu rounded-box h-full w-full p-2">
@@ -79,7 +82,7 @@ const VaultSelector = () => {
                                 )}
                             </div>
                             <div className="text-xs text-base-content/60 mt-1">
-                                Last accessed: {formatLastAccessed(vault.lastAccessed)}
+                                {t("vaultSelector.lastAccessed")}: {formatLastAccessed(vault.lastAccessed)}
                             </div>
                             <div className="text-xs text-base-content/40 truncate w-full">
                                 {vault.path}
