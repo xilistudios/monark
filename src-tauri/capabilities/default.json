@@ -11,6 +11,7 @@
     "dialog:default",
     "store:default",
     "clipboard-manager:default",
-    "deep-link:default"
+    "deep-link:default",
+    "dialog:default"
   ]
 }

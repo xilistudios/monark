@@ -1,49 +1,81 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [filePath, setFilePath] = useState("");
+  const [password, setPassword] = useState("");
+  const [vault, setVault] = useState<any | null>(null);
+  const [error, setError] = useState("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  async function createVault() {
+    setError("");
+    setVault(null);
+    try {
+      await invoke("create_vault", { filePath, password });
+      alert("Vault created successfully!");
+    } catch (err) {
+      console.error("Error creating vault:", err);
+      setError(String(err));
+    }
   }
 
+  async function openVault() {
+    setError("");
+    setVault(null);
+    try {
+      const openedVault = await invoke("open_vault", { filePath, password });
+      setVault(openedVault);
+    } catch (err) {
+      console.error("Error opening vault:", err);
+      setError(String(err));
+    }
+  }
+  console.log(error);
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+      <h1>Monark Vault</h1>
 
       <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
         <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+          id="path-input"
+          onChange={(e) => setFilePath(e.currentTarget.value)}
+          placeholder="Enter vault file path..."
+          value={filePath}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+        <input
+          id="password-input"
+          type="password"
+          onChange={(e) => setPassword(e.currentTarget.value)}
+          placeholder="Enter password..."
+          value={password}
+        />
+      </div>
+
+      <div className="row">
+        <button onClick={async () => {
+          const result = await open({
+            multiple: false,
+            directory: false,
+            filters: [{ name: "Monark Vault", extensions: ["monark"] }],
+          });
+          if (result) {
+            setFilePath(result);
+          }
+        }}>Select vault</button>
+        <button onClick={createVault}>Create Vault</button>
+        <button onClick={openVault}>Open Vault</button>
+      </div>
+
+      {error && <p style={{ color: "red" }}>{JSON.stringify(error)}</p>}
+
+      {vault && (
+        <div>
+          <h2>Vault Content</h2>
+          <pre>{JSON.stringify(vault, null, 2)}</pre>
+        </div>
+      )}
     </main>
   );
 }
