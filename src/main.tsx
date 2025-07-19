@@ -5,6 +5,7 @@ import { Provider } from 'react-redux'
 import { store, initializeVaultState } from './redux/store'
 import { routeTree } from './routeTree.gen'
 import "./styles.css";
+import { ThemeProvider } from "./hooks/withTheme";
 
 const router = createRouter({ routeTree })
 declare module '@tanstack/react-router' {
@@ -14,12 +15,16 @@ declare module '@tanstack/react-router' {
 }
 
 // Initialize vault state from settings store
-initializeVaultState()
+initializeVaultState().then(() => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <Provider store={store}>
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
+      </Provider>
+    </React.StrictMode>,
+  );
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <Provider store={store}>
-      <RouterProvider router={router}/>
-    </Provider>
-  </React.StrictMode>,
-);
+})
+
