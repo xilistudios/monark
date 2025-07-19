@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { setCurrentVault, updateLastAccessed, Vault } from '../../redux/actions/vault';
 
 import { Modal } from '../UI/Modal';
 import { VaultTabs } from './VaultTabs';
-import { useState } from 'react';
+import ThemeSwitcher from '../UI/ThemeSwitcher';
+import { Link } from '@tanstack/react-router';
+
 const VaultSelector = () => {
     const dispatch = useDispatch();
     const { savedVaults, currentVault, loading } = useSelector((state: RootState) => state.vault);
@@ -27,34 +30,29 @@ const VaultSelector = () => {
         );
     }
 
-    if (savedVaults.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full w-full p-4 text-center">
-                <div className="text-base-content/60 mb-2">No vaults found</div>
-                <div className="text-sm text-base-content/40">Create a new vault to get started</div>
-                <hr />
-                <button className="btn" onClick={() => setModalOpen(true)}>Add Vault</button>
-                <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)}>
-                    <VaultTabs
-                        onSuccess={() => setModalOpen(false)}
-                        onCancel={() => setModalOpen(false)}
-                    />
-                </Modal>
-            </div>
-        );
-    }
-
     return (
         <div className="h-full w-full">
-            <div className="p-2">
-                <button
-                    className="btn btn-outline btn-sm w-full"
-                    onClick={() => setModalOpen(true)}
-                >
-                    Add New Vault
-                </button>
+            <div className='flex p-2'>
+                <div className="dropdown">
+                    <div tabIndex={0} role="button" className="btn btn-outline btn-sm">
+                        •••
+                    </div>
+                    <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                        <li><a onClick={() => setModalOpen(true)}>Add Vault</a></li>
+                        <li>
+                            <Link to="/settings">Settings</Link>
+                        </li>
+                    </ul>
+                </div>
             </div>
+            {savedVaults.length === 0 && (
+                <div className="text-center p-4">
+                    <div className="text-base-content/60 mb-2">No vaults found</div>
+                    <div className="text-sm text-base-content/40">Create a new vault to get started</div>
+                </div>
+            )}
             <ul className="menu rounded-box h-full w-full p-2">
+
                 {savedVaults.map((vault) => (
                     <li key={vault.id}>
                         <a

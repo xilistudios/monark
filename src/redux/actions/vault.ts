@@ -24,7 +24,7 @@ const saveVaultStateToSettings = async (state: VaultState) => {
       savedVaults: state.savedVaults,
       currentVault: state.currentVault,
     }
-    await settingsStore.set('vaultState', persistentState)
+    await settingsStore.set('vaults', persistentState)
   } catch (error) {
     console.error('Failed to save vault state to settings:', error)
   }
@@ -33,7 +33,7 @@ const saveVaultStateToSettings = async (state: VaultState) => {
 // Helper function to load vault state from settings store
 export const loadVaultStateFromSettings = async (): Promise<Partial<VaultState>> => {
   try {
-    const savedState = await settingsStore.get('vaultState')
+    const savedState = await settingsStore.get('vaults')
     if (savedState) {
       // Convert lastAccessed strings back to Date objects
       const processedState = {
