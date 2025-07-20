@@ -30,7 +30,7 @@ export const loadPreferencesFromSettings = async (): Promise<Partial<Preferences
       return { preferences: prefs };
     }
   } catch (error) {
-    console.error('Error al cargar preferencias desde settings:', error);
+    console.error('Error loading preferences from settings:', error);
   }
   return {};
 };
