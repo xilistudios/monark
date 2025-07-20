@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { addVault, Vault } from '../../redux/actions/vault';
@@ -11,6 +12,7 @@ interface ImportVaultFormProps {
 
 export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) => {
   const dispatch = useDispatch();
+  const { t } = useTranslation('home');
   const [filePath, setFilePath] = useState("");
   const [password, setPassword] = useState("");
   const [vaultName, setVaultName] = useState("");
@@ -28,7 +30,7 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
 
   const handleImportVault = async () => {
     if (!filePath || !password) {
-      setError("Please select a vault file and enter the password");
+      setError(t('errors.missingFields'));
       return;
     }
 
@@ -53,7 +55,7 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
       onSuccess();
     } catch (err) {
       console.error("Error importing vault:", err);
-      setError("Failed to import vault. Please check the file path and password.");
+      setError(t('importVault.errors.importVault'));
     } finally {
       setLoading(false);
     }
@@ -76,38 +78,38 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
       }
     } catch (err) {
       console.error("Error selecting file:", err);
-      setError("Failed to open file dialog");
+      setError(t('importVault.errors.fileDialog'));
     }
   };
 
   return (
     <div className="space-y-4">
-      <h3 className="font-bold text-lg">Import Existing Vault</h3>
+      <h3 className="font-bold text-lg">{t('importVault.title')}</h3>
       
       <div className="form-control">
         <label className="label">
-          <span className="label-text">Vault Name (Optional)</span>
+          <span className="label-text">{t('importVault.name')}</span>
         </label>
         <input
           type="text"
-          placeholder="Enter custom vault name..."
+          placeholder={t('importVault.namePlaceholder')}
           className="input input-bordered"
           value={vaultName}
           onChange={(e) => setVaultName(e.target.value)}
         />
         <label className="label">
-          <span className="label-text-alt">Leave empty to use filename</span>
+          <span className="label-text-alt">{t('importVault.fileHelp')}</span>
         </label>
       </div>
 
       <div className="form-control">
         <label className="label">
-          <span className="label-text">Vault File</span>
+          <span className="label-text">{t('importVault.vaultFile')}</span>
         </label>
         <div className="join">
           <input
             type="text"
-            placeholder="Select vault file..."
+            placeholder={t('importVault.vaultFilePlaceholder')}
             className="input input-bordered join-item flex-1"
             value={filePath}
             onChange={(e) => setFilePath(e.target.value)}
@@ -118,18 +120,18 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
             onClick={handleSelectFile}
             type="button"
           >
-            Browse
+            {t('importVault.browse')}
           </button>
         </div>
       </div>
 
       <div className="form-control">
         <label className="label">
-          <span className="label-text">Password</span>
+          <span className="label-text">{t('importVault.password')}</span>
         </label>
         <input
           type="password"
-          placeholder="Enter vault password..."
+          placeholder={t('importVault.passwordPlaceholder')}
           className="input input-bordered"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -151,10 +153,10 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
           {loading ? (
             <>
               <span className="loading loading-spinner loading-sm"></span>
-              Importing...
+              {t('importVault.importing')}
             </>
           ) : (
-            'Import Vault'
+            t('importVault.importVault')
           )}
         </button>
         <button 
@@ -162,7 +164,7 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
           onClick={onCancel}
           disabled={loading}
         >
-          Cancel
+          {t('importVault.cancel')}
         </button>
       </div>
     </div>

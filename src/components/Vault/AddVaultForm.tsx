@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { addVault, Vault } from '../../redux/actions/vault';
@@ -11,6 +12,7 @@ interface AddVaultFormProps {
 
 export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
   const dispatch = useDispatch();
+  const { t } = useTranslation('home');
   const [filePath, setFilePath] = useState("");
   const [password, setPassword] = useState("");
   const [vaultName, setVaultName] = useState("");
@@ -28,7 +30,7 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
 
   const handleCreateVault = async () => {
     if (!filePath || !password || !vaultName) {
-      setError("Please fill in all fields");
+      setError(t('errors.missingFields'));
       return;
     }
 
@@ -74,21 +76,21 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
       }
     } catch (err) {
       console.error("Error selecting file:", err);
-      setError("Failed to open file dialog");
+      setError(t('addVault.errors.fileDialog'));
     }
   };
 
   return (
     <div className="space-y-4">
-      <h3 className="font-bold text-lg">Create New Vault</h3>
+      <h3 className="font-bold text-lg">{t('addVault.title')}</h3>
       
       <div className="form-control">
         <label className="label">
-          <span className="label-text">Vault Name</span>
+          <span className="label-text">{t('addVault.name')}</span>
         </label>
         <input
           type="text"
-          placeholder="Enter vault name..."
+          placeholder={t('addVault.namePlaceholder')}
           className="input input-bordered"
           value={vaultName}
           onChange={(e) => setVaultName(e.target.value)}
@@ -97,12 +99,12 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
 
       <div className="form-control">
         <label className="label">
-          <span className="label-text">File Path</span>
+          <span className="label-text">{t('addVault.filePath')}</span>
         </label>
         <div className="join">
           <input
             type="text"
-            placeholder="Enter vault file path..."
+            placeholder={t('addVault.filePathPlaceholder')}
             className="input input-bordered join-item flex-1"
             value={filePath}
             onChange={(e) => setFilePath(e.target.value)}
@@ -112,18 +114,18 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
             onClick={handleSelectFile}
             type="button"
           >
-            Browse
+            {t('addVault.browse')}
           </button>
         </div>
       </div>
 
       <div className="form-control">
         <label className="label">
-          <span className="label-text">Password</span>
+          <span className="label-text">{t('addVault.password')}</span>
         </label>
         <input
           type="password"
-          placeholder="Enter password..."
+          placeholder={t('addVault.passwordPlaceholder')}
           className="input input-bordered"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -145,10 +147,10 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
           {loading ? (
             <>
               <span className="loading loading-spinner loading-sm"></span>
-              Creating...
+              {t('addVault.creating')}
             </>
           ) : (
-            'Create Vault'
+            t('addVault.createVault')
           )}
         </button>
         <button 
@@ -156,7 +158,7 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
           onClick={onCancel}
           disabled={loading}
         >
-          Cancel
+          {t('addVault.cancel')}
         </button>
       </div>
     </div>

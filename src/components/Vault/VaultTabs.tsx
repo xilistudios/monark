@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AddVaultForm } from './AddVaultForm';
 import { ImportVaultForm } from './ImportVaultForm';
 
@@ -9,6 +10,7 @@ interface VaultTabsProps {
 
 export const VaultTabs = ({ onSuccess, onCancel }: VaultTabsProps) => {
   const [activeTab, setActiveTab] = useState<'create' | 'import'>('create');
+  const { t } = useTranslation('home');
 
   return (
     <div className="w-full">
@@ -19,14 +21,14 @@ export const VaultTabs = ({ onSuccess, onCancel }: VaultTabsProps) => {
           className={`tab ${activeTab === 'create' ? 'tab-active' : ''}`}
           onClick={() => setActiveTab('create')}
         >
-          Create New Vault
+          {t('vaultSelector.createNew')}
         </button>
         <button 
           role="tab" 
           className={`tab ${activeTab === 'import' ? 'tab-active' : ''}`}
           onClick={() => setActiveTab('import')}
         >
-          Import Existing Vault
+          {t('vaultSelector.importExisting')}
         </button>
       </div>
 

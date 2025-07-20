@@ -53,6 +53,44 @@
       "never": "Never",
       "locked": "Locked",
       "unlocked": "Unlocked"
+    },
+    "addVault": {
+      "title": "Create New Vault",
+      "name": "Vault Name",
+      "namePlaceholder": "Enter vault name",
+      "filePath": "File Path",
+      "filePathPlaceholder": "Select a folder",
+      "password": "Password",
+      "passwordPlaceholder": "Enter password",
+      "createVault": "Create Vault",
+      "creating": "Creating...",
+      "browse": "Browse",
+      "cancel": "Cancel",
+      "errors": {
+        "fileDialog": "Error opening file dialog"
+      }
+    },
+    "importVault": {
+      "title": "Import Existing Vault",
+      "name": "Vault Name (Optional)",
+      "namePlaceholder": "Enter vault name (optional)",
+      "fileHelp": "Leave empty to use filename",
+      "vaultFile": "Vault File",
+      "vaultFilePlaceholder": "Select a vault file",
+      "password": "Password",
+      "passwordPlaceholder": "Enter password",
+      "importVault": "Import Vault",
+      "importing": "Importing...",
+      "browse": "Browse",
+      "cancel": "Cancel",
+      "errors": {
+        "fileDialog": "Error opening file dialog",
+        "importVault": "Error importing vault"
+      }
+    },
+    "errors": {
+      "missingFields": "Please fill in all fields",
+      "invalidPassword": "Invalid password"
     }
   }
 }
