@@ -19,12 +19,8 @@ interface VaultState {
 // Helper function to save vault state to settings store
 const saveVaultStateToSettings = async (state: VaultState) => {
   try {
-    // Only save persistent data (not loading/error states)
-    const persistentState = {
-      savedVaults: state.savedVaults,
-      currentVault: state.currentVault,
-    }
-    await settingsStore.set('vaults', persistentState)
+    // Only save 
+    await settingsStore.set('vaults', state.savedVaults)
   } catch (error) {
     console.error('Failed to save vault state to settings:', error)
   }
@@ -38,16 +34,12 @@ export const loadVaultStateFromSettings = async (): Promise<Partial<VaultState>>
       // Convert lastAccessed strings back to Date objects
       const processedState = {
         ...savedState,
-        savedVaults: savedState.savedVaults?.map((vault: any) => ({
+        savedVaults: savedState?.map((vault: any) => ({
           ...vault,
           lastAccessed: vault.lastAccessed ? new Date(vault.lastAccessed) : undefined,
+          isLocked: true
         })) || [],
-        currentVault: savedState.currentVault ? {
-          ...savedState.currentVault,
-          lastAccessed: savedState.currentVault.lastAccessed 
-            ? new Date(savedState.currentVault.lastAccessed) 
-            : undefined,
-        } : null,
+        currentVault: null,
       }
       return processedState
     }
