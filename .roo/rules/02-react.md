@@ -203,3 +203,4 @@ This comprehensive guide outlines best practices, conventions, and standards for
     - Use proper links
     - Use proper headings
     - Use proper lists
+    - If you are working with Daisy UI styles, you can fetch the lasted documentation at https://daisyui.com/llms.txt
