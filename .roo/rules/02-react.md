@@ -36,9 +36,11 @@ This comprehensive guide outlines best practices, conventions, and standards for
       - Components
       - Type definitions
       - Interfaces
+      - Directory names (e.g., components/Navigation) for React code
+      - File namos for react components
     - Use kebab-case for:
-      - Directory names (e.g., components/auth-wizard)
-      - File names (e.g., user-profile.tsx)
+      - Directory names (e.g., components/utils) for vanilla typescript
+      - File names (e.g., utils.ts) for vanilla typescript
     - Use camelCase for:
       - Variables
       - Functions
@@ -78,7 +80,7 @@ This comprehensive guide outlines best practices, conventions, and standards for
     - Implement code splitting using dynamic imports
     - Implement proper key props in lists (avoid using index as key)
 
-    Next.js Best Practices
+    React Best Practices
     Core Concepts
     - Utilize App Router for routing
     - Implement proper metadata management
@@ -86,7 +88,7 @@ This comprehensive guide outlines best practices, conventions, and standards for
     - Implement proper error boundaries
 
     Components and Features
-    - Use Next.js built-in components:
+    - Use React built-in components:
       - Image component for optimized images
       - Link component for client-side navigation
       - Script component for external scripts
