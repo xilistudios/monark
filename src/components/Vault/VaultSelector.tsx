@@ -5,7 +5,6 @@ import { setCurrentVault, updateLastAccessed, Vault } from '../../redux/actions/
 
 import { Modal } from '../UI/Modal';
 import { VaultTabs } from './VaultTabs';
-import ThemeSwitcher from '../UI/ThemeSwitcher';
 import { Link } from '@tanstack/react-router';
 
 import { useTranslation } from "react-i18next";
@@ -65,26 +64,46 @@ const VaultSelector = () => {
                         >
                             <div className="flex items-center justify-between w-full">
                                 <span className="font-medium">{vault.name}</span>
-                                {vault.isLocked && (
-                                    <svg
-                                        className="w-4 h-4 text-warning"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                                        />
-                                    </svg>
+                                {vault.isLocked ? (
+                                    <span className="flex items-center gap-1" aria-label={t("vaultSelector.locked", "Locked")}>
+                                        <svg
+                                            className="w-4 h-4 text-warning"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                            />
+                                        </svg>
+                                        <span className="text-warning text-xs">{t("vaultSelector.locked", "Locked")}</span>
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1" aria-label={t("vaultSelector.unlocked", "Unlocked")}>
+                                        <svg
+                                            className="w-4 h-4 text-success"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                        <span className="text-success text-xs">{t("vaultSelector.unlocked", "Unlocked")}</span>
+                                    </span>
                                 )}
                             </div>
-                            <div className="text-xs text-base-content/60 mt-1">
+                            <div className="text-xs  mt-1">
                                 {t("vaultSelector.lastAccessed")}: {formatLastAccessed(vault.lastAccessed)}
                             </div>
-                            <div className="text-xs text-base-content/40 truncate w-full">
+                            <div className="text-xs truncate w-full">
                                 {vault.path}
                             </div>
                         </a>

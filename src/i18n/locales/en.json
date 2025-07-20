@@ -50,7 +50,9 @@
       "noVaults": "No vaults found",
       "emptyState": "Create a new vault to get started",
       "lastAccessed": "Last accessed",
-      "never": "Never"
+      "never": "Never",
+      "locked": "Locked",
+      "unlocked": "Unlocked"
     }
   }
 }

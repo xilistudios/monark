@@ -50,7 +50,9 @@
       "noVaults": "No se encontraron bóvedas",
       "emptyState": "Crea una nueva bóveda para comenzar",
       "lastAccessed": "Último acceso",
-      "never": "Nunca"
+      "never": "Nunca",
+      "locked": "Bloqueada",
+      "unlocked": "Desbloqueada"
     }
   }
 }
