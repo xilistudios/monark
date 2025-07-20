@@ -4,7 +4,6 @@ import { settingsStore } from '../../store/settings';
 export interface Preferences {
   theme: string;
   language: string;
-  // Agrega aquí más preferencias según sea necesario
 }
 
 interface PreferencesState {
@@ -12,8 +11,7 @@ interface PreferencesState {
   loading: boolean;
   error: string | null;
 }
-
-// Helper para guardar preferencias en settingsStore
+ 
 const savePreferencesToSettings = async (preferences: Preferences) => {
   try {
     await settingsStore.set('preferences', preferences);
