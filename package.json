@@ -8,24 +8,43 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "cargo test --manifest-path src-tauri/Cargo.toml -p monark_lib"
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest --coverage",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml -p monark_lib"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.8.2",
+    "@tailwindcss/vite": "^4.1.11",
+    "@tanstack/react-router": "^1.128.4",
+    "@tanstack/react-router-devtools": "^1.128.4",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "~2",
     "@tauri-apps/plugin-deep-link": "~2",
     "@tauri-apps/plugin-dialog": "~2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-store": "~2",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "i18next": "^25.3.2",
+    "jsdom": "^26.1.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-i18next": "^15.6.0",
+    "react-redux": "^9.2.0",
+    "tailwindcss": "^4.1.11",
+    "vitest": "^3.2.4"
   },
   "devDependencies": {
+    "@tanstack/router-plugin": "^1.128.4",
+    "@tauri-apps/cli": "^2",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "daisyui": "^5.0.46",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3",
-    "@tauri-apps/cli": "^2"
+    "vite": "^6.0.3"
   }
 }

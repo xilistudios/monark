@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+    themes: all;
+}
+/* Add these focus styles for accessibility */
+[role="button"]:focus-visible,
+[role="option"]:focus-visible {
+  outline: 3px solid hsl(var(--p));
+  outline-offset: 2px;
+  transition: outline-offset 0.2s ease;
+}
+
+/* High contrast focus indicator for keyboard navigation */
+[tabindex]:focus-visible {
+  box-shadow: 0 0 0 3px hsl(var(--bc)), 0 0 0 6px hsl(var(--p));
+}

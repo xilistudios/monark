@@ -10,6 +10,7 @@ use crate::commands::errors::CommandError;
 // Constants
 const CURRENT_VAULT_VERSION: &str = "1.0";
 
+#[tauri::command]
 pub fn create_vault(
     file_path: String,
     password: String, // User's chosen master password
@@ -79,6 +80,7 @@ pub fn create_vault(
     Ok(())
 }
 
+#[tauri::command]
 pub fn open_vault(
     file_path: String,
     password: String,

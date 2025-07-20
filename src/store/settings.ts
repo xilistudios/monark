@@ -14,6 +14,12 @@ export class SettingsStore {
         }
         );
     }
+    init = async () => {
+        if (!this.store) {
+            this.store = await load('store.json', { autoSave: false });
+            this.initalized = true;
+        }
+    }
     async get(key: string): Promise<any> {
         if (!this.store) {
             throw new Error('Store not initialized');
