@@ -18,7 +18,6 @@ const VaultSelector = () => {
         dispatch(setCurrentVault(vault));
         dispatch(updateLastAccessed(vault.id));
     };
-    console.log("Current Vault:", currentVault);
     const formatLastAccessed = (dateStr?: string) => {
         if (!dateStr) return t("vaultSelector.never");
         const date = new Date(dateStr);
