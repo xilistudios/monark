@@ -18,7 +18,7 @@ const savePreferencesToSettings = async (preferences: Preferences) => {
   try {
     await settingsStore.set('preferences', preferences);
   } catch (error) {
-    console.error('Error al guardar preferencias en settings:', error);
+    console.error('Error saving preferences to settings:', error);
   }
 };
 
