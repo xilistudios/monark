@@ -47,7 +47,7 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
         id: generateVaultId(),
         name: finalVaultName,
         path: filePath,
-        lastAccessed: new Date(),
+        lastAccessed: new Date().toISOString(),
         isLocked: false,
       };
 

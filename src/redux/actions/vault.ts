@@ -5,7 +5,7 @@ export interface Vault {
   id: string
   name: string
   path: string
-  lastAccessed?: Date
+  lastAccessed?: string
   isLocked: boolean
 }
 
@@ -94,7 +94,7 @@ export const vaultSlice = createSlice({
     updateLastAccessed: (state, action: PayloadAction<string>) => {
       const vault = state.savedVaults.find(vault => vault.id === action.payload)
       if (vault) {
-        vault.lastAccessed = new Date()
+        vault.lastAccessed = new Date().toISOString()
       }
       // Save to settings store asynchronously
       saveVaultStateToSettings(state)

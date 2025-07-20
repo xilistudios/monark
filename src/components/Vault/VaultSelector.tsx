@@ -18,10 +18,11 @@ const VaultSelector = () => {
         dispatch(setCurrentVault(vault));
         dispatch(updateLastAccessed(vault.id));
     };
-
-    const formatLastAccessed = (date?: Date) => {
-        if (!date) return t("vaultSelector.never");
-        return date.toLocaleDateString();
+    console.log("Current Vault:", currentVault);
+    const formatLastAccessed = (dateStr?: string) => {
+        if (!dateStr) return t("vaultSelector.never");
+        const date = new Date(dateStr);
+        return isNaN(date.getTime()) ? t("vaultSelector.never") : date.toLocaleDateString();
     };
 
     if (loading) {

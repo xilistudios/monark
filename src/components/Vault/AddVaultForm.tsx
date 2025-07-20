@@ -45,7 +45,7 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
         id: generateVaultId(),
         name: vaultName,
         path,
-        lastAccessed: new Date(),
+        lastAccessed: new Date().toISOString(),
         isLocked: false,
       };
 

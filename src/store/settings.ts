@@ -39,5 +39,11 @@ export class SettingsStore {
         }
         await this.store.delete(key);
     }
+    async clear(): Promise<void> {
+        if (!this.store) {
+            throw new Error('Store not initialized');
+        }
+        await this.store.clear();
+    }
 }
 export const settingsStore = new SettingsStore();

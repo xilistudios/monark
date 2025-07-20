@@ -5,6 +5,15 @@
     "theme": "Theme",
     "resetButton": "Reset to Defaults",
     "backButton": "Back to Home",
+    "clearDataButton": "Clear All App Data",
+    "clearDataButtonAria": "Clear all app data",
+    "clearDataConfirmTitle": "Clear All App Data?",
+    "clearDataConfirmDesc": "This will erase all app data. This action cannot be undone.",
+    "clearDataConfirmYes": "Yes, clear",
+    "clearDataConfirmNo": "Cancel",
+    "clearDataLoading": "Clearing...",
+    "clearDataSuccess": "App data cleared successfully.",
+    "clearDataError": "Failed to clear app data",
     "errors": {
       "invalidLanguage": "Invalid language selection"
     },

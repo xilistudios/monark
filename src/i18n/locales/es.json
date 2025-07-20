@@ -5,6 +5,15 @@
     "theme": "Tema",
     "resetButton": "Restablecer valores",
     "backButton": "Volver al inicio",
+    "clearDataButton": "Borrar todos los datos de la app",
+    "clearDataButtonAria": "Borrar todos los datos de la app",
+    "clearDataConfirmTitle": "¿Borrar todos los datos de la app?",
+    "clearDataConfirmDesc": "Esto eliminará todos los datos de la aplicación. Esta acción no se puede deshacer.",
+    "clearDataConfirmYes": "Sí, borrar",
+    "clearDataConfirmNo": "Cancelar",
+    "clearDataLoading": "Borrando...",
+    "clearDataSuccess": "Datos de la aplicación borrados exitosamente.",
+    "clearDataError": "Error al borrar los datos de la aplicación",
     "errors": {
       "invalidLanguage": "Selección de idioma inválida"
     },
