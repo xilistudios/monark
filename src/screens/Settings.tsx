@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import ThemeSwitcher from "../components/UI/ThemeSwitcher";
-import { settingsStore } from "../store/settings";
 import { useDispatch, useSelector } from "react-redux";
 import { DAISYUI_THEMES } from "../share/themes";
 import { useTranslation } from "react-i18next";
@@ -87,14 +85,13 @@ const GeneralSettings = () => {
 const AppearanceSettings = () => {
     const dispatch = useDispatch();
     const { t } = useTranslation("settings");
-
     return (
         <section className="mb-8">
             <div className="form-control w-full mt-4">
                 <label className="label">
                     <span className="label-text">{t("theme")}</span>
                 </label>
-                <div className="grid grid-cols-4 gap-4 mt-4 w-full">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mt-4 w-full">
                     {DAISYUI_THEMES.map((thm) => (
                         <div key={thm} data-theme={thm} className="card w-40 bg-base-100 shadow-xl transition-all duration-500 cursor-pointer"
                             onClick={() => dispatch(setTheme(thm))}
@@ -139,12 +136,12 @@ const ResetSection = () => {
 const SettingsScreen = () => {
     const { t } = useTranslation("settings");
     return (
-        <main className="p-4">
+        <main className="p-4 w-full">
             <div className="flex items-center justify-between mb-4">
                 <h1 className="text-3xl font-bold">{t("title")}</h1>
                 <Link to="/" className="btn btn-outline btn-sm">{t("backButton")}</Link>
             </div>
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w mx-auto">
                 <div className="card bg-base-100 shadow-xl">
                     <div
                         className="card-body"
