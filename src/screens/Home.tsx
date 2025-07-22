@@ -7,7 +7,10 @@ import { AddGroupModal } from "../components/Vault/AddGroupModal"
 import VaultTree from "../components/Vault/VaultTree"
 import { RootState, AppDispatch } from '../redux/store'
 import { readVault, lockVault, setVaultCredential, setNavigationPath } from '../redux/actions/vault'
-import { Entry, isGroupEntry } from '../interfaces/vault.interface'
+import { Entry, isGroupEntry, DataEntry, GroupEntry, isDataEntry } from "../interfaces/vault.interface";
+import { EntryDetailsModal } from "../components/Vault/EntryDetailsModal";
+import { EditEntryModal } from "../components/Vault/EditEntryModal";
+import { EditGroupModal } from "../components/Vault/EditGroupModal";
 
 const HomeScreen = () => {
     const { t } = useTranslation('home')
@@ -21,6 +24,10 @@ const HomeScreen = () => {
     const [addEntryParentId, setAddEntryParentId] = useState<string | null>(null)
     const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false)
     const [addGroupParentId, setAddGroupParentId] = useState<string | null>(null)
+    const [selectedEntry, setSelectedEntry] = useState<DataEntry | GroupEntry | null>(null);
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
+    const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
 
     const getCurrentParentId = () => {
         const pathParts = navigationPath.split('/').filter(Boolean)
@@ -243,9 +250,19 @@ const HomeScreen = () => {
                                     setAddGroupParentId(parentId);
                                     setIsAddGroupModalOpen(true);
                                 }}
-                                onEdit={(entry) => {
-                                    // TODO: Implement edit modal
-                                    console.log('Edit entry:', entry);
+                                onView={(entry: Entry) => {
+                                    if (isDataEntry(entry)) {
+                                        setSelectedEntry(entry);
+                                        setIsDetailsModalOpen(true);
+                                    }
+                                }}
+                                onEdit={(entry: Entry) => {
+                                    setSelectedEntry(entry);
+                                    if (isGroupEntry(entry)) {
+                                        setIsEditGroupModalOpen(true);
+                                    } else if (isDataEntry(entry)) {
+                                        setIsEditEntryModalOpen(true);
+                                    }
                                 }}
                                 onNavigate={handleNavigate}
                             />
@@ -278,6 +295,48 @@ const HomeScreen = () => {
                 onSuccess={() => setIsAddGroupModalOpen(false)}
                 parentId={addGroupParentId}
             />
+            {selectedEntry && isDataEntry(selectedEntry) && (
+                <EntryDetailsModal
+                    isOpen={isDetailsModalOpen}
+                    onClose={() => {
+                        setIsDetailsModalOpen(false);
+                        setSelectedEntry(null);
+                    }}
+                    entry={selectedEntry}
+                    onEdit={() => {
+                        setIsDetailsModalOpen(false);
+                        setIsEditEntryModalOpen(true);
+                    }}
+                />
+            )}
+            {selectedEntry && isDataEntry(selectedEntry) && (
+                <EditEntryModal
+                    isOpen={isEditEntryModalOpen}
+                    onClose={() => {
+                        setIsEditEntryModalOpen(false);
+                        setSelectedEntry(null);
+                    }}
+                    onSuccess={() => {
+                        setIsEditEntryModalOpen(false);
+                        setSelectedEntry(null);
+                    }}
+                    entry={selectedEntry}
+                />
+            )}
+            {selectedEntry && isGroupEntry(selectedEntry) && (
+                <EditGroupModal
+                    isOpen={isEditGroupModalOpen}
+                    onClose={() => {
+                        setIsEditGroupModalOpen(false);
+                        setSelectedEntry(null);
+                    }}
+                    onSuccess={() => {
+                        setIsEditGroupModalOpen(false);
+                        setSelectedEntry(null);
+                    }}
+                    entry={selectedEntry}
+                />
+            )}
         </div>
     )
 }

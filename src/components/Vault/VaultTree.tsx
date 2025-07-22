@@ -9,10 +9,11 @@ interface VaultTreeProps {
   onAddEntry: (parentId: string | null) => void;
   onAddGroup: (parentId: string | null) => void;
   onEdit: (entry: Entry) => void;
+  onView: (entry: Entry) => void; // New prop for viewing data entries
   onNavigate: (groupId: string) => void;
 }
 
-const VaultTree = ({ entries, onAddEntry, onAddGroup, onEdit, onNavigate }: VaultTreeProps) => {
+const VaultTree = ({ entries, onAddEntry, onAddGroup, onEdit, onView, onNavigate }: VaultTreeProps) => {
   const dispatch = useDispatch<AppDispatch>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -43,7 +44,7 @@ const VaultTree = ({ entries, onAddEntry, onAddGroup, onEdit, onNavigate }: Vaul
                   if (isGroupEntry(node)) {
                     onNavigate(node.id);
                   } else {
-                    onEdit(node);
+                    onView(node);
                   }
                 }}
               >
