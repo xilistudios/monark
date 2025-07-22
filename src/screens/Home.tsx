@@ -1,34 +1,77 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useTranslation } from 'react-i18next'
 import VaultSelector from "../components/Vault/VaultSelector"
 import { AddEntryModal } from "../components/Vault/AddEntryModal"
+import { AddGroupModal } from "../components/Vault/AddGroupModal"
+import VaultTree from "../components/Vault/VaultTree"
 import { RootState, AppDispatch } from '../redux/store'
-import { readVault, saveVault, lockVault } from '../redux/actions/vault'
-import { Entry, DataEntry, GroupEntry } from '../interfaces/vault.interface'
+import { readVault, lockVault, setVaultCredential, setNavigationPath } from '../redux/actions/vault'
+import { Entry, isGroupEntry } from '../interfaces/vault.interface'
 
 const HomeScreen = () => {
     const { t } = useTranslation('home')
     const dispatch = useDispatch<AppDispatch>()
     const { currentVault, vaultState, loading, error } = useSelector((state: RootState) => state.vault)
+    const navigationPath = useSelector((state: RootState) => state.vault.currentVault?.data?.navigationPath || '/')
     
     const [password, setPassword] = useState('')
     const [unlockError, setUnlockError] = useState('')
     const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false)
+    const [addEntryParentId, setAddEntryParentId] = useState<string | null>(null)
+    const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false)
+    const [addGroupParentId, setAddGroupParentId] = useState<string | null>(null)
 
-    // Auto-save functionality
-    useEffect(() => {
-        if (currentVault && !vaultState.isLocked && vaultState.entries.length > 0) {
-            const timeoutId = setTimeout(() => {
-                dispatch(saveVault({
-                    filePath: currentVault.path,
-                    password: currentVault.data?.credential || ''
-                }))
-            }, 2000) // Auto-save after 2 seconds of no changes
+    const getCurrentParentId = () => {
+        const pathParts = navigationPath.split('/').filter(Boolean)
+        return pathParts.length > 0 ? pathParts[pathParts.length - 1] : null
+    }
 
-            return () => clearTimeout(timeoutId)
+    const getCurrentEntries = (entries: Entry[], parentId: string | null) => {
+        if (!parentId) {
+            const allChildren = new Set<string>()
+            entries.forEach(e => {
+                if (isGroupEntry(e)) {
+                    e.children.forEach(c => allChildren.add(c))
+                }
+            })
+            return entries.filter(e => !allChildren.has(e.id))
+        } else {
+            const parent = entries.find(e => e.id === parentId)
+            if (!parent || !isGroupEntry(parent)) return []
+            return parent.children
+                .map(childId => entries.find(e => e.id === childId))
+                .filter(Boolean) as Entry[]
         }
-    }, [vaultState.entries, currentVault, vaultState.isLocked, dispatch])
+    }
+
+    const handleNavigate = (groupId: string) => {
+        const newPath = `${navigationPath === '/' ? '' : navigationPath}/${groupId}`
+        dispatch(setNavigationPath(newPath))
+    }
+
+    const renderBreadcrumbs = () => {
+        const parts = navigationPath.split('/').filter(Boolean)
+        return (
+            <div className="breadcrumbs text-sm p-4 border-b border-base-300">
+                <ul>
+                    <li>
+                        <a onClick={() => dispatch(setNavigationPath('/'))}>/</a>
+                    </li>
+                    {parts.map((id, index) => {
+                        const entry = vaultState.entries.find(e => e.id === id)
+                        if (!entry) return null
+                        const pathUpTo = '/' + parts.slice(0, index + 1).join('/')
+                        return (
+                            <li key={id}>
+                                <a onClick={() => dispatch(setNavigationPath(pathUpTo))}>{entry.name}</a>
+                            </li>
+                        )
+                    })}
+                </ul>
+            </div>
+        )
+    }
 
     const handleUnlockVault = async () => {
         if (!currentVault || !password.trim()) {
@@ -43,11 +86,8 @@ const HomeScreen = () => {
                 filePath: currentVault.path
             })).unwrap()
             
-            // Store credential for auto-save
-            if (currentVault.data) {
-                currentVault.data.credential = password.trim()
-            }
-            
+            dispatch(setVaultCredential(password.trim()))
+            dispatch(setNavigationPath('/'))
             setPassword('')
         } catch (err) {
             setUnlockError(t('errors.unlockFailed'))
@@ -132,10 +172,6 @@ const HomeScreen = () => {
             )
         }
 
-        // Filter entries by type from unified array
-        const groupEntries = vaultState.entries.filter((entry): entry is GroupEntry => entry.entry_type === 'group')
-        const dataEntries = vaultState.entries.filter((entry): entry is DataEntry => entry.entry_type === 'entry')
-
         // Unlocked vault manager
         return (
             <div className="h-full flex flex-col">
@@ -146,14 +182,23 @@ const HomeScreen = () => {
                         <div className="flex gap-2">
                             <button
                                 className="btn btn-primary btn-sm"
-                                onClick={() => setIsAddEntryModalOpen(true)}
+                                onClick={() => {
+                                    setAddEntryParentId(getCurrentParentId())
+                                    setIsAddEntryModalOpen(true)
+                                }}
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
                                 {t('vault.manager.addEntry')}
                             </button>
-                            <button className="btn btn-outline btn-sm">
+                            <button
+                                className="btn btn-outline btn-sm"
+                                onClick={() => {
+                                    setAddGroupParentId(getCurrentParentId())
+                                    setIsAddGroupModalOpen(true)
+                                }}
+                            >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
@@ -174,86 +219,38 @@ const HomeScreen = () => {
                 </div>
 
                 {/* Content area */}
-                <div className="flex-1 p-4 overflow-auto">
-                    {vaultState.entries.length === 0 ? (
-                        <div className="text-center py-12">
-                            <div className="text-base-content/60 mb-4">
-                                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
-                                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                </svg>
-                                <p className="text-lg">{t('vault.manager.emptyVault')}</p>
+                <div className="flex-1 overflow-auto">
+                    {renderBreadcrumbs()}
+                    <div className="p-4">
+                        {getCurrentEntries(vaultState.entries, getCurrentParentId()).length === 0 ? (
+                            <div className="text-center py-12">
+                                <div className="text-base-content/60 mb-4">
+                                    <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
+                                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                    </svg>
+                                    <p className="text-lg">{t('vault.manager.emptyVault')}</p>
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-6">
-                            {/* Groups Section */}
-                            {groupEntries.length > 0 && (
-                                <div>
-                                    <h3 className="text-lg font-semibold mb-3 flex items-center">
-                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                        </svg>
-                                        {t('vault.manager.groups')} ({groupEntries.length})
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {groupEntries.map((group) => (
-                                            <div key={group.id} className="card bg-base-200 cursor-pointer hover:bg-base-300 transition-colors">
-                                                <div className="card-body p-4">
-                                                    <div className="flex items-center">
-                                                        <svg className="w-5 h-5 mr-3 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                                        </svg>
-                                                        <span className="font-medium">{group.name}</span>
-                                                    </div>
-                                                    <div className="text-sm text-base-content/60 mt-1">
-                                                        {group.children.length} {group.children.length === 1 ? 'item' : 'items'}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Entries Section */}
-                            {dataEntries.length > 0 && (
-                                <div>
-                                    <h3 className="text-lg font-semibold mb-3 flex items-center">
-                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                        </svg>
-                                        {t('vault.manager.entries')} ({dataEntries.length})
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {dataEntries.map((entry) => (
-                                            <div
-                                                key={entry.id}
-                                                className="card bg-base-100 border border-base-300 cursor-pointer hover:shadow-md transition-shadow"
-                                                onClick={() => handleEntryClick(entry)}
-                                            >
-                                                <div className="card-body p-4">
-                                                    <div className="flex items-center">
-                                                        <svg className="w-5 h-5 mr-3 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                                                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                                        </svg>
-                                                        <span className="font-medium">{entry.name}</span>
-                                                    </div>
-                                                    <div className="text-sm text-base-content/60 mt-1">
-                                                        {entry.data_type} • {entry.fields.length} fields
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                        ) : (
+                            <VaultTree 
+                                entries={getCurrentEntries(vaultState.entries, getCurrentParentId())}
+                                onAddEntry={(parentId) => {
+                                    setAddEntryParentId(parentId);
+                                    setIsAddEntryModalOpen(true);
+                                }}
+                                onAddGroup={(parentId) => {
+                                    setAddGroupParentId(parentId);
+                                    setIsAddGroupModalOpen(true);
+                                }}
+                                onEdit={(entry) => {
+                                    // TODO: Implement edit modal
+                                    console.log('Edit entry:', entry);
+                                }}
+                                onNavigate={handleNavigate}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
         )
@@ -273,6 +270,13 @@ const HomeScreen = () => {
                 isOpen={isAddEntryModalOpen}
                 onClose={() => setIsAddEntryModalOpen(false)}
                 onSuccess={() => setIsAddEntryModalOpen(false)}
+                parentId={addEntryParentId}
+            />
+            <AddGroupModal
+                isOpen={isAddGroupModalOpen}
+                onClose={() => setIsAddGroupModalOpen(false)}
+                onSuccess={() => setIsAddGroupModalOpen(false)}
+                parentId={addGroupParentId}
             />
         </div>
     )
