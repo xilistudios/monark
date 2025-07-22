@@ -39,7 +39,7 @@ export const ImportVaultForm = ({ onSuccess, onCancel }: ImportVaultFormProps) =
     
     try {
       // Try to open the vault to verify the password is correct
-      await invoke("open_vault", { filePath, password });
+      await invoke("read_vault", { filePath, password });
       
       const finalVaultName = vaultName || extractVaultNameFromPath(filePath);
       

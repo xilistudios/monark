@@ -51,16 +51,28 @@ pub struct Vault {
 
 
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)] // No Zeroize needed here directly
-#[serde(rename_all = "snake_case")]
-pub struct Entry {
-    pub id: Uuid, // UUID v4 string
-    pub entry_type: String, // e.g., "group | entry"
-    pub name: String,
-    pub entries: Vec<Entry>, // Contains the encrypted entries
-    pub data_type: String, // e.g., "website | note | card | etc."
-}
+// Section 4.1: Entry enum with Group/Data variants
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(tag = "entry_type", rename_all = "snake_case")]
+pub enum Entry {
+    Group {
+        id: Uuid,
+        name: String,
+        data_type: String,
+        children: Vec<Uuid>,
+    },
+    #[serde(rename = "entry")]
+    Data {
+        id: Uuid,
+        name: String,
+        data_type: String,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        fields: Vec<Field>,
+        tags: Vec<String>,
+    },
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "snake_case")]
@@ -71,22 +83,7 @@ pub struct EntryEncryption {
     pub nonce: String, // Base64 encoded, nonce for XChaCha20 entry encryption
 }
 
-// Section 5: Decrypted Entry Content (result of decrypting Entry.ciphertext)
-
-// EntryData contains potentially sensitive fields, so derive Zeroize.
-// DateTime<Utc> doesn't implement Zeroize, so we can't derive it directly here.
-// We need to handle zeroization manually or wrap sensitive fields.
-// For simplicity now, let's remove Zeroize derive from EntryData and rely on Field's Zeroize.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)] // Removed Zeroize derive
-#[serde(rename_all = "snake_case")]
-pub struct EntryData {
-    pub title: String, // Indexable
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub fields: Vec<Field>, // Field itself implements Zeroize for its value
-    pub tags: Vec<String>, // Indexable, not typically secret
-    // Add other relevant metadata if needed
-}
+// Section 5: Field structure for data entries
 
 // Field contains the sensitive 'value', so derive Zeroize. String implements Zeroize.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
@@ -96,6 +93,61 @@ pub struct Field {
     pub property: String, // e.g., "username", "password", "url", "note" - determines indexability
     pub value: String, // The actual data, zeroized on drop
     pub secret: bool, // Indicates if the field is considered secret (e.g., password)
+}
+
+// Section 6: Command Interface Types for TypeScript Integration
+
+/// EncryptedVault represents the encrypted vault data as expected by Tauri commands.
+/// This matches the Redux action payload structure for encrypted vault data.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptedVault {
+    /// Base64 encoded encrypted vault data
+    pub encrypted_data: String,
+    /// Base64 encoded nonce used for encryption
+    pub nonce: String,
+    /// Base64 encoded salt for key derivation
+    pub salt: String,
+    /// Argon2 parameters used for key derivation (not zeroized as they're public)
+    #[zeroize(skip)]
+    pub argon2_params: Argon2Params,
+}
+
+/// DecryptedVault represents the decrypted vault content returned to TypeScript.
+/// This matches the VaultContent interface on the frontend.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct DecryptedVault {
+    /// Timestamp when vault was last updated (ISO 8601 string)
+    pub updated_at: String,
+    /// HMAC signature of the vault content
+    pub hmac: String,
+    /// List of entries (both groups and individual entries)
+    pub entries: Vec<Entry>,
+}
+
+// Conversion traits between Rust and TypeScript types
+impl From<Vault> for DecryptedVault {
+    fn from(vault: Vault) -> Self {
+        DecryptedVault {
+            updated_at: vault.updated_at.to_rfc3339(),
+            hmac: vault.hmac,
+            entries: vault.entries,
+        }
+    }
+}
+
+impl TryFrom<DecryptedVault> for Vault {
+    type Error = chrono::ParseError;
+    
+    fn try_from(decrypted: DecryptedVault) -> Result<Self, Self::Error> {
+        Ok(Vault {
+            updated_at: chrono::DateTime::parse_from_rfc3339(&decrypted.updated_at)?
+                .with_timezone(&chrono::Utc),
+            hmac: decrypted.hmac,
+            entries: decrypted.entries,
+        })
+    }
 }
 
 // Note: DTOs (Data Transfer Objects) like EntryAddDTO, EntryUpdateDTO from the previous version

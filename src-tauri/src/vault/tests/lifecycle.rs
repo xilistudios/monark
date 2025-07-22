@@ -3,6 +3,9 @@ mod tests {
     use crate::vault::lifecycle;
     use crate::commands::errors::CommandError;
     use tempfile::tempdir;
+    use chrono::Utc;
+    use crate::models::{Vault, Entry};
+    use uuid::Uuid;
 
     #[test]
     fn test_create_vault_success() -> Result<(), CommandError> {
@@ -14,7 +17,7 @@ mod tests {
         assert!(!std::path::Path::new(&file_path).exists());
 
         // Create the vault
-        lifecycle::create_vault(file_path.clone(), password)?;
+        lifecycle::write_vault(file_path.clone(), password, None)?;
 
         // Verify the file was created
         assert!(std::path::Path::new(&file_path).exists());
@@ -37,7 +40,7 @@ mod tests {
         assert!(std::path::Path::new(&file_path).exists());
 
         // Attempt to create the vault again
-        let result = lifecycle::create_vault(file_path.clone(), password);
+        let result = lifecycle::write_vault(file_path.clone(), password, None);
 
         // Verify that the function returns an error indicating the file already exists
         match result {
@@ -55,13 +58,13 @@ mod tests {
         let password = "test_password".to_string();
 
         // Create the vault
-        lifecycle::create_vault(file_path.clone(), password.clone())?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), None)?;
 
         // Verify the file was created
         assert!(std::path::Path::new(&file_path).exists());
 
         // Open the vault with correct password
-        let vault = lifecycle::open_vault(file_path.clone(), password)?;
+        let vault = lifecycle::read_vault(file_path.clone(), password)?;
 
         // Verify the vault structure
         assert!(vault.entries.is_empty()); // Should be empty for a new vault
@@ -78,10 +81,10 @@ mod tests {
         let wrong_password = "wrong_password".to_string();
 
         // Create the vault with correct password
-        lifecycle::create_vault(file_path.clone(), password)?;
+        lifecycle::write_vault(file_path.clone(), password, None)?;
 
         // Attempt to open with wrong password
-        let result = lifecycle::open_vault(file_path, wrong_password);
+        let result = lifecycle::read_vault(file_path, wrong_password);
 
         // Should fail with a crypto error (decryption failure)
         assert!(result.is_err());
@@ -99,7 +102,7 @@ mod tests {
         let password = "test_password".to_string();
 
         // Attempt to open a nonexistent vault
-        let result = lifecycle::open_vault(file_path, password);
+        let result = lifecycle::read_vault(file_path, password);
 
         // Should fail with an IO error
         assert!(result.is_err());
@@ -109,5 +112,116 @@ mod tests {
         }
 
         Ok(())
+    }
+    #[test]
+    fn test_update_vault_success() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let password = "test_password".to_string();
+
+        // Create initial vault
+        lifecycle::write_vault(file_path.clone(), password.clone(), None)?;
+        
+        // Open and modify vault
+        let mut vault = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        vault.hmac = "test_hmac".to_string();
+        vault.entries.push(Entry::Data {
+            id: Uuid::new_v4(),
+            name: "Test Entry".to_string(),
+            data_type: "note".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            fields: Vec::new(),
+            tags: Vec::new(),
+        });
+
+        let prev_updated_at = vault.updated_at;
+
+        // Perform update
+        lifecycle::write_vault(file_path.clone(), password.clone(), Some(vault))?;
+
+        // Verify changes
+        let updated_vault = lifecycle::read_vault(file_path, password)?;
+        assert_eq!(updated_vault.hmac, "test_hmac");
+        assert_eq!(updated_vault.entries.len(), 1);
+        assert!(updated_vault.updated_at > prev_updated_at);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_update_vault_wrong_password() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let password = "correct_password".to_string();
+        let wrong_password = "wrong_password".to_string();
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), None)?;
+        let mut vault = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        vault.hmac = "new_hmac".to_string();
+
+        let result = lifecycle::write_vault(file_path, wrong_password, Some(vault));
+        match result {
+            Err(CommandError::Crypto(_)) => Ok(()),
+            _ => panic!("Expected cryptographic error for wrong password"),
+        }
+    }
+
+    #[test]
+    fn test_update_vault_nonexistent_file() {
+        let file_path = "/nonexistent/path/vault.vault".to_string();
+        let password = "test_password".to_string();
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
+
+        let result = lifecycle::write_vault(file_path, password, Some(vault));
+        assert!(matches!(result, Err(CommandError::Io(_))));
+    }
+    #[test]
+    fn test_delete_vault_success() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("delete_me.monark").to_str().unwrap().to_string();
+        let password = "test_password".to_string();
+
+        // Create the vault file
+        std::fs::File::create(&file_path).expect("Failed to create dummy .monark file");
+        assert!(std::path::Path::new(&file_path).exists());
+
+        // Delete the vault file
+        lifecycle::delete_vault(file_path.clone())?;
+        assert!(!std::path::Path::new(&file_path).exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_delete_vault_invalid_extension() {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("invalid.txt").to_str().unwrap().to_string();
+
+        // Create a dummy file with invalid extension
+        std::fs::File::create(&file_path).expect("Failed to create dummy file");
+        assert!(std::path::Path::new(&file_path).exists());
+
+        let result = lifecycle::delete_vault(file_path.clone());
+        match result {
+            Err(CommandError::Io(msg)) => assert_eq!(msg, "Invalid vault file extension"),
+            _ => panic!("Expected CommandError::Io with 'Invalid vault file extension'"),
+        }
+        // File should still exist
+        assert!(std::path::Path::new(&file_path).exists());
+    }
+
+    #[test]
+    fn test_delete_vault_nonexistent_file() {
+        let file_path = "/nonexistent/path/does_not_exist.monark".to_string();
+        let result = lifecycle::delete_vault(file_path);
+        match result {
+            Err(CommandError::Io(msg)) => assert_eq!(msg, "Vault file does not exist"),
+            _ => panic!("Expected CommandError::Io with 'Vault file does not exist'"),
+        }
     }
 }
