@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
 import { addVault, Vault } from '../../redux/actions/vault';
-
+import VaultCommands from '../../services/commands';
 interface AddVaultFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -38,9 +37,9 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
     setLoading(true);
     
     try {
-    const path = `${filePath}/${vaultName}.monark`;
-      await invoke("create_vault", { filePath: path, password });
-      
+      const path = `${filePath}/${vaultName}.monark`;
+      await VaultCommands.write(path, password);
+
       const newVault: Vault = {
         id: generateVaultId(),
         name: vaultName,

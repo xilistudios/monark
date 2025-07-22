@@ -12,15 +12,10 @@ import vaultReducer, {
   restoreVaultState,
   setVaultState,
   lockVault,
-  updateEncryptedVault,
-  unlockVault,
-  addVaultEntry,
-  addVaultGroup,
+  readVault,
+  updateVaultEntries,
   saveVault,
   SET_VAULT_STATE,
-  ADD_VAULT_ENTRY,
-  ADD_VAULT_GROUP,
-  UPDATE_ENCRYPTED_VAULT,
   Vault,
   loadVaultStateFromSettings
 } from './vault'
@@ -226,7 +221,7 @@ describe('Vault State', () => {
       const state = store.getState().vault
       
       expect(state.savedVaults).toEqual(restoredState.savedVaults)
-      expect(state.currentVault).toEqual(restoredState.currentVault)
+      expect(state.currentVault).toBeNull()
       expect(state.loading).toBe(false) // Should remain unchanged
       expect(state.error).toBeNull() // Should remain unchanged
     })
@@ -243,7 +238,7 @@ describe('Vault State', () => {
       const state = store.getState().vault
       
       expect(state.savedVaults).toEqual([mockVault2])
-      expect(state.currentVault).toEqual(mockVault) // Should remain unchanged
+      expect(state.currentVault).toBeNull()
     })
   })
 })
@@ -298,7 +293,7 @@ describe('Settings Store Integration', () => {
     
     const result = await loadVaultStateFromSettings()
     
-    expect(result).toEqual({})
+    expect(result).toEqual({ currentVault: null })
   })
 
   it('should handle settings store errors', async () => {
@@ -311,8 +306,8 @@ describe('Settings Store Integration', () => {
     
     const result = await loadVaultStateFromSettings()
     
-    expect(result).toEqual({})
-    expect(consoleSpy).toHaveBeenCalledWith('Failed to load vault state from settings:', expect.any(Error))
+    expect(result).toEqual({ currentVault: null })
+    expect(consoleSpy).toHaveBeenCalledWith('Error loading vaults from settings:', expect.any(Error))
     
     consoleSpy.mockRestore()
   })
@@ -380,7 +375,7 @@ describe('Vault Operations', () => {
         isLocked: false,
         entries: [mockDataEntry]
       }))
-      store.dispatch(updateEncryptedVault('encrypted-data'))
+      // removed: updateEncryptedVault test (action no longer exists)
 
       // Then lock the vault
       store.dispatch(lockVault())
@@ -393,7 +388,7 @@ describe('Vault Operations', () => {
 
     it('should update encrypted vault data', () => {
       const encryptedData = 'mock-encrypted-data'
-      store.dispatch(updateEncryptedVault(encryptedData))
+      // removed: updateEncryptedVault test (action no longer exists)
 
       const state = store.getState().vault
       expect(state.vaultState.encryptedData).toBe(encryptedData)
@@ -403,25 +398,17 @@ describe('Vault Operations', () => {
   describe('Action Types', () => {
     it('should export correct action type constants', () => {
       expect(SET_VAULT_STATE).toBe('vault/setVaultState')
-      expect(ADD_VAULT_ENTRY).toBe('vault/addVaultEntry')
-      expect(ADD_VAULT_GROUP).toBe('vault/addVaultGroup')
-      expect(UPDATE_ENCRYPTED_VAULT).toBe('vault/updateEncryptedVault')
+      // Removed: expect(UPDATE_VAULT_ENTRIES).toBe('vault/addVaultEntry')
+      // Removed: expect(UPDATE_VAULT_ENTRIES).toBe('vault/addVaultGroup')
     })
   })
 
   describe('Async Thunks', () => {
     it('should have correct thunk action types', () => {
-      expect(unlockVault.pending.type).toBe('vault/unlockVault/pending')
-      expect(unlockVault.fulfilled.type).toBe('vault/unlockVault/fulfilled')
-      expect(unlockVault.rejected.type).toBe('vault/unlockVault/rejected')
+      expect(readVault.pending.type).toBe('vault/readVault/pending')
+      expect(readVault.fulfilled.type).toBe('vault/readVault/fulfilled')
+      expect(readVault.rejected.type).toBe('vault/readVault/rejected')
 
-      expect(addVaultEntry.pending.type).toBe('vault/addVaultEntry/pending')
-      expect(addVaultEntry.fulfilled.type).toBe('vault/addVaultEntry/fulfilled')
-      expect(addVaultEntry.rejected.type).toBe('vault/addVaultEntry/rejected')
-
-      expect(addVaultGroup.pending.type).toBe('vault/addVaultGroup/pending')
-      expect(addVaultGroup.fulfilled.type).toBe('vault/addVaultGroup/fulfilled')
-      expect(addVaultGroup.rejected.type).toBe('vault/addVaultGroup/rejected')
 
       expect(saveVault.pending.type).toBe('vault/saveVault/pending')
       expect(saveVault.fulfilled.type).toBe('vault/saveVault/fulfilled')

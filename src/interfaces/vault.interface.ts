@@ -6,7 +6,6 @@ export interface BaseEntry {
     entry_type: EntryType;
     name: string;
     data_type: string;
-    parent_id?: string; // Optional parent group ID
 }
 
 // Group entry interface
@@ -48,4 +47,12 @@ export interface EntryData {
     updated_at: string; // ISO 8601 string
     fields: Field[];
     tags: string[];
+}
+// Type guards for unified entry system
+export function isDataEntry(entry: Entry): entry is DataEntry {
+	return entry.entry_type === 'entry'
+}
+
+export function isGroupEntry(entry: Entry): entry is GroupEntry {
+	return entry.entry_type === 'group'
 }

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import VaultSelector from "../components/Vault/VaultSelector"
 import { AddEntryModal } from "../components/Vault/AddEntryModal"
 import { RootState, AppDispatch } from '../redux/store'
-import { unlockVault, saveVault, lockVault } from '../redux/actions/vault'
+import { readVault, saveVault, lockVault } from '../redux/actions/vault'
 import { Entry, DataEntry, GroupEntry } from '../interfaces/vault.interface'
 
 const HomeScreen = () => {
@@ -38,7 +38,7 @@ const HomeScreen = () => {
 
         setUnlockError('')
         try {
-            await dispatch(unlockVault({
+            await dispatch(readVault({
                 password: password.trim(),
                 filePath: currentVault.path
             })).unwrap()

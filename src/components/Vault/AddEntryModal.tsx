@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useTranslation } from 'react-i18next'
-import { addVaultEntry, VaultEntry, saveVault } from '../../redux/actions/vault'
+import { updateVaultEntries, saveVault } from '../../redux/actions/vault'
+import { Entry } from '../../interfaces/vault.interface'
 import { Field } from '../../interfaces/vault.interface'
 import { Modal } from '../UI/Modal'
 import { AppDispatch, RootState } from '../../redux/store'
@@ -93,7 +94,7 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess }: AddEntryModalProps
 				secret: field.secret
 			}))
 
-			const entryData: VaultEntry = {
+			const entryData: Entry = {
 				id: generateEntryId(),
 				entry_type: 'entry',
 				name: entryTitle.trim(),
@@ -104,7 +105,10 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess }: AddEntryModalProps
 				tags: tags
 			}
 
-			await dispatch(addVaultEntry(entryData))
+			// Add new entry to the current vault entries array
+			const currentEntries = (currentVault?.data?.content?.entries || [])
+			const updatedEntries = [...currentEntries, entryData]
+			await dispatch(updateVaultEntries({ adds: [entryData] }))
 			
 			// Save the vault after adding the entry
 			if (currentVault && currentVault.data?.credential) {
