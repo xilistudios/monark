@@ -8,10 +8,7 @@ export default class VaultCommands {
     return await invoke<VaultContent>('read_vault', { filePath, password })
   }
 
-  static async write(filePath: string, password: string, vaultContent?: any) {
-    console.log('Writing vault to:', filePath)
-    console.log('Vault content:', vaultContent)
-    console.log('Password:', password)
+  static async write(filePath: string, password: string, vaultContent?: VaultContent) {
     if (!vaultContent) {
       throw new Error('Vault content is required for writing')
     }
