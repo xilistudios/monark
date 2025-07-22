@@ -97,9 +97,52 @@
         "importVault": "Error importing vault"
       }
     },
+    "addEntry": {
+      "title": "Add New Entry",
+      "entryTitle": "Entry Title",
+      "entryTitlePlaceholder": "Enter entry title",
+      "fields": "Fields",
+      "fieldTitle": "Field name",
+      "fieldProperty": "Property",
+      "fieldValue": "Value",
+      "secret": "Secret",
+      "addField": "Add Field",
+      "tags": "Tags",
+      "tagPlaceholder": "Enter tag",
+      "addTag": "Add Tag",
+      "addEntry": "Add Entry",
+      "adding": "Adding...",
+      "cancel": "Cancel",
+      "errors": {
+        "titleRequired": "Entry title is required",
+        "fieldsRequired": "At least one field is required",
+        "addFailed": "Failed to add entry"
+      }
+    },
+    "vault": {
+      "unlock": {
+        "title": "Unlock Vault",
+        "password": "Password",
+        "passwordPlaceholder": "Enter vault password",
+        "unlockButton": "Unlock",
+        "unlocking": "Unlocking..."
+      },
+      "manager": {
+        "addEntry": "Add Entry",
+        "addGroup": "Add Group",
+        "entries": "Entries",
+        "groups": "Groups",
+        "noEntries": "No entries found",
+        "noGroups": "No groups found",
+        "emptyVault": "Your vault is empty. Add some entries to get started.",
+        "noVaultSelected": "No Vault Selected",
+        "selectVaultToStart": "Select a vault from the sidebar to get started"
+      }
+    },
     "errors": {
       "missingFields": "Please fill in all fields",
-      "invalidPassword": "Invalid password"
+      "invalidPassword": "Invalid password",
+      "unlockFailed": "Failed to unlock vault"
     }
   }
 }

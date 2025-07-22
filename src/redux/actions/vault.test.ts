@@ -10,6 +10,17 @@ import vaultReducer, {
   setError,
   clearError,
   restoreVaultState,
+  setVaultState,
+  lockVault,
+  updateEncryptedVault,
+  unlockVault,
+  addVaultEntry,
+  addVaultGroup,
+  saveVault,
+  SET_VAULT_STATE,
+  ADD_VAULT_ENTRY,
+  ADD_VAULT_GROUP,
+  UPDATE_ENCRYPTED_VAULT,
   Vault,
   loadVaultStateFromSettings
 } from './vault'
@@ -39,7 +50,7 @@ describe('Vault State', () => {
     name: 'Test Vault',
     path: '/path/to/vault',
     isLocked: false,
-    lastAccessed: new Date('2025-01-01')
+    lastAccessed: '2025-01-01T00:00:00.000Z' // Store as ISO string
   }
 
   const mockVault2: Vault = {
@@ -47,7 +58,7 @@ describe('Vault State', () => {
     name: 'Test Vault 2',
     path: '/path/to/vault2',
     isLocked: true,
-    lastAccessed: new Date('2025-01-02')
+    lastAccessed: '2025-01-02T00:00:00.000Z' // Store as ISO string
   }
 
   describe('Initial State', () => {
@@ -58,6 +69,10 @@ describe('Vault State', () => {
         currentVault: null,
         loading: false,
         error: null,
+        vaultState: {
+          isLocked: true,
+          entries: []
+        }
       })
     })
   })
@@ -145,7 +160,7 @@ describe('Vault State', () => {
     })
 
     it('should update last accessed date', () => {
-      const initialDate = new Date('2025-01-01')
+      const initialDate = '2025-01-01T00:00:00.000Z'
       const vaultWithDate = { ...mockVault, lastAccessed: initialDate }
       
       store.dispatch(addVault(vaultWithDate))
@@ -158,7 +173,7 @@ describe('Vault State', () => {
       store.dispatch(updateLastAccessed(mockVault.id))
       const state = store.getState().vault
       
-      expect(state.savedVaults[0].lastAccessed).toEqual(mockDate)
+      expect(state.savedVaults[0].lastAccessed).toBe(mockDate.toISOString())
       
       vi.useRealTimers()
     })
@@ -238,59 +253,41 @@ describe('Settings Store Integration', () => {
     const { settingsStore } = await import('../../store/settings')
     const mockGet = vi.mocked(settingsStore.get)
     
-    const savedState = {
-      savedVaults: [{
-        id: 'test-vault',
-        name: 'Test Vault',
-        path: '/test/path',
-        isLocked: false,
-        lastAccessed: '2025-01-01T00:00:00.000Z'
-      }],
-      currentVault: {
-        id: 'current-vault',
-        name: 'Current Vault',
-        path: '/current/path',
-        isLocked: true,
-        lastAccessed: '2025-01-02T00:00:00.000Z'
-      }
-    }
+    const savedVaults = [{
+      id: 'test-vault',
+      name: 'Test Vault',
+      path: '/test/path',
+      isLocked: false,
+      lastAccessed: '2025-01-01T00:00:00.000Z'
+    }]
     
-    mockGet.mockResolvedValue(savedState)
+    mockGet.mockResolvedValue(savedVaults)
     
     const result = await loadVaultStateFromSettings()
     
     expect(result.savedVaults).toHaveLength(1)
-    expect(result.savedVaults![0].lastAccessed).toBeInstanceOf(Date)
-    expect(result.savedVaults![0].lastAccessed).toEqual(new Date('2025-01-01T00:00:00.000Z'))
-    expect(result.currentVault?.lastAccessed).toBeInstanceOf(Date)
-    expect(result.currentVault?.lastAccessed).toEqual(new Date('2025-01-02T00:00:00.000Z'))
+    expect(result.savedVaults![0].lastAccessed).toBe('2025-01-01T00:00:00.000Z')
+    expect(result.savedVaults![0].isLocked).toBe(true)
+    expect(result.currentVault).toBeNull()
   })
 
   it('should handle missing lastAccessed dates', async () => {
     const { settingsStore } = await import('../../store/settings')
     const mockGet = vi.mocked(settingsStore.get)
     
-    const savedState = {
-      savedVaults: [{
-        id: 'test-vault',
-        name: 'Test Vault',
-        path: '/test/path',
-        isLocked: false
-      }],
-      currentVault: {
-        id: 'current-vault',
-        name: 'Current Vault',
-        path: '/current/path',
-        isLocked: true
-      }
-    }
+    const savedVaults = [{
+      id: 'test-vault',
+      name: 'Test Vault',
+      path: '/test/path',
+      isLocked: false
+    }]
     
-    mockGet.mockResolvedValue(savedState)
+    mockGet.mockResolvedValue(savedVaults)
     
     const result = await loadVaultStateFromSettings()
     
     expect(result.savedVaults![0].lastAccessed).toBeUndefined()
-    expect(result.currentVault?.lastAccessed).toBeUndefined()
+    expect(result.currentVault).toBeNull()
   })
 
   it('should return empty object when no saved state', async () => {
@@ -318,5 +315,117 @@ describe('Settings Store Integration', () => {
     expect(consoleSpy).toHaveBeenCalledWith('Failed to load vault state from settings:', expect.any(Error))
     
     consoleSpy.mockRestore()
+  })
+})
+
+// New tests for vault operations
+describe('Vault Operations', () => {
+  let store: ReturnType<typeof configureStore<{ vault: ReturnType<typeof vaultReducer> }>>
+
+  beforeEach(() => {
+    store = configureStore({
+      reducer: {
+        vault: vaultReducer,
+      },
+    })
+  })
+
+  describe('Vault State Management', () => {
+    it('should set vault state', () => {
+      const mockDataEntry = {
+        id: 'entry-1',
+        entry_type: 'entry' as const,
+        name: 'Test Entry',
+        data_type: 'website',
+        created_at: '2025-01-01T00:00:00.000Z',
+        updated_at: '2025-01-01T00:00:00.000Z',
+        fields: [],
+        tags: []
+      }
+      
+      const mockGroupEntry = {
+        id: 'group-1',
+        entry_type: 'group' as const,
+        name: 'Test Group',
+        data_type: 'group',
+        children: []
+      }
+
+      const allEntries = [mockDataEntry, mockGroupEntry]
+
+      store.dispatch(setVaultState({
+        isLocked: false,
+        entries: allEntries
+      }))
+
+      const state = store.getState().vault
+      expect(state.vaultState.isLocked).toBe(false)
+      expect(state.vaultState.entries).toEqual(allEntries)
+    })
+
+    it('should lock vault and clear sensitive data', () => {
+      const mockDataEntry = {
+        id: 'test',
+        entry_type: 'entry' as const,
+        name: 'test',
+        data_type: 'website',
+        created_at: '2025-01-01T00:00:00.000Z',
+        updated_at: '2025-01-01T00:00:00.000Z',
+        fields: [],
+        tags: []
+      }
+
+      // First set some data
+      store.dispatch(setVaultState({
+        isLocked: false,
+        entries: [mockDataEntry]
+      }))
+      store.dispatch(updateEncryptedVault('encrypted-data'))
+
+      // Then lock the vault
+      store.dispatch(lockVault())
+
+      const state = store.getState().vault
+      expect(state.vaultState.isLocked).toBe(true)
+      expect(state.vaultState.entries).toEqual([])
+      expect(state.vaultState.encryptedData).toBeUndefined()
+    })
+
+    it('should update encrypted vault data', () => {
+      const encryptedData = 'mock-encrypted-data'
+      store.dispatch(updateEncryptedVault(encryptedData))
+
+      const state = store.getState().vault
+      expect(state.vaultState.encryptedData).toBe(encryptedData)
+    })
+  })
+
+  describe('Action Types', () => {
+    it('should export correct action type constants', () => {
+      expect(SET_VAULT_STATE).toBe('vault/setVaultState')
+      expect(ADD_VAULT_ENTRY).toBe('vault/addVaultEntry')
+      expect(ADD_VAULT_GROUP).toBe('vault/addVaultGroup')
+      expect(UPDATE_ENCRYPTED_VAULT).toBe('vault/updateEncryptedVault')
+    })
+  })
+
+  describe('Async Thunks', () => {
+    it('should have correct thunk action types', () => {
+      expect(unlockVault.pending.type).toBe('vault/unlockVault/pending')
+      expect(unlockVault.fulfilled.type).toBe('vault/unlockVault/fulfilled')
+      expect(unlockVault.rejected.type).toBe('vault/unlockVault/rejected')
+
+      expect(addVaultEntry.pending.type).toBe('vault/addVaultEntry/pending')
+      expect(addVaultEntry.fulfilled.type).toBe('vault/addVaultEntry/fulfilled')
+      expect(addVaultEntry.rejected.type).toBe('vault/addVaultEntry/rejected')
+
+      expect(addVaultGroup.pending.type).toBe('vault/addVaultGroup/pending')
+      expect(addVaultGroup.fulfilled.type).toBe('vault/addVaultGroup/fulfilled')
+      expect(addVaultGroup.rejected.type).toBe('vault/addVaultGroup/rejected')
+
+      expect(saveVault.pending.type).toBe('vault/saveVault/pending')
+      expect(saveVault.fulfilled.type).toBe('vault/saveVault/fulfilled')
+      expect(saveVault.rejected.type).toBe('vault/saveVault/rejected')
+    })
   })
 })

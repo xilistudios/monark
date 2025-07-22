@@ -132,4 +132,59 @@ pub fn open_vault(
 
     Ok(vault)
 }
+#[tauri::command]
+pub fn update_vault(
+	file_path: String,
+	password: String,
+	mut vault_content: Vault,
+) -> Result<(), CommandError> {
+	// 1. Read VaultFile from disk
+	let mut vault_file = io::vault::read_vault(file_path.clone())?;
+
+	// 2. Derive KDF Key from Password using stored Argon2 params
+	let user_salt = base64::engine::general_purpose::URL_SAFE_NO_PAD
+		.decode(&vault_file.argon2_params.salt)
+		.map_err(|e| CommandError::Crypto(format!("Failed to decode salt: {}", e)))?;
+	let kdf_key = crypto::argon2::derive_key_argon2id(
+		password.as_bytes(),
+		&user_salt,
+		vault_file.argon2_params.memory_cost_kib,
+		vault_file.argon2_params.iterations,
+		vault_file.argon2_params.parallelism,
+		32,
+	)?;
+
+	// 3. Decrypt Master Key using KDF Key
+	let mk_nonce = base64::engine::general_purpose::URL_SAFE_NO_PAD
+		.decode(&vault_file.credentials.nonce)
+		.map_err(|e| CommandError::Crypto(format!("Failed to decode master key nonce: {}", e)))?;
+	let mk_ciphertext = base64::engine::general_purpose::URL_SAFE_NO_PAD
+		.decode(&vault_file.credentials.ciphertext)
+		.map_err(|e| CommandError::Crypto(format!("Failed to decode master key ciphertext: {}", e)))?;
+	let master_key_vec = crypto::chacha::decrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &mk_ciphertext)?;
+	let master_key: [u8; 32] = master_key_vec.try_into()
+		.map_err(|_| CommandError::Crypto("Invalid decrypted master key length".to_string()))?;
+
+	// 4. Update vault_content.updated_at
+	vault_content.updated_at = Utc::now();
+
+	// 5. Serialize vault_content to JSON bytes
+	let vault_json_bytes = serde_json::to_vec(&vault_content)
+		.map_err(|e| CommandError::Io(format!("Failed to serialize vault: {}", e)))?;
+
+	// 6. Generate new encryption nonce
+	let vault_nonce = crypto::random::generate_nonce()?;
+
+	// 7. Encrypt vault JSON with master key
+	let vault_ciphertext = crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
+
+	// 8. Update VaultFile's vault data
+	vault_file.vault.nonce = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(vault_nonce);
+	vault_file.vault.ciphertext = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(vault_ciphertext);
+
+	// 9. Write updated VaultFile back to disk
+	io::vault::write_vault(file_path, &vault_file)?;
+
+	Ok(())
+}
 

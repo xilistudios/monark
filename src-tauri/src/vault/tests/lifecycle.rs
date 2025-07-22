@@ -3,6 +3,9 @@ mod tests {
     use crate::vault::lifecycle;
     use crate::commands::errors::CommandError;
     use tempfile::tempdir;
+    use chrono::Utc;
+    use crate::models::{Vault, Entry};
+    use uuid::Uuid;
 
     #[test]
     fn test_create_vault_success() -> Result<(), CommandError> {
@@ -109,5 +112,73 @@ mod tests {
         }
 
         Ok(())
+    }
+    #[test]
+    fn test_update_vault_success() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let password = "test_password".to_string();
+
+        // Create initial vault
+        lifecycle::create_vault(file_path.clone(), password.clone())?;
+        
+        // Open and modify vault
+        let mut vault = lifecycle::open_vault(file_path.clone(), password.clone())?;
+        vault.hmac = "test_hmac".to_string();
+        vault.entries.push(Entry::Data {
+            id: Uuid::new_v4(),
+            name: "Test Entry".to_string(),
+            data_type: "note".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            fields: Vec::new(),
+            tags: Vec::new(),
+            parent_id: None,
+        });
+
+        let prev_updated_at = vault.updated_at;
+
+        // Perform update
+        lifecycle::update_vault(file_path.clone(), password.clone(), vault)?;
+
+        // Verify changes
+        let updated_vault = lifecycle::open_vault(file_path, password)?;
+        assert_eq!(updated_vault.hmac, "test_hmac");
+        assert_eq!(updated_vault.entries.len(), 1);
+        assert!(updated_vault.updated_at > prev_updated_at);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_update_vault_wrong_password() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let password = "correct_password".to_string();
+        let wrong_password = "wrong_password".to_string();
+
+        lifecycle::create_vault(file_path.clone(), password.clone())?;
+        let mut vault = lifecycle::open_vault(file_path.clone(), password.clone())?;
+        vault.hmac = "new_hmac".to_string();
+
+        let result = lifecycle::update_vault(file_path, wrong_password, vault);
+        match result {
+            Err(CommandError::Crypto(_)) => Ok(()),
+            _ => panic!("Expected cryptographic error for wrong password"),
+        }
+    }
+
+    #[test]
+    fn test_update_vault_nonexistent_file() {
+        let file_path = "/nonexistent/path/vault.vault".to_string();
+        let password = "test_password".to_string();
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
+
+        let result = lifecycle::update_vault(file_path, password, vault);
+        assert!(matches!(result, Err(CommandError::Io(_))));
     }
 }
