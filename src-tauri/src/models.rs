@@ -61,7 +61,6 @@ pub enum Entry {
         name: String,
         data_type: String,
         children: Vec<Uuid>,
-        parent_id: Option<Uuid>,
     },
     #[serde(rename = "entry")]
     Data {
@@ -72,7 +71,6 @@ pub enum Entry {
         updated_at: DateTime<Utc>,
         fields: Vec<Field>,
         tags: Vec<String>,
-        parent_id: Option<Uuid>,
     },
 }
 

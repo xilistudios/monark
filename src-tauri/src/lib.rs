@@ -19,11 +19,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
-            vault::lifecycle::create_vault,
-            vault::lifecycle::open_vault,
-            vault::lifecycle::update_vault,
+            vault::lifecycle::write_vault,
+            vault::lifecycle::read_vault,
+            vault::lifecycle::delete_vault,
             commands::vault::unlock_vault,
-            commands::vault::update_vault_encrypted
+            commands::vault::update_vault_encrypted,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
