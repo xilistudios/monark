@@ -1,148 +1,148 @@
 {
-  "settings": {
-    "title": "Settings",
-    "language": "Language",
-    "theme": "Theme",
-    "resetButton": "Reset to Defaults",
-    "backButton": "Back to Home",
-    "clearDataButton": "Clear All App Data",
-    "clearDataButtonAria": "Clear all app data",
-    "clearDataConfirmTitle": "Clear All App Data?",
-    "clearDataConfirmDesc": "This will erase all app data. This action cannot be undone.",
-    "clearDataConfirmYes": "Yes, clear",
-    "clearDataConfirmNo": "Cancel",
-    "clearDataLoading": "Clearing...",
-    "clearDataSuccess": "App data cleared successfully.",
-    "clearDataError": "Failed to clear app data",
-    "errors": {
-      "invalidLanguage": "Invalid language selection"
-    },
-    "themes": {
-      "light": "Light",
-      "dark": "Dark",
-      "cupcake": "Cupcake",
-      "bumblebee": "Bumblebee",
-      "emerald": "Emerald",
-      "corporate": "Corporate",
-      "synthwave": "Synthwave",
-      "retro": "Retro",
-      "cyberpunk": "Cyberpunk",
-      "valentine": "Valentine",
-      "halloween": "Halloween",
-      "garden": "Garden",
-      "forest": "Forest",
-      "aqua": "Aqua",
-      "lofi": "Lofi",
-      "pastel": "Pastel",
-      "fantasy": "Fantasy",
-      "wireframe": "Wireframe",
-      "black": "Black",
-      "luxury": "Luxury",
-      "dracula": "Dracula",
-      "cmyk": "CMYK",
-      "autumn": "Autumn",
-      "business": "Business",
-      "acid": "Acid",
-      "lemonade": "Lemonade",
-      "night": "Night",
-      "coffee": "Coffee",
-      "winter": "Winter"
-    }
-  },
-  "home": {
-    "vaultSelector": {
-      "title": "Select Vault",
-      "createNew": "Create New Vault",
-      "importExisting": "Import Existing Vault",
-      "addVault": "Add Vault",
-      "settings": "Settings",
-      "noVaults": "No vaults found",
-      "emptyState": "Create a new vault to get started",
-      "lastAccessed": "Last accessed",
-      "never": "Never",
-      "locked": "Locked",
-      "unlocked": "Unlocked"
-    },
-    "addVault": {
-      "title": "Create New Vault",
-      "name": "Vault Name",
-      "namePlaceholder": "Enter vault name",
-      "filePath": "File Path",
-      "filePathPlaceholder": "Select a folder",
-      "password": "Password",
-      "passwordPlaceholder": "Enter password",
-      "createVault": "Create Vault",
-      "creating": "Creating...",
-      "browse": "Browse",
-      "cancel": "Cancel",
-      "errors": {
-        "fileDialog": "Error opening file dialog"
-      }
-    },
-    "importVault": {
-      "title": "Import Existing Vault",
-      "name": "Vault Name (Optional)",
-      "namePlaceholder": "Enter vault name (optional)",
-      "fileHelp": "Leave empty to use filename",
-      "vaultFile": "Vault File",
-      "vaultFilePlaceholder": "Select a vault file",
-      "password": "Password",
-      "passwordPlaceholder": "Enter password",
-      "importVault": "Import Vault",
-      "importing": "Importing...",
-      "browse": "Browse",
-      "cancel": "Cancel",
-      "errors": {
-        "fileDialog": "Error opening file dialog",
-        "importVault": "Error importing vault"
-      }
-    },
-    "addEntry": {
-      "title": "Add New Entry",
-      "entryTitle": "Entry Title",
-      "entryTitlePlaceholder": "Enter entry title",
-      "fields": "Fields",
-      "fieldTitle": "Field name",
-      "fieldProperty": "Property",
-      "fieldValue": "Value",
-      "secret": "Secret",
-      "addField": "Add Field",
-      "tags": "Tags",
-      "tagPlaceholder": "Enter tag",
-      "addTag": "Add Tag",
-      "addEntry": "Add Entry",
-      "adding": "Adding...",
-      "cancel": "Cancel",
-      "errors": {
-        "titleRequired": "Entry title is required",
-        "fieldsRequired": "At least one field is required",
-        "addFailed": "Failed to add entry"
-      }
-    },
-    "vault": {
-      "unlock": {
-        "title": "Unlock Vault",
-        "password": "Password",
-        "passwordPlaceholder": "Enter vault password",
-        "unlockButton": "Unlock",
-        "unlocking": "Unlocking..."
-      },
-      "manager": {
-        "addEntry": "Add Entry",
-        "addGroup": "Add Group",
-        "entries": "Entries",
-        "groups": "Groups",
-        "noEntries": "No entries found",
-        "noGroups": "No groups found",
-        "emptyVault": "Your vault is empty. Add some entries to get started.",
-        "noVaultSelected": "No Vault Selected",
-        "selectVaultToStart": "Select a vault from the sidebar to get started"
-      }
-    },
-    "errors": {
-      "missingFields": "Please fill in all fields",
-      "invalidPassword": "Invalid password",
-      "unlockFailed": "Failed to unlock vault"
-    }
-  }
+	"settings": {
+		"title": "Settings",
+		"language": "Language",
+		"theme": "Theme",
+		"resetButton": "Reset to Defaults",
+		"backButton": "Back to Home",
+		"clearDataButton": "Clear All App Data",
+		"clearDataButtonAria": "Clear all app data",
+		"clearDataConfirmTitle": "Clear All App Data?",
+		"clearDataConfirmDesc": "This will erase all app data. This action cannot be undone.",
+		"clearDataConfirmYes": "Yes, clear",
+		"clearDataConfirmNo": "Cancel",
+		"clearDataLoading": "Clearing...",
+		"clearDataSuccess": "App data cleared successfully.",
+		"clearDataError": "Failed to clear app data",
+		"errors": {
+			"invalidLanguage": "Invalid language selection"
+		},
+		"themes": {
+			"light": "Light",
+			"dark": "Dark",
+			"cupcake": "Cupcake",
+			"bumblebee": "Bumblebee",
+			"emerald": "Emerald",
+			"corporate": "Corporate",
+			"synthwave": "Synthwave",
+			"retro": "Retro",
+			"cyberpunk": "Cyberpunk",
+			"valentine": "Valentine",
+			"halloween": "Halloween",
+			"garden": "Garden",
+			"forest": "Forest",
+			"aqua": "Aqua",
+			"lofi": "Lofi",
+			"pastel": "Pastel",
+			"fantasy": "Fantasy",
+			"wireframe": "Wireframe",
+			"black": "Black",
+			"luxury": "Luxury",
+			"dracula": "Dracula",
+			"cmyk": "CMYK",
+			"autumn": "Autumn",
+			"business": "Business",
+			"acid": "Acid",
+			"lemonade": "Lemonade",
+			"night": "Night",
+			"coffee": "Coffee",
+			"winter": "Winter"
+		}
+	},
+	"home": {
+		"vaultSelector": {
+			"title": "Select Vault",
+			"createNew": "Create New Vault",
+			"importExisting": "Import Existing Vault",
+			"addVault": "Add Vault",
+			"settings": "Settings",
+			"noVaults": "No vaults found",
+			"emptyState": "Create a new vault to get started",
+			"lastAccessed": "Last accessed",
+			"never": "Never",
+			"locked": "Locked",
+			"unlocked": "Unlocked"
+		},
+		"addVault": {
+			"title": "Create New Vault",
+			"name": "Vault Name",
+			"namePlaceholder": "Enter vault name",
+			"filePath": "File Path",
+			"filePathPlaceholder": "Select a folder",
+			"password": "Password",
+			"passwordPlaceholder": "Enter password",
+			"createVault": "Create Vault",
+			"creating": "Creating...",
+			"browse": "Browse",
+			"cancel": "Cancel",
+			"errors": {
+				"fileDialog": "Error opening file dialog"
+			}
+		},
+		"importVault": {
+			"title": "Import Existing Vault",
+			"name": "Vault Name (Optional)",
+			"namePlaceholder": "Enter vault name (optional)",
+			"fileHelp": "Leave empty to use filename",
+			"vaultFile": "Vault File",
+			"vaultFilePlaceholder": "Select a vault file",
+			"password": "Password",
+			"passwordPlaceholder": "Enter password",
+			"importVault": "Import Vault",
+			"importing": "Importing...",
+			"browse": "Browse",
+			"cancel": "Cancel",
+			"errors": {
+				"fileDialog": "Error opening file dialog",
+				"importVault": "Error importing vault"
+			}
+		},
+		"addEntry": {
+			"title": "Add New Entry",
+			"entryTitle": "Entry Title",
+			"entryTitlePlaceholder": "Enter entry title",
+			"fields": "Fields",
+			"fieldTitle": "Field name",
+			"fieldProperty": "Property",
+			"fieldValue": "Value",
+			"secret": "Secret",
+			"addField": "Add Field",
+			"tags": "Tags",
+			"tagPlaceholder": "Enter tag",
+			"addTag": "Add Tag",
+			"addEntry": "Add Entry",
+			"adding": "Adding...",
+			"cancel": "Cancel",
+			"errors": {
+				"titleRequired": "Entry title is required",
+				"fieldsRequired": "At least one field is required",
+				"addFailed": "Failed to add entry"
+			}
+		},
+		"vault": {
+			"unlock": {
+				"title": "Unlock Vault",
+				"password": "Password",
+				"passwordPlaceholder": "Enter vault password",
+				"unlockButton": "Unlock",
+				"unlocking": "Unlocking..."
+			},
+			"manager": {
+				"addEntry": "Add Entry",
+				"addGroup": "Add Group",
+				"entries": "Entries",
+				"groups": "Groups",
+				"noEntries": "No entries found",
+				"noGroups": "No groups found",
+				"emptyVault": "Your vault is empty. Add some entries to get started.",
+				"noVaultSelected": "No Vault Selected",
+				"selectVaultToStart": "Select a vault from the sidebar to get started"
+			}
+		},
+		"errors": {
+			"missingFields": "Please fill in all fields",
+			"invalidPassword": "Invalid password",
+			"unlockFailed": "Failed to unlock vault"
+		}
+	}
 }

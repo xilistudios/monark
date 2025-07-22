@@ -1,38 +1,41 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import { settingsStore } from '../../store/settings'
-import { VaultContent, Entry } from '../../interfaces/vault.interface'
-import VaultCommands from '../../services/commands'
-import { VaultUpdater } from '../../utils/VaultUpdater'
-import { RootState } from '../store'
- 
+import {
+	createAsyncThunk,
+	createSlice,
+	type PayloadAction,
+} from "@reduxjs/toolkit";
+import type { Entry, VaultContent } from "../../interfaces/vault.interface";
+import VaultCommands from "../../services/commands";
+import { settingsStore } from "../../store/settings";
+import { VaultUpdater } from "../../utils/VaultUpdater";
+import type { RootState } from "../store";
 
 export interface Vault {
-  id: string
-  name: string
-  path: string
-  lastAccessed?: string // Always store as ISO string for serialization
-  isLocked: boolean
-  // In-memory data
-  data?: {
-    credential?: string
-    content?: VaultContent
-    navigationPath?: string
-  }
+	id: string;
+	name: string;
+	path: string;
+	lastAccessed?: string; // Always store as ISO string for serialization
+	isLocked: boolean;
+	// In-memory data
+	data?: {
+		credential?: string;
+		content?: VaultContent;
+		navigationPath?: string;
+	};
 }
 
 // Types for vault entry operations - using the new unified structure
 
 interface VaultState {
-  savedVaults: Vault[]
-  currentVault: Vault | null
-  loading: boolean
-  error: string | null
-  // Unified vault state with single entries array
-  vaultState: {
-    isLocked: boolean
-    encryptedData?: string // Never persisted
-    entries: Entry[] // Unified array containing both DataEntry and GroupEntry
-  }
+	savedVaults: Vault[];
+	currentVault: Vault | null;
+	loading: boolean;
+	error: string | null;
+	// Unified vault state with single entries array
+	vaultState: {
+		isLocked: boolean;
+		encryptedData?: string; // Never persisted
+		entries: Entry[]; // Unified array containing both DataEntry and GroupEntry
+	};
 }
 
 /**
@@ -41,61 +44,60 @@ interface VaultState {
  */
 const saveVaultStateToSettings = async (vaults: Vault[]) => {
 	try {
-		const persistentVaults = vaults.map(v => ({
+		const persistentVaults = vaults.map((v) => ({
 			id: v.id,
 			name: v.name,
 			path: v.path,
 			lastAccessed: v.lastAccessed,
-			isLocked: v.isLocked
+			isLocked: v.isLocked,
 		}));
-		await settingsStore.set('vaults', persistentVaults)
+		await settingsStore.set("vaults", persistentVaults);
 	} catch (error) {
-		console.error('Error saving vaults to settings:', error)
+		console.error("Error saving vaults to settings:", error);
 	}
-}
+};
 
 /**
  * Load vault state from settings store.
  * Mirrors loadPreferencesFromSettings return type/style.
  */
-export const loadVaultStateFromSettings = async (): Promise<Partial<VaultState>> => {
+export const loadVaultStateFromSettings = async (): Promise<
+	Partial<VaultState>
+> => {
 	try {
-		const vaults = await settingsStore.get('vaults')
+		const vaults = await settingsStore.get("vaults");
 		if (vaults && Array.isArray(vaults)) {
 			return {
 				savedVaults: vaults.map((vault: any) => ({
 					...vault,
 					lastAccessed: vault.lastAccessed || undefined,
-					isLocked: true
+					isLocked: true,
 				})),
-				currentVault: null
-			}
+				currentVault: null,
+			};
 		}
 	} catch (error) {
-		console.error('Error loading vaults from settings:', error)
+		console.error("Error loading vaults from settings:", error);
 	}
-	return { currentVault: null }
-}
+	return { currentVault: null };
+};
 
 // Action Types
-export const SET_VAULT_STATE = 'vault/setVaultState'
+export const SET_VAULT_STATE = "vault/setVaultState";
 
 // Async Thunks
 export const readVault = createAsyncThunk<
-  VaultContent,
-  { password: string; filePath: string },
-  { rejectValue: string }
->(
-  'vault/readVault',
-  async ({ password, filePath }, { rejectWithValue }) => {
-    try {
-      const vaultData = await VaultCommands.read(filePath, password)
-      return vaultData
-    } catch (error) {
-      return rejectWithValue(error as string)
-    }
-  }
-)
+	VaultContent,
+	{ password: string; filePath: string },
+	{ rejectValue: string }
+>("vault/readVault", async ({ password, filePath }, { rejectWithValue }) => {
+	try {
+		const vaultData = await VaultCommands.read(filePath, password);
+		return vaultData;
+	} catch (error) {
+		return rejectWithValue(error as string);
+	}
+});
 
 /**
  * Unified reducer for batch updating vault entries.
@@ -103,284 +105,329 @@ export const readVault = createAsyncThunk<
  */
 
 export const saveVault = createAsyncThunk<
-  void,
-  { filePath: string; password: string },
-  { rejectValue: string; state: RootState }
+	void,
+	{ filePath: string; password: string },
+	{ rejectValue: string; state: RootState }
 >(
-  'vault/saveVault',
-  async ({ filePath, password }, { getState, rejectWithValue }) => {
-    try {
-      const state = getState()
-      const { entries } = state.vault.vaultState
-      
-      const vaultContent: VaultContent = {
-        updated_at: new Date().toISOString(),
-        hmac: '', // Will be generated by Tauri
-        entries: entries
-      }
-      console.log('Saving vault content:', vaultContent)
-      await VaultCommands.write(
-        filePath,
-        password,
-        vaultContent
-      )
-    } catch (error) {
-      return rejectWithValue(error as string)
-    }
-  }
-)
+	"vault/saveVault",
+	async ({ filePath, password }, { getState, rejectWithValue }) => {
+		try {
+			const state = getState();
+			const { entries } = state.vault.vaultState;
+
+			const vaultContent: VaultContent = {
+				updated_at: new Date().toISOString(),
+				hmac: "", // Will be generated by Tauri
+				entries: entries,
+			};
+			console.log("Saving vault content:", vaultContent);
+			await VaultCommands.write(filePath, password, vaultContent);
+		} catch (error) {
+			return rejectWithValue(error as string);
+		}
+	},
+);
 
 export const addVaultEntry = createAsyncThunk<
-  Entry[],
-  { parentId: string | null; newEntry: Entry },
-  { rejectValue: string; state: RootState }
+	Entry[],
+	{ parentId: string | null; newEntry: Entry },
+	{ rejectValue: string; state: RootState }
 >(
-  'vault/addEntry',
-  async (arg: { parentId: string | null; newEntry: Entry }, { getState, dispatch, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const updater = new VaultUpdater(state.vault.vaultState.entries);
-      updater.addEntry(arg.parentId, arg.newEntry);
-      const newEntries = updater.getEntries();
-      dispatch(vaultSlice.actions.setVaultState({ isLocked: false, entries: newEntries }));
-      const currentVault = state.vault.currentVault;
-      if (!currentVault || !currentVault.data?.credential) {
-        throw new Error('No current vault or credential available');
-      }
-      await dispatch(saveVault({ filePath: currentVault.path, password: currentVault.data.credential })).unwrap();
-      return newEntries;
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
+	"vault/addEntry",
+	async (
+		arg: { parentId: string | null; newEntry: Entry },
+		{ getState, dispatch, rejectWithValue },
+	) => {
+		try {
+			const state = getState() as RootState;
+			const updater = new VaultUpdater(state.vault.vaultState.entries);
+			updater.addEntry(arg.parentId, arg.newEntry);
+			const newEntries = updater.getEntries();
+			dispatch(
+				vaultSlice.actions.setVaultState({
+					isLocked: false,
+					entries: newEntries,
+				}),
+			);
+			const currentVault = state.vault.currentVault;
+			if (!currentVault || !currentVault.data?.credential) {
+				throw new Error("No current vault or credential available");
+			}
+			await dispatch(
+				saveVault({
+					filePath: currentVault.path,
+					password: currentVault.data.credential,
+				}),
+			).unwrap();
+			return newEntries;
+		} catch (error) {
+			return rejectWithValue((error as Error).message);
+		}
+	},
 );
 
 export const updateVaultEntry = createAsyncThunk<
-  Entry[],
-  { entryId: string; updates: Partial<Entry> },
-  { rejectValue: string; state: RootState }
+	Entry[],
+	{ entryId: string; updates: Partial<Entry> },
+	{ rejectValue: string; state: RootState }
 >(
-  'vault/updateEntry',
-  async (arg: { entryId: string; updates: Partial<Entry> }, { getState, dispatch, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const updater = new VaultUpdater(state.vault.vaultState.entries);
-      updater.updateEntry(arg.entryId, arg.updates);
-      const newEntries = updater.getEntries();
-      dispatch(vaultSlice.actions.setVaultState({ isLocked: false, entries: newEntries }));
-      const currentVault = state.vault.currentVault;
-      if (!currentVault || !currentVault.data?.credential) {
-        throw new Error('No current vault or credential available');
-      }
-      await dispatch(saveVault({ filePath: currentVault.path, password: currentVault.data.credential })).unwrap();
-      return newEntries;
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
+	"vault/updateEntry",
+	async (
+		arg: { entryId: string; updates: Partial<Entry> },
+		{ getState, dispatch, rejectWithValue },
+	) => {
+		try {
+			const state = getState() as RootState;
+			const updater = new VaultUpdater(state.vault.vaultState.entries);
+			updater.updateEntry(arg.entryId, arg.updates);
+			const newEntries = updater.getEntries();
+			dispatch(
+				vaultSlice.actions.setVaultState({
+					isLocked: false,
+					entries: newEntries,
+				}),
+			);
+			const currentVault = state.vault.currentVault;
+			if (!currentVault || !currentVault.data?.credential) {
+				throw new Error("No current vault or credential available");
+			}
+			await dispatch(
+				saveVault({
+					filePath: currentVault.path,
+					password: currentVault.data.credential,
+				}),
+			).unwrap();
+			return newEntries;
+		} catch (error) {
+			return rejectWithValue((error as Error).message);
+		}
+	},
 );
 
 export const deleteVaultEntry = createAsyncThunk<
-  Entry[],
-  string,
-  { rejectValue: string; state: RootState }
+	Entry[],
+	string,
+	{ rejectValue: string; state: RootState }
 >(
-  'vault/deleteEntry',
-  async (entryId: string, { getState, dispatch, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const updater = new VaultUpdater(state.vault.vaultState.entries);
-      updater.deleteEntry(entryId);
-      const newEntries = updater.getEntries();
-      dispatch(vaultSlice.actions.setVaultState({ isLocked: false, entries: newEntries }));
-      const currentVault = state.vault.currentVault;
-      if (!currentVault || !currentVault.data?.credential) {
-        throw new Error('No current vault or credential available');
-      }
-      await dispatch(saveVault({ filePath: currentVault.path, password: currentVault.data.credential })).unwrap();
-      return newEntries;
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
-    }
-  }
+	"vault/deleteEntry",
+	async (entryId: string, { getState, dispatch, rejectWithValue }) => {
+		try {
+			const state = getState() as RootState;
+			const updater = new VaultUpdater(state.vault.vaultState.entries);
+			updater.deleteEntry(entryId);
+			const newEntries = updater.getEntries();
+			dispatch(
+				vaultSlice.actions.setVaultState({
+					isLocked: false,
+					entries: newEntries,
+				}),
+			);
+			const currentVault = state.vault.currentVault;
+			if (!currentVault || !currentVault.data?.credential) {
+				throw new Error("No current vault or credential available");
+			}
+			await dispatch(
+				saveVault({
+					filePath: currentVault.path,
+					password: currentVault.data.credential,
+				}),
+			).unwrap();
+			return newEntries;
+		} catch (error) {
+			return rejectWithValue((error as Error).message);
+		}
+	},
 );
 
 const initialState: VaultState = {
-  savedVaults: [],
-  currentVault: null,
-  loading: false,
-  error: null,
-  vaultState: {
-    isLocked: true,
-    entries: [] // Unified array for both entries and groups
-  }
-}
+	savedVaults: [],
+	currentVault: null,
+	loading: false,
+	error: null,
+	vaultState: {
+		isLocked: true,
+		entries: [], // Unified array for both entries and groups
+	},
+};
 
 export const vaultSlice = createSlice({
-  name: 'vault',
-  initialState,
-  reducers: {
-    addVault: (state, action: PayloadAction<Vault>) => {
-      state.savedVaults.push(action.payload)
-      void saveVaultStateToSettings(state.savedVaults)
-    },
-    removeVault: (state, action: PayloadAction<string>) => {
-      state.savedVaults = state.savedVaults.filter((vault: Vault) => vault.id !== action.payload)
-      void saveVaultStateToSettings(state.savedVaults)
-    },
-    updateVault: (state, action: PayloadAction<Vault>) => {
-      const index = state.savedVaults.findIndex((vault: Vault) => vault.id === action.payload.id)
-      if (index !== -1) {
-        state.savedVaults[index] = action.payload
-      }
-      void saveVaultStateToSettings(state.savedVaults)
-    },
-    setCurrentVault: (state, action: PayloadAction<Vault | null>) => {
-      state.currentVault = action.payload
-      void saveVaultStateToSettings(state.savedVaults)
-    },
-    updateLastAccessed: (state, action: PayloadAction<string>) => {
-      const vault = state.savedVaults.find((vault: Vault) => vault.id === action.payload)
-      if (vault) {
-        vault.lastAccessed = new Date().toISOString()
-      }
-      void saveVaultStateToSettings(state.savedVaults)
-    },
-    setLoading: (state, action: PayloadAction<boolean>) => {
-      state.loading = action.payload
-    },
-    setError: (state, action: PayloadAction<string | null>) => {
-      state.error = action.payload
-    },
-    clearError: (state) => {
-      state.error = null
-    },
-    // New action to restore state from settings
-    restoreVaultState: (state, action: PayloadAction<Partial<Pick<VaultState, 'savedVaults'>>>) => {
-      if (action.payload.savedVaults) {
-        state.savedVaults = action.payload.savedVaults
-      }
-      state.currentVault = null // Always reset for security
-    },
-    // New synchronous actions for vault state management
-    setVaultState: (state, action: PayloadAction<{ isLocked: boolean; entries: Entry[] }>) => {
-      state.vaultState.isLocked = action.payload.isLocked
-      state.vaultState.entries = action.payload.entries
-      // Don't persist encrypted data
-    },
-    lockVault: (state) => {
-      state.vaultState.isLocked = true
-      state.vaultState.entries = []
-      state.vaultState.encryptedData = undefined
-      // Don't persist when locking
-    },
-    setVaultCredential: (state, action: PayloadAction<string>) => {
-      if (state.currentVault) {
-        if (!state.currentVault.data) {
-          state.currentVault.data = {}
-        }
-        state.currentVault.data.credential = action.payload
-      }
-    },
-    setNavigationPath: (state, action: PayloadAction<string>) => {
-      if (state.currentVault) {
-        if (!state.currentVault.data) {
-          state.currentVault.data = {}
-        }
-        state.currentVault.data.navigationPath = action.payload
-      }
-    }
-  },
-  extraReducers: (builder) => {
-    builder
-      // readVault cases
-      .addCase(readVault.pending, (state) => {
-        state.loading = true
-        state.error = null
-      })
-      .addCase(readVault.fulfilled, (state, action) => {
-        state.loading = false
-        state.vaultState.isLocked = false
-        state.vaultState.entries = action.payload.entries
-      })
-      .addCase(readVault.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload || 'Failed to read vault'
-        state.vaultState.isLocked = true
-      })
-      // saveVault cases
-      .addCase(saveVault.pending, (state) => {
-        state.loading = true
-        state.error = null
-      })
-      .addCase(saveVault.fulfilled, (state) => {
-        state.loading = false
-        // Update last accessed time for current vault
-        if (state.currentVault) {
-          const vault = state.savedVaults.find(v => v.id === state.currentVault!.id)
-          if (vault) {
-            vault.lastAccessed = new Date().toISOString()
-          }
-        }
-      })
-      .addCase(saveVault.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload || 'Failed to save vault'
-      })
-      // New cases for addVaultEntry
-      .addCase(addVaultEntry.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(addVaultEntry.fulfilled, (state) => {
-        state.loading = false;
-      })
-      .addCase(addVaultEntry.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload ?? 'Failed to add entry';
-      })
-      // New cases for updateVaultEntry
-      .addCase(updateVaultEntry.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(updateVaultEntry.fulfilled, (state) => {
-        state.loading = false;
-      })
-      .addCase(updateVaultEntry.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload ?? 'Failed to update entry';
-      })
-      // New cases for deleteVaultEntry
-      .addCase(deleteVaultEntry.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(deleteVaultEntry.fulfilled, (state) => {
-        state.loading = false;
-      })
-      .addCase(deleteVaultEntry.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload ?? 'Failed to delete entry';
-      });
-  },
-})
+	name: "vault",
+	initialState,
+	reducers: {
+		addVault: (state, action: PayloadAction<Vault>) => {
+			state.savedVaults.push(action.payload);
+			void saveVaultStateToSettings(state.savedVaults);
+		},
+		removeVault: (state, action: PayloadAction<string>) => {
+			state.savedVaults = state.savedVaults.filter(
+				(vault: Vault) => vault.id !== action.payload,
+			);
+			void saveVaultStateToSettings(state.savedVaults);
+		},
+		updateVault: (state, action: PayloadAction<Vault>) => {
+			const index = state.savedVaults.findIndex(
+				(vault: Vault) => vault.id === action.payload.id,
+			);
+			if (index !== -1) {
+				state.savedVaults[index] = action.payload;
+			}
+			void saveVaultStateToSettings(state.savedVaults);
+		},
+		setCurrentVault: (state, action: PayloadAction<Vault | null>) => {
+			state.currentVault = action.payload;
+			void saveVaultStateToSettings(state.savedVaults);
+		},
+		updateLastAccessed: (state, action: PayloadAction<string>) => {
+			const vault = state.savedVaults.find(
+				(vault: Vault) => vault.id === action.payload,
+			);
+			if (vault) {
+				vault.lastAccessed = new Date().toISOString();
+			}
+			void saveVaultStateToSettings(state.savedVaults);
+		},
+		setLoading: (state, action: PayloadAction<boolean>) => {
+			state.loading = action.payload;
+		},
+		setError: (state, action: PayloadAction<string | null>) => {
+			state.error = action.payload;
+		},
+		clearError: (state) => {
+			state.error = null;
+		},
+		// New action to restore state from settings
+		restoreVaultState: (
+			state,
+			action: PayloadAction<Partial<Pick<VaultState, "savedVaults">>>,
+		) => {
+			if (action.payload.savedVaults) {
+				state.savedVaults = action.payload.savedVaults;
+			}
+			state.currentVault = null; // Always reset for security
+		},
+		// New synchronous actions for vault state management
+		setVaultState: (
+			state,
+			action: PayloadAction<{ isLocked: boolean; entries: Entry[] }>,
+		) => {
+			state.vaultState.isLocked = action.payload.isLocked;
+			state.vaultState.entries = action.payload.entries;
+			// Don't persist encrypted data
+		},
+		lockVault: (state) => {
+			state.vaultState.isLocked = true;
+			state.vaultState.entries = [];
+			state.vaultState.encryptedData = undefined;
+			// Don't persist when locking
+		},
+		setVaultCredential: (state, action: PayloadAction<string>) => {
+			if (state.currentVault) {
+				if (!state.currentVault.data) {
+					state.currentVault.data = {};
+				}
+				state.currentVault.data.credential = action.payload;
+			}
+		},
+		setNavigationPath: (state, action: PayloadAction<string>) => {
+			if (state.currentVault) {
+				if (!state.currentVault.data) {
+					state.currentVault.data = {};
+				}
+				state.currentVault.data.navigationPath = action.payload;
+			}
+		},
+	},
+	extraReducers: (builder) => {
+		builder
+			// readVault cases
+			.addCase(readVault.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(readVault.fulfilled, (state, action) => {
+				state.loading = false;
+				state.vaultState.isLocked = false;
+				state.vaultState.entries = action.payload.entries;
+			})
+			.addCase(readVault.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.payload || "Failed to read vault";
+				state.vaultState.isLocked = true;
+			})
+			// saveVault cases
+			.addCase(saveVault.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(saveVault.fulfilled, (state) => {
+				state.loading = false;
+				// Update last accessed time for current vault
+				if (state.currentVault) {
+					const vault = state.savedVaults.find(
+						(v) => v.id === state.currentVault!.id,
+					);
+					if (vault) {
+						vault.lastAccessed = new Date().toISOString();
+					}
+				}
+			})
+			.addCase(saveVault.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.payload || "Failed to save vault";
+			})
+			// New cases for addVaultEntry
+			.addCase(addVaultEntry.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(addVaultEntry.fulfilled, (state) => {
+				state.loading = false;
+			})
+			.addCase(addVaultEntry.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.payload ?? "Failed to add entry";
+			})
+			// New cases for updateVaultEntry
+			.addCase(updateVaultEntry.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(updateVaultEntry.fulfilled, (state) => {
+				state.loading = false;
+			})
+			.addCase(updateVaultEntry.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.payload ?? "Failed to update entry";
+			})
+			// New cases for deleteVaultEntry
+			.addCase(deleteVaultEntry.pending, (state) => {
+				state.loading = true;
+				state.error = null;
+			})
+			.addCase(deleteVaultEntry.fulfilled, (state) => {
+				state.loading = false;
+			})
+			.addCase(deleteVaultEntry.rejected, (state, action) => {
+				state.loading = false;
+				state.error = action.payload ?? "Failed to delete entry";
+			});
+	},
+});
 
 export const {
-  addVault,
-  removeVault,
-  updateVault,
-  setCurrentVault,
-  updateLastAccessed,
-  setLoading,
-  setError,
-  clearError,
-  restoreVaultState,
-  setVaultState,
-  lockVault,
-  setVaultCredential,
-  setNavigationPath,
-} = vaultSlice.actions
+	addVault,
+	removeVault,
+	updateVault,
+	setCurrentVault,
+	updateLastAccessed,
+	setLoading,
+	setError,
+	clearError,
+	restoreVaultState,
+	setVaultState,
+	lockVault,
+	setVaultCredential,
+	setNavigationPath,
+} = vaultSlice.actions;
 
-
-export default vaultSlice.reducer
+export default vaultSlice.reducer;

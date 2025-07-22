@@ -1,157 +1,168 @@
-import { useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { useTranslation } from 'react-i18next'
-import { addVaultEntry } from '../../redux/actions/vault'
-import { DataEntry, Field } from '../../interfaces/vault.interface'
-import { Modal } from '../UI/Modal'
-import { AppDispatch, RootState } from '../../redux/store'
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useDispatch, useSelector } from "react-redux";
+import type { DataEntry, Field } from "../../interfaces/vault.interface";
+import { addVaultEntry } from "../../redux/actions/vault";
+import type { AppDispatch, RootState } from "../../redux/store";
+import { Modal } from "../UI/Modal";
 
 interface AddEntryModalProps {
-	isOpen: boolean
-	onClose: () => void
-	onSuccess?: () => void
-	parentId: string | null
+	isOpen: boolean;
+	onClose: () => void;
+	onSuccess?: () => void;
+	parentId: string | null;
 }
 
 interface FormField {
-	title: string
-	property: string
-	value: string
-	secret: boolean
+	title: string;
+	property: string;
+	value: string;
+	secret: boolean;
 }
 
-export const AddEntryModal = ({ isOpen, onClose, onSuccess, parentId }: AddEntryModalProps) => {
-	const dispatch = useDispatch<AppDispatch>()
-	const { t } = useTranslation('home')
-	const { currentVault } = useSelector((state: RootState) => state.vault)
-	
-	const [entryTitle, setEntryTitle] = useState('')
+export const AddEntryModal = ({
+	isOpen,
+	onClose,
+	onSuccess,
+	parentId,
+}: AddEntryModalProps) => {
+	const dispatch = useDispatch<AppDispatch>();
+	const { t } = useTranslation("home");
+	const { currentVault } = useSelector((state: RootState) => state.vault);
+
+	const [entryTitle, setEntryTitle] = useState("");
 	const [fields, setFields] = useState<FormField[]>([
-		{ title: 'Username', property: 'username', value: '', secret: false },
-		{ title: 'Password', property: 'password', value: '', secret: true }
-	])
-	const [tags, setTags] = useState<string[]>([])
-	const [newTag, setNewTag] = useState('')
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState('')
+		{ title: "Username", property: "username", value: "", secret: false },
+		{ title: "Password", property: "password", value: "", secret: true },
+	]);
+	const [tags, setTags] = useState<string[]>([]);
+	const [newTag, setNewTag] = useState("");
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState("");
 
 	const generateEntryId = () => {
-		return crypto.randomUUID()
-	}
+		return crypto.randomUUID();
+	};
 
 	const handleAddField = () => {
-		setFields(prev => [
+		setFields((prev) => [
 			...prev,
-			{ title: '', property: '', value: '', secret: false }
-		])
-	}
+			{ title: "", property: "", value: "", secret: false },
+		]);
+	};
 
-	const handleUpdateField = (index: number, key: keyof FormField, value: string | boolean) => {
-		setFields(prev => prev.map((field, i) => 
-			i === index ? { ...field, [key]: value } : field
-		))
-	}
+	const handleUpdateField = (
+		index: number,
+		key: keyof FormField,
+		value: string | boolean,
+	) => {
+		setFields((prev) =>
+			prev.map((field, i) =>
+				i === index ? { ...field, [key]: value } : field,
+			),
+		);
+	};
 
 	const handleRemoveField = (index: number) => {
-		setFields(prev => prev.filter((_, i) => i !== index))
-	}
+		setFields((prev) => prev.filter((_, i) => i !== index));
+	};
 
 	const handleAddTag = () => {
 		if (newTag.trim() && !tags.includes(newTag.trim())) {
-			setTags(prev => [...prev, newTag.trim()])
-			setNewTag('')
+			setTags((prev) => [...prev, newTag.trim()]);
+			setNewTag("");
 		}
-	}
+	};
 
 	const handleRemoveTag = (tagToRemove: string) => {
-		setTags(prev => prev.filter(tag => tag !== tagToRemove))
-	}
+		setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
+	};
 
 	const handleSubmit = async () => {
 		if (!entryTitle.trim()) {
-			setError(t('addEntry.errors.titleRequired'))
-			return
+			setError(t("addEntry.errors.titleRequired"));
+			return;
 		}
 
-		const validFields = fields.filter(field => 
-			field.title.trim() && field.property.trim()
-		)
+		const validFields = fields.filter(
+			(field) => field.title.trim() && field.property.trim(),
+		);
 
 		if (validFields.length === 0) {
-			setError(t('addEntry.errors.fieldsRequired'))
-			return
+			setError(t("addEntry.errors.fieldsRequired"));
+			return;
 		}
 
-		setError('')
-		setLoading(true)
+		setError("");
+		setLoading(true);
 
 		try {
 			// Convert form fields to vault fields format
-			const vaultFields: Field[] = validFields.map(field => ({
+			const vaultFields: Field[] = validFields.map((field) => ({
 				title: field.title.trim(),
 				property: field.property.trim(),
 				value: field.value,
-				secret: field.secret
-			}))
+				secret: field.secret,
+			}));
 
 			const newEntry: DataEntry = {
 				id: generateEntryId(),
-				entry_type: 'entry',
+				entry_type: "entry",
 				name: entryTitle.trim(),
-				data_type: 'login', // Default type
+				data_type: "login", // Default type
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString(),
 				fields: vaultFields,
-				tags: tags
-			}
+				tags: tags,
+			};
 
 			// Use new thunk to add entry and save
-			await dispatch(addVaultEntry({ parentId, newEntry }))
-			
+			await dispatch(addVaultEntry({ parentId, newEntry }));
+
 			// Reset form
-			setEntryTitle('')
+			setEntryTitle("");
 			setFields([
-				{ title: 'Username', property: 'username', value: '', secret: false },
-				{ title: 'Password', property: 'password', value: '', secret: true }
-			])
-			setTags([])
-			setNewTag('')
-			
-			onSuccess?.()
-			onClose()
+				{ title: "Username", property: "username", value: "", secret: false },
+				{ title: "Password", property: "password", value: "", secret: true },
+			]);
+			setTags([]);
+			setNewTag("");
+
+			onSuccess?.();
+			onClose();
 		} catch (err) {
-			console.error('Error adding entry:', err)
-			setError(t('addEntry.errors.addFailed'))
+			console.error("Error adding entry:", err);
+			setError(t("addEntry.errors.addFailed"));
 		} finally {
-			setLoading(false)
+			setLoading(false);
 		}
-	}
+	};
 
 	const handleCancel = () => {
-		setEntryTitle('')
+		setEntryTitle("");
 		setFields([
-			{ title: 'Username', property: 'username', value: '', secret: false },
-			{ title: 'Password', property: 'password', value: '', secret: true }
-		])
-		setTags([])
-		setNewTag('')
-		setError('')
-		onClose()
-	}
+			{ title: "Username", property: "username", value: "", secret: false },
+			{ title: "Password", property: "password", value: "", secret: true },
+		]);
+		setTags([]);
+		setNewTag("");
+		setError("");
+		onClose();
+	};
 
 	return (
 		<Modal isOpen={isOpen} onClose={handleCancel}>
 			<div className="space-y-4">
-				<h3 className="font-bold text-lg">{t('addEntry.title')}</h3>
-				
+				<h3 className="font-bold text-lg">{t("addEntry.title")}</h3>
+
 				{/* Entry Title */}
 				<div className="form-control">
 					<label className="label">
-						<span className="label-text">{t('addEntry.entryTitle')} *</span>
+						<span className="label-text">{t("addEntry.entryTitle")} *</span>
 					</label>
 					<input
 						type="text"
-						placeholder={t('addEntry.entryTitlePlaceholder')}
+						placeholder={t("addEntry.entryTitlePlaceholder")}
 						className="input input-bordered"
 						value={entryTitle}
 						onChange={(e) => setEntryTitle(e.target.value)}
@@ -161,31 +172,37 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess, parentId }: AddEntry
 				{/* Fields */}
 				<div className="form-control">
 					<label className="label">
-						<span className="label-text">{t('addEntry.fields')}</span>
+						<span className="label-text">{t("addEntry.fields")}</span>
 					</label>
 					<div className="space-y-2">
 						{fields.map((field, index) => (
 							<div key={index} className="flex gap-2 items-center">
 								<input
 									type="text"
-									placeholder={t('addEntry.fieldTitle')}
+									placeholder={t("addEntry.fieldTitle")}
 									className="input input-bordered input-sm flex-1"
 									value={field.title}
-									onChange={(e) => handleUpdateField(index, 'title', e.target.value)}
+									onChange={(e) =>
+										handleUpdateField(index, "title", e.target.value)
+									}
 								/>
 								<input
 									type="text"
-									placeholder={t('addEntry.fieldProperty')}
+									placeholder={t("addEntry.fieldProperty")}
 									className="input input-bordered input-sm flex-1"
 									value={field.property}
-									onChange={(e) => handleUpdateField(index, 'property', e.target.value)}
+									onChange={(e) =>
+										handleUpdateField(index, "property", e.target.value)
+									}
 								/>
 								<input
-									type={field.secret ? 'password' : 'text'}
-									placeholder={t('addEntry.fieldValue')}
+									type={field.secret ? "password" : "text"}
+									placeholder={t("addEntry.fieldValue")}
 									className="input input-bordered input-sm flex-1"
 									value={field.value}
-									onChange={(e) => handleUpdateField(index, 'value', e.target.value)}
+									onChange={(e) =>
+										handleUpdateField(index, "value", e.target.value)
+									}
 								/>
 								<div className="form-control">
 									<label className="cursor-pointer label">
@@ -193,9 +210,13 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess, parentId }: AddEntry
 											type="checkbox"
 											className="checkbox checkbox-sm"
 											checked={field.secret}
-											onChange={(e) => handleUpdateField(index, 'secret', e.target.checked)}
+											onChange={(e) =>
+												handleUpdateField(index, "secret", e.target.checked)
+											}
 										/>
-										<span className="label-text text-xs ml-1">{t('addEntry.secret')}</span>
+										<span className="label-text text-xs ml-1">
+											{t("addEntry.secret")}
+										</span>
 									</label>
 								</div>
 								<button
@@ -213,7 +234,7 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess, parentId }: AddEntry
 							className="btn btn-outline btn-sm"
 							onClick={handleAddField}
 						>
-							+ {t('addEntry.addField')}
+							+ {t("addEntry.addField")}
 						</button>
 					</div>
 				</div>
@@ -221,23 +242,23 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess, parentId }: AddEntry
 				{/* Tags */}
 				<div className="form-control">
 					<label className="label">
-						<span className="label-text">{t('addEntry.tags')}</span>
+						<span className="label-text">{t("addEntry.tags")}</span>
 					</label>
 					<div className="flex gap-2 mb-2">
 						<input
 							type="text"
-							placeholder={t('addEntry.tagPlaceholder')}
+							placeholder={t("addEntry.tagPlaceholder")}
 							className="input input-bordered input-sm flex-1"
 							value={newTag}
 							onChange={(e) => setNewTag(e.target.value)}
-							onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
+							onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
 						/>
 						<button
 							type="button"
 							className="btn btn-outline btn-sm"
 							onClick={handleAddTag}
 						>
-							{t('addEntry.addTag')}
+							{t("addEntry.addTag")}
 						</button>
 					</div>
 					{tags.length > 0 && (
@@ -273,21 +294,17 @@ export const AddEntryModal = ({ isOpen, onClose, onSuccess, parentId }: AddEntry
 						{loading ? (
 							<>
 								<span className="loading loading-spinner loading-sm"></span>
-								{t('addEntry.adding')}
+								{t("addEntry.adding")}
 							</>
 						) : (
-							t('addEntry.addEntry')
+							t("addEntry.addEntry")
 						)}
 					</button>
-					<button
-						className="btn"
-						onClick={handleCancel}
-						disabled={loading}
-					>
-						{t('addEntry.cancel')}
+					<button className="btn" onClick={handleCancel} disabled={loading}>
+						{t("addEntry.cancel")}
 					</button>
 				</div>
 			</div>
 		</Modal>
-	)
-}
+	);
+};

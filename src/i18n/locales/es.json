@@ -1,105 +1,105 @@
 {
-  "settings": {
-    "title": "Configuración",
-    "language": "Idioma",
-    "theme": "Tema",
-    "resetButton": "Restablecer valores",
-    "backButton": "Volver al inicio",
-    "clearDataButton": "Borrar todos los datos de la app",
-    "clearDataButtonAria": "Borrar todos los datos de la app",
-    "clearDataConfirmTitle": "¿Borrar todos los datos de la app?",
-    "clearDataConfirmDesc": "Esto eliminará todos los datos de la aplicación. Esta acción no se puede deshacer.",
-    "clearDataConfirmYes": "Sí, borrar",
-    "clearDataConfirmNo": "Cancelar",
-    "clearDataLoading": "Borrando...",
-    "clearDataSuccess": "Datos de la aplicación borrados exitosamente.",
-    "clearDataError": "Error al borrar los datos de la aplicación",
-    "errors": {
-      "invalidLanguage": "Selección de idioma inválida"
-    },
-    "themes": {
-      "light": "Claro",
-      "dark": "Oscuro",
-      "cupcake": "Cupcake",
-      "bumblebee": "Abeja",
-      "emerald": "Esmeralda",
-      "corporate": "Corporativo",
-      "synthwave": "Synthwave",
-      "retro": "Retro",
-      "cyberpunk": "Cyberpunk",
-      "valentine": "San Valentín",
-      "halloween": "Halloween",
-      "garden": "Jardín",
-      "forest": "Bosque",
-      "aqua": "Aqua",
-      "lofi": "Lofi",
-      "pastel": "Pastel",
-      "fantasy": "Fantasía",
-      "wireframe": "Wireframe",
-      "black": "Negro",
-      "luxury": "Lujo",
-      "dracula": "Drácula",
-      "cmyk": "CMYK",
-      "autumn": "Otoño",
-      "business": "Negocios",
-      "acid": "Ácido",
-      "lemonade": "Limonada",
-      "night": "Noche",
-      "coffee": "Café",
-      "winter": "Invierno"
-    }
-  },
-  "home": {
-    "vaultSelector": {
-      "title": "Seleccionar Bóveda",
-      "createNew": "Crear Nueva Bóveda",
-      "importExisting": "Importar Bóveda Existente",
-      "addVault": "Agregar Bóveda",
-      "settings": "Configuración",
-      "noVaults": "No se encontraron bóvedas",
-      "emptyState": "Crea una nueva bóveda para comenzar",
-      "lastAccessed": "Último acceso",
-      "never": "Nunca",
-      "locked": "Bloqueada",
-      "unlocked": "Desbloqueada"
-    },
-    "addVault": {
-      "title": "Crear Nueva Bóveda",
-      "name": "Nombre de la Bóveda",
-      "namePlaceholder": "Ingresa el nombre de la bóveda",
-      "filePath": "Ruta del Archivo",
-      "filePathPlaceholder": "Selecciona una carpeta",
-      "password": "Contraseña",
-      "passwordPlaceholder": "Ingresa la contraseña",
-      "createVault": "Crear Bóveda",
-      "creating": "Creando...",
-      "browse": "Examinar",
-      "cancel": "Cancelar",
-      "errors": {
-        "fileDialog": "Error al abrir el diálogo de archivos"
-      }
-    },
-    "importVault": {
-      "title": "Importar Bóveda Existente",
-      "name": "Nombre de la Bóveda (Opcional)",
-      "namePlaceholder": "Ingresa el nombre de la bóveda (opcional)",
-      "fileHelp": "Deja vacío para usar el nombre del archivo",
-      "vaultFile": "Archivo de Bóveda",
-      "vaultFilePlaceholder": "Selecciona un archivo de bóveda",
-      "password": "Contraseña",
-      "passwordPlaceholder": "Ingresa la contraseña",
-      "importVault": "Importar Bóveda",
-      "importing": "Importando...",
-      "browse": "Examinar",
-      "cancel": "Cancelar",
-      "errors": {
-        "fileDialog": "Error al abrir el diálogo de archivos",
-        "importVault": "Error al importar la bóveda"
-      }
-    },
-    "errors": {
-      "missingFields": "Por favor, completa todos los campos",
-      "invalidPassword": "Contraseña inválida"
-    }
-  }
+	"settings": {
+		"title": "Configuración",
+		"language": "Idioma",
+		"theme": "Tema",
+		"resetButton": "Restablecer valores",
+		"backButton": "Volver al inicio",
+		"clearDataButton": "Borrar todos los datos de la app",
+		"clearDataButtonAria": "Borrar todos los datos de la app",
+		"clearDataConfirmTitle": "¿Borrar todos los datos de la app?",
+		"clearDataConfirmDesc": "Esto eliminará todos los datos de la aplicación. Esta acción no se puede deshacer.",
+		"clearDataConfirmYes": "Sí, borrar",
+		"clearDataConfirmNo": "Cancelar",
+		"clearDataLoading": "Borrando...",
+		"clearDataSuccess": "Datos de la aplicación borrados exitosamente.",
+		"clearDataError": "Error al borrar los datos de la aplicación",
+		"errors": {
+			"invalidLanguage": "Selección de idioma inválida"
+		},
+		"themes": {
+			"light": "Claro",
+			"dark": "Oscuro",
+			"cupcake": "Cupcake",
+			"bumblebee": "Abeja",
+			"emerald": "Esmeralda",
+			"corporate": "Corporativo",
+			"synthwave": "Synthwave",
+			"retro": "Retro",
+			"cyberpunk": "Cyberpunk",
+			"valentine": "San Valentín",
+			"halloween": "Halloween",
+			"garden": "Jardín",
+			"forest": "Bosque",
+			"aqua": "Aqua",
+			"lofi": "Lofi",
+			"pastel": "Pastel",
+			"fantasy": "Fantasía",
+			"wireframe": "Wireframe",
+			"black": "Negro",
+			"luxury": "Lujo",
+			"dracula": "Drácula",
+			"cmyk": "CMYK",
+			"autumn": "Otoño",
+			"business": "Negocios",
+			"acid": "Ácido",
+			"lemonade": "Limonada",
+			"night": "Noche",
+			"coffee": "Café",
+			"winter": "Invierno"
+		}
+	},
+	"home": {
+		"vaultSelector": {
+			"title": "Seleccionar Bóveda",
+			"createNew": "Crear Nueva Bóveda",
+			"importExisting": "Importar Bóveda Existente",
+			"addVault": "Agregar Bóveda",
+			"settings": "Configuración",
+			"noVaults": "No se encontraron bóvedas",
+			"emptyState": "Crea una nueva bóveda para comenzar",
+			"lastAccessed": "Último acceso",
+			"never": "Nunca",
+			"locked": "Bloqueada",
+			"unlocked": "Desbloqueada"
+		},
+		"addVault": {
+			"title": "Crear Nueva Bóveda",
+			"name": "Nombre de la Bóveda",
+			"namePlaceholder": "Ingresa el nombre de la bóveda",
+			"filePath": "Ruta del Archivo",
+			"filePathPlaceholder": "Selecciona una carpeta",
+			"password": "Contraseña",
+			"passwordPlaceholder": "Ingresa la contraseña",
+			"createVault": "Crear Bóveda",
+			"creating": "Creando...",
+			"browse": "Examinar",
+			"cancel": "Cancelar",
+			"errors": {
+				"fileDialog": "Error al abrir el diálogo de archivos"
+			}
+		},
+		"importVault": {
+			"title": "Importar Bóveda Existente",
+			"name": "Nombre de la Bóveda (Opcional)",
+			"namePlaceholder": "Ingresa el nombre de la bóveda (opcional)",
+			"fileHelp": "Deja vacío para usar el nombre del archivo",
+			"vaultFile": "Archivo de Bóveda",
+			"vaultFilePlaceholder": "Selecciona un archivo de bóveda",
+			"password": "Contraseña",
+			"passwordPlaceholder": "Ingresa la contraseña",
+			"importVault": "Importar Bóveda",
+			"importing": "Importando...",
+			"browse": "Examinar",
+			"cancel": "Cancelar",
+			"errors": {
+				"fileDialog": "Error al abrir el diálogo de archivos",
+				"importVault": "Error al importar la bóveda"
+			}
+		},
+		"errors": {
+			"missingFields": "Por favor, completa todos los campos",
+			"invalidPassword": "Contraseña inválida"
+		}
+	}
 }
