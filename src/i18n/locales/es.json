@@ -101,5 +101,34 @@
 			"missingFields": "Por favor, completa todos los campos",
 			"invalidPassword": "Contraseña inválida"
 		}
+	},
+	"vault": {
+		"unlock": {
+			"title": "Desbloquear Bóveda",
+			"password": "Contraseña",
+			"passwordPlaceholder": "Ingresa la contraseña de la bóveda",
+			"unlockButton": "Desbloquear",
+			"unlocking": "Desbloqueando..."
+		},
+		"manager": {
+			"addEntry": "Agregar Entrada",
+			"addGroup": "Agregar Grupo",
+			"entries": "Entradas",
+			"groups": "Grupos",
+			"noEntries": "No se encontraron entradas",
+			"noGroups": "No se encontraron grupos",
+			"emptyVault": "Tu bóveda está vacía. Agrega algunas entradas para comenzar.",
+			"noVaultSelected": "No se ha seleccionado bóveda",
+			"selectVaultToStart": "Selecciona una bóveda del panel lateral para comenzar"
+		},
+		"tree": {
+			"noEntries": "No hay entradas",
+			"addEntry": "+ Entrada",
+			"addGroup": "+ Grupo",
+			"edit": "Editar",
+			"delete": "Eliminar",
+			"deleting": "Eliminando...",
+			"deleteConfirm": "¿Estás seguro de que quieres eliminar esta entrada? Esta acción no se puede deshacer."
+		}
 	}
 }

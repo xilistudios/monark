@@ -137,6 +137,15 @@
 				"emptyVault": "Your vault is empty. Add some entries to get started.",
 				"noVaultSelected": "No Vault Selected",
 				"selectVaultToStart": "Select a vault from the sidebar to get started"
+			},
+			"tree": {
+				"noEntries": "No entries",
+				"addEntry": "+ Entry",
+				"addGroup": "+ Group",
+				"edit": "Edit",
+				"delete": "Delete",
+				"deleting": "Deleting...",
+				"deleteConfirm": "Are you sure you want to delete this entry? This action cannot be undone."
 			}
 		},
 		"errors": {

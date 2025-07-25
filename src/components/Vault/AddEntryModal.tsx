@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
+import { z } from "zod";
 import type { DataEntry, Field } from "../../interfaces/vault.interface";
 import { addVaultEntry } from "../../redux/actions/vault";
 import type { AppDispatch, RootState } from "../../redux/store";
 import { Modal } from "../UI/Modal";
+import { addEntryFormSchema, tagSchema } from "../../utils/validation/vaultSchemas";
 
 interface AddEntryModalProps {
 	isOpen: boolean;
@@ -68,9 +70,16 @@ export const AddEntryModal = ({
 	};
 
 	const handleAddTag = () => {
-		if (newTag.trim() && !tags.includes(newTag.trim())) {
-			setTags((prev) => [...prev, newTag.trim()]);
-			setNewTag("");
+		try {
+			const validatedTag = tagSchema.parse(newTag.trim());
+			if (!tags.includes(validatedTag)) {
+				setTags((prev) => [...prev, validatedTag]);
+				setNewTag("");
+			}
+		} catch (err) {
+			if (err instanceof z.ZodError) {
+				setError(err.issues[0]?.message || "Invalid tag");
+			}
 		}
 	};
 
@@ -79,26 +88,21 @@ export const AddEntryModal = ({
 	};
 
 	const handleSubmit = async () => {
-		if (!entryTitle.trim()) {
-			setError(t("addEntry.errors.titleRequired"));
-			return;
-		}
-
-		const validFields = fields.filter(
-			(field) => field.title.trim() && field.property.trim(),
-		);
-
-		if (validFields.length === 0) {
-			setError(t("addEntry.errors.fieldsRequired"));
-			return;
-		}
-
-		setError("");
-		setLoading(true);
-
 		try {
+			// Validar el formulario con Zod
+			const formData = {
+				entryTitle,
+				fields,
+				tags,
+			};
+
+			const validatedData = addEntryFormSchema.parse(formData);
+
+			setError("");
+			setLoading(true);
+
 			// Convert form fields to vault fields format
-			const vaultFields: Field[] = validFields.map((field) => ({
+			const vaultFields: Field[] = validatedData.fields.map((field) => ({
 				title: field.title.trim(),
 				property: field.property.trim(),
 				value: field.value,
@@ -108,12 +112,12 @@ export const AddEntryModal = ({
 			const newEntry: DataEntry = {
 				id: generateEntryId(),
 				entry_type: "entry",
-				name: entryTitle.trim(),
+				name: validatedData.entryTitle.trim(),
 				data_type: "login", // Default type
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString(),
 				fields: vaultFields,
-				tags: tags,
+				tags: validatedData.tags,
 			};
 
 			// Use new thunk to add entry and save
@@ -131,8 +135,14 @@ export const AddEntryModal = ({
 			onSuccess?.();
 			onClose();
 		} catch (err) {
-			console.error("Error adding entry:", err);
-			setError(t("addEntry.errors.addFailed"));
+			if (err instanceof z.ZodError) {
+				// Manejar errores de validación de Zod
+				const errorMessages = err.issues.map(issue => issue.message).join(', ');
+				setError(errorMessages);
+			} else {
+				console.error("Error adding entry:", err);
+				setError(t("addEntry.errors.addFailed"));
+			}
 		} finally {
 			setLoading(false);
 		}

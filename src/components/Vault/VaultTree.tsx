@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
+import { useTranslation } from "react-i18next";
 import {
 	type Entry,
 	isDataEntry,
@@ -25,13 +26,14 @@ const VaultTree = ({
 	onView,
 	onNavigate,
 }: VaultTreeProps) => {
+	const { t } = useTranslation();
 	const dispatch = useDispatch<AppDispatch>();
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 
 	const handleDelete = async (entryId: string) => {
 		if (
 			confirm(
-				"Are you sure you want to delete this entry? This action cannot be undone.",
+				t("home.vault.tree.deleteConfirm")
 			)
 		) {
 			setDeletingId(entryId);
@@ -48,7 +50,7 @@ const VaultTree = ({
 	return (
 		<div>
 			{entries.length === 0 ? (
-				<div className="text-center py-12">No entries</div>
+				<div className="text-center py-12">{t("home.vault.tree.noEntries")}</div>
 			) : (
 				entries.map((node) => (
 					<div key={node.id} className="my-2">
@@ -101,13 +103,13 @@ const VaultTree = ({
 											className="btn btn-xs btn-primary"
 											onClick={() => onAddEntry(node.id)}
 										>
-											+ Entry
+											{t("home.vault.tree.addEntry")}
 										</button>
 										<button
 											className="btn btn-xs btn-secondary"
 											onClick={() => onAddGroup(node.id)}
 										>
-											+ Group
+											{t("home.vault.tree.addGroup")}
 										</button>
 									</>
 								)}
@@ -115,7 +117,7 @@ const VaultTree = ({
 									className="btn btn-xs btn-accent"
 									onClick={() => onEdit(node)}
 								>
-									Edit
+									{t("home.vault.tree.edit")}
 								</button>
 								<button
 									className="btn btn-xs btn-error"
@@ -123,9 +125,12 @@ const VaultTree = ({
 									disabled={deletingId === node.id}
 								>
 									{deletingId === node.id ? (
-										<span className="loading loading-spinner loading-xs"></span>
+										<>
+											<span className="loading loading-spinner loading-xs"></span>
+											<span className="ml-1">{t("home.vault.tree.deleting")}</span>
+										</>
 									) : (
-										"Delete"
+										t("home.vault.tree.delete")
 									)}
 								</button>
 							</div>
