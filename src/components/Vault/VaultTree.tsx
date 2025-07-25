@@ -10,16 +10,19 @@ import { deleteVaultEntry } from "../../redux/actions/vault";
 import type { AppDispatch } from "../../redux/store";
 
 interface VaultTreeProps {
-	entries: Entry[];
-	onAddEntry: (parentId: string | null) => void;
-	onAddGroup: (parentId: string | null) => void;
-	onEdit: (entry: Entry) => void;
-	onView: (entry: Entry) => void; // New prop for viewing data entries
-	onNavigate: (groupId: string) => void;
+	vaultId: string;
+	onAddEntry: (vaultId: string, parentId: string | null) => void;
+	onAddGroup: (vaultId: string, parentId: string | null) => void;
+	onEdit: (vaultId: string, entry: Entry) => void;
+	onView: (vaultId: string, entry: Entry) => void;
+	onNavigate: (vaultId: string, groupId: string) => void;
 }
 
+import { useSelector } from "react-redux";
+import { selectVaults } from "../../redux/selectors/vaultSelectors";
+
 const VaultTree = ({
-	entries,
+	vaultId,
 	onAddEntry,
 	onAddGroup,
 	onEdit,
@@ -29,6 +32,10 @@ const VaultTree = ({
 	const { t } = useTranslation();
 	const dispatch = useDispatch<AppDispatch>();
 	const [deletingId, setDeletingId] = useState<string | null>(null);
+
+	const vaults = useSelector(selectVaults);
+	const entries =
+		vaults.find((v) => v.id === vaultId)?.volatile?.entries ?? [];
 
 	const handleDelete = async (entryId: string) => {
 		if (
@@ -59,9 +66,9 @@ const VaultTree = ({
 								className="flex items-center cursor-pointer"
 								onClick={() => {
 									if (isGroupEntry(node)) {
-										onNavigate(node.id);
+										onNavigate(vaultId, node.id);
 									} else {
-										onView(node);
+										onView(vaultId, node);
 									}
 								}}
 							>
@@ -101,13 +108,13 @@ const VaultTree = ({
 									<>
 										<button
 											className="btn btn-xs btn-primary"
-											onClick={() => onAddEntry(node.id)}
+											onClick={() => onAddEntry(vaultId, node.id)}
 										>
 											{t("home.vault.tree.addEntry")}
 										</button>
 										<button
 											className="btn btn-xs btn-secondary"
-											onClick={() => onAddGroup(node.id)}
+											onClick={() => onAddGroup(vaultId, node.id)}
 										>
 											{t("home.vault.tree.addGroup")}
 										</button>
@@ -115,7 +122,7 @@ const VaultTree = ({
 								)}
 								<button
 									className="btn btn-xs btn-accent"
-									onClick={() => onEdit(node)}
+									onClick={() => onEdit(vaultId, node)}
 								>
 									{t("home.vault.tree.edit")}
 								</button>

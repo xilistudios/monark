@@ -6,8 +6,9 @@ import { addVault, type Vault } from "../../redux/actions/vault";
 import VaultCommands from "../../services/commands";
 
 interface AddVaultFormProps {
-	onSuccess: () => void;
-	onCancel: () => void;
+	onSuccess: () => void
+	onCancel: () => void
+	vault?: Vault
 }
 
 export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
@@ -47,6 +48,12 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
 				path,
 				lastAccessed: new Date().toISOString(),
 				isLocked: false,
+				volatile: {
+					credential: password,
+					entries: [],
+					navigationPath: '/',
+					encryptedData: undefined,
+				},
 			};
 
 			dispatch(addVault(newVault));

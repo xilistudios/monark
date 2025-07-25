@@ -14,12 +14,12 @@ import { VaultTabs } from "./VaultTabs";
 const VaultSelector = () => {
 	const { t } = useTranslation("home");
 	const dispatch = useDispatch();
-	const { savedVaults, currentVault, loading } = useSelector(
-		(state: RootState) => state.vault,
-	);
+	const vaults = useSelector((state: RootState) => state.vault.vaults);
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
+	const loading = useSelector((state: RootState) => state.vault.loading);
 	const [modalOpen, setModalOpen] = useState(false);
 	const handleVaultSelect = (vault: Vault) => {
-		dispatch(setCurrentVault(vault));
+		dispatch(setCurrentVault(vault.id));
 		dispatch(updateLastAccessed(vault.id));
 	};
 	const formatLastAccessed = (dateStr?: string) => {
@@ -60,7 +60,7 @@ const VaultSelector = () => {
 					</ul>
 				</div>
 			</div>
-			{savedVaults.length === 0 && (
+			{vaults.length === 0 && (
 				<div className="text-center p-4">
 					<div className="text-base-content/60 mb-2">
 						{t("vaultSelector.noVaults")}
@@ -71,11 +71,11 @@ const VaultSelector = () => {
 				</div>
 			)}
 			<ul className="menu rounded-box h-full w-full p-2">
-				{savedVaults.map((vault) => (
+				{vaults.map((vault) => (
 					<li key={vault.id}>
 						<a
 							className={`flex flex-col items-start p-3 ${
-								currentVault?.id === vault.id ? "menu-active" : ""
+								currentVaultId === vault.id ? "menu-active" : ""
 							}`}
 							onClick={() => handleVaultSelect(vault)}
 						>

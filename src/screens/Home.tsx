@@ -26,12 +26,13 @@ import type { AppDispatch, RootState } from "../redux/store";
 const HomeScreen = () => {
 	const { t } = useTranslation("home");
 	const dispatch = useDispatch<AppDispatch>();
-	const { currentVault, vaultState, loading, error } = useSelector(
-		(state: RootState) => state.vault,
-	);
-	const navigationPath = useSelector(
-		(state: RootState) => state.vault.currentVault?.data?.navigationPath || "/",
-	);
+	const vaults = useSelector((state: RootState) => state.vault.vaults);
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
+	const loading = useSelector((state: RootState) => state.vault.loading);
+	const error = useSelector((state: RootState) => state.vault.error);
+
+	const currentVault = vaults.find(v => v.id === currentVaultId) ?? null;
+	const navigationPath = currentVault?.volatile?.navigationPath || "/";
 
 	const [password, setPassword] = useState("");
 	const [unlockError, setUnlockError] = useState("");
@@ -71,7 +72,9 @@ const HomeScreen = () => {
 
 	const handleNavigate = (groupId: string) => {
 		const newPath = `${navigationPath === "/" ? "" : navigationPath}/${groupId}`;
-		dispatch(setNavigationPath(newPath));
+		if (currentVault) {
+			dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: newPath }));
+		}
 	};
 
 	const renderBreadcrumbs = () => {
@@ -80,15 +83,23 @@ const HomeScreen = () => {
 			<div className="breadcrumbs text-sm p-4 border-b border-base-300">
 				<ul>
 					<li>
-						<a onClick={() => dispatch(setNavigationPath("/"))}>/</a>
+						<a onClick={() => {
+							if (currentVault) {
+								dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: "/" }));
+							}
+						}}>/</a>
 					</li>
 					{parts.map((id, index) => {
-						const entry = vaultState.entries.find((e) => e.id === id);
+						const entry = currentVault?.volatile?.entries?.find((e: Entry) => e.id === id);
 						if (!entry) return null;
 						const pathUpTo = "/" + parts.slice(0, index + 1).join("/");
 						return (
 							<li key={id}>
-								<a onClick={() => dispatch(setNavigationPath(pathUpTo))}>
+								<a onClick={() => {
+									if (currentVault) {
+										dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: pathUpTo }));
+									}
+								}}>
 									{entry.name}
 								</a>
 							</li>
@@ -114,8 +125,10 @@ const HomeScreen = () => {
 				}),
 			).unwrap();
 
-			dispatch(setVaultCredential(password.trim()));
-			dispatch(setNavigationPath("/"));
+			if (currentVault) {
+				dispatch(setVaultCredential({ vaultId: currentVault.id, credential: password.trim() }));
+				dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: "/" }));
+			}
 			setPassword("");
 		} catch (err) {
 			setUnlockError(t("errors.unlockFailed"));
@@ -123,7 +136,9 @@ const HomeScreen = () => {
 	};
 
 	const handleLockVault = () => {
-		dispatch(lockVault());
+		if (currentVault) {
+			dispatch(lockVault(currentVault.id));
+		}
 		setPassword("");
 		setUnlockError("");
 	};
@@ -149,7 +164,7 @@ const HomeScreen = () => {
 			);
 		}
 
-		if (vaultState.isLocked) {
+		if (currentVault?.isLocked) {
 			return (
 				<div className="flex items-center justify-center h-full">
 					<div className="card w-96 bg-base-100 shadow-xl">
@@ -299,7 +314,7 @@ const HomeScreen = () => {
 				<div className="flex-1 overflow-auto">
 					{renderBreadcrumbs()}
 					<div className="p-4">
-						{getCurrentEntries(vaultState.entries, getCurrentParentId())
+						{getCurrentEntries(currentVault?.volatile?.entries ?? [], getCurrentParentId())
 							.length === 0 ? (
 							<div className="text-center py-12">
 								<div className="text-base-content/60 mb-4">
@@ -321,25 +336,22 @@ const HomeScreen = () => {
 							</div>
 						) : (
 							<VaultTree
-								entries={getCurrentEntries(
-									vaultState.entries,
-									getCurrentParentId(),
-								)}
-								onAddEntry={(parentId) => {
+								vaultId={currentVault?.id ?? ""}
+								onAddEntry={(vaultId, parentId) => {
 									setAddEntryParentId(parentId);
 									setIsAddEntryModalOpen(true);
 								}}
-								onAddGroup={(parentId) => {
+								onAddGroup={(vaultId, parentId) => {
 									setAddGroupParentId(parentId);
 									setIsAddGroupModalOpen(true);
 								}}
-								onView={(entry: Entry) => {
+								onView={(vaultId, entry: Entry) => {
 									if (isDataEntry(entry)) {
 										setSelectedEntry(entry);
 										setIsDetailsModalOpen(true);
 									}
 								}}
-								onEdit={(entry: Entry) => {
+								onEdit={(vaultId, entry: Entry) => {
 									setSelectedEntry(entry);
 									if (isGroupEntry(entry)) {
 										setIsEditGroupModalOpen(true);
@@ -347,7 +359,7 @@ const HomeScreen = () => {
 										setIsEditEntryModalOpen(true);
 									}
 								}}
-								onNavigate={handleNavigate}
+								onNavigate={(vaultId, groupId) => handleNavigate(groupId)}
 							/>
 						)}
 					</div>

@@ -6,8 +6,9 @@ import { useDispatch } from "react-redux";
 import { addVault, type Vault } from "../../redux/actions/vault";
 
 interface ImportVaultFormProps {
-	onSuccess: () => void;
-	onCancel: () => void;
+	onSuccess: () => void
+	onCancel: () => void
+	vault?: Vault
 }
 
 export const ImportVaultForm = ({
@@ -52,6 +53,12 @@ export const ImportVaultForm = ({
 				path: filePath,
 				lastAccessed: new Date().toISOString(),
 				isLocked: false,
+				volatile: {
+					credential: password,
+					entries: [],
+					navigationPath: '/',
+					encryptedData: undefined,
+				},
 			};
 
 			dispatch(addVault(newVault));
