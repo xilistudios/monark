@@ -13,13 +13,16 @@ mod tests {
         let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
         let password = "test_password".to_string();
 
-        // Ensure the file does not exist before creation
         assert!(!std::path::Path::new(&file_path).exists());
 
-        // Create the vault
-        lifecycle::write_vault(file_path.clone(), password, None)?;
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
 
-        // Verify the file was created
+        lifecycle::write_vault(file_path.clone(), password, vault)?;
+
         assert!(std::path::Path::new(&file_path).exists());
 
         // TODO: Add more assertions to verify the content of the created vault file
@@ -39,10 +42,14 @@ mod tests {
         assert!(!subdir.exists());
         assert!(!std::path::Path::new(&file_path).exists());
 
-        // Create the vault (should create the parent directory as well)
-        lifecycle::write_vault(file_path.clone(), password, None)?;
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
 
-        // Verify the directory and file were created
+        lifecycle::write_vault(file_path.clone(), password, vault)?;
+
         assert!(subdir.exists());
         assert!(std::path::Path::new(&file_path).exists());
 
@@ -59,13 +66,17 @@ mod tests {
         std::fs::File::create(&file_path).expect("Failed to create dummy file");
         assert!(std::path::Path::new(&file_path).exists());
 
-        // Attempt to create the vault again
-        let result = lifecycle::write_vault(file_path.clone(), password, None);
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
 
-        // Verify that the function returns an error indicating the file already exists
+        let result = lifecycle::write_vault(file_path.clone(), password, vault);
+
         match result {
-            Err(CommandError::Io(msg)) => assert_eq!(msg, "Vault file already exists"),
-            _ => panic!("Expected CommandError::Io with 'Vault file already exists'"),
+            Err(CommandError::Io(msg)) => assert_eq!(msg, "Invalid vault file signature"),
+            _ => panic!("Expected CommandError::Io with 'Invalid vault file signature'"),
         }
 
         Ok(())
@@ -77,10 +88,14 @@ mod tests {
         let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
         let password = "test_password".to_string();
 
-        // Create the vault
-        lifecycle::write_vault(file_path.clone(), password.clone(), None)?;
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
 
-        // Verify the file was created
+        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+
         assert!(std::path::Path::new(&file_path).exists());
 
         // Open the vault with correct password
@@ -100,8 +115,13 @@ mod tests {
         let password = "correct_password".to_string();
         let wrong_password = "wrong_password".to_string();
 
-        // Create the vault with correct password
-        lifecycle::write_vault(file_path.clone(), password, None)?;
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
+
+        lifecycle::write_vault(file_path.clone(), password, vault)?;
 
         // Attempt to open with wrong password
         let result = lifecycle::read_vault(file_path, wrong_password);
@@ -139,10 +159,14 @@ mod tests {
         let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
         let password = "test_password".to_string();
 
-        // Create initial vault
-        lifecycle::write_vault(file_path.clone(), password.clone(), None)?;
-        
-        // Open and modify vault
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+
         let mut vault = lifecycle::read_vault(file_path.clone(), password.clone())?;
         vault.hmac = "test_hmac".to_string();
         vault.entries.push(Entry::Data {
@@ -157,10 +181,8 @@ mod tests {
 
         let prev_updated_at = vault.updated_at;
 
-        // Perform update
-        lifecycle::write_vault(file_path.clone(), password.clone(), Some(vault))?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
 
-        // Verify changes
         let updated_vault = lifecycle::read_vault(file_path, password)?;
         assert_eq!(updated_vault.hmac, "test_hmac");
         assert_eq!(updated_vault.entries.len(), 1);
@@ -176,11 +198,17 @@ mod tests {
         let password = "correct_password".to_string();
         let wrong_password = "wrong_password".to_string();
 
-        lifecycle::write_vault(file_path.clone(), password.clone(), None)?;
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
         let mut vault = lifecycle::read_vault(file_path.clone(), password.clone())?;
         vault.hmac = "new_hmac".to_string();
 
-        let result = lifecycle::write_vault(file_path, wrong_password, Some(vault));
+        let result = lifecycle::write_vault(file_path, wrong_password, vault);
         match result {
             Err(CommandError::Crypto(_)) => Ok(()),
             _ => panic!("Expected cryptographic error for wrong password"),
@@ -199,11 +227,10 @@ mod tests {
         };
 
         // Should succeed and create the file
-        let result = lifecycle::write_vault(file_path.clone(), password.clone(), Some(vault));
+        let result = lifecycle::write_vault(file_path.clone(), password.clone(), vault);
         assert!(result.is_ok(), "Expected Ok(()), got {:?}", result);
         assert!(std::path::Path::new(&file_path).exists(), "Vault file was not created");
 
-        // Optionally, verify the vault can be opened
         let open_result = lifecycle::read_vault(file_path, password);
         assert!(open_result.is_ok(), "Vault file could not be opened after creation");
     }
@@ -264,8 +291,13 @@ mod tests {
         // Clean up before test
         let _ = fs::remove_file(&file_path);
 
-        // 1. Write vault
-        let write_result = lifecycle::write_vault(file_path.clone(), password.clone(), None);
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: String::new(),
+            entries: Vec::new(),
+        };
+
+        let write_result = lifecycle::write_vault(file_path.clone(), password.clone(), vault);
 
         // 2. Check file existence
         let file_exists = std::path::Path::new(&file_path).exists();
