@@ -62,6 +62,12 @@ pub fn write_vault(
 			credentials,
 			vault: vault_encrypted,
 		};
+		// Ensure parent directory exists
+		let parent = std::path::Path::new(&file_path)
+			.parent()
+			.ok_or_else(|| CommandError::Io("Invalid parent directory".to_string()))?;
+		std::fs::create_dir_all(parent)
+			.map_err(|e| CommandError::Io(format!("Failed to create parent directory: {}", e)))?;
 		io::vault::write_vault(file_path, &vault_file)?;
 		Ok(())
 	} else {
@@ -95,6 +101,12 @@ pub fn write_vault(
 		let vault_ciphertext = crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
 		vault_file.vault.nonce = URL_SAFE_NO_PAD.encode(vault_nonce);
 		vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
+		// Ensure parent directory exists
+		let parent = std::path::Path::new(&file_path)
+			.parent()
+			.ok_or_else(|| CommandError::Io("Invalid parent directory".to_string()))?;
+		std::fs::create_dir_all(parent)
+			.map_err(|e| CommandError::Io(format!("Failed to create parent directory: {}", e)))?;
 		io::vault::write_vault(file_path, &vault_file)?;
 		Ok(())
 	}

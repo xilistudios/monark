@@ -40,7 +40,12 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
 
 		try {
 			const path = `${filePath}/${vaultName}.monark`;
-			await VaultCommands.write(path, password);
+			const initialContent = {
+				updated_at: new Date().toISOString(),
+				hmac: "",
+				entries: []
+			};
+			await VaultCommands.write(path, password, initialContent);
 
 			const newVault: Vault = {
 				id: generateVaultId(),

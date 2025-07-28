@@ -28,6 +28,26 @@ mod tests {
 
         Ok(())
     }
+    #[test]
+    fn test_create_vault_in_new_subdirectory() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let subdir = temp_dir.path().join("nested_dir");
+        let file_path = subdir.join("test_vault.vault").to_str().unwrap().to_string();
+        let password = "test_password".to_string();
+
+        // Ensure the directory and file do not exist before creation
+        assert!(!subdir.exists());
+        assert!(!std::path::Path::new(&file_path).exists());
+
+        // Create the vault (should create the parent directory as well)
+        lifecycle::write_vault(file_path.clone(), password, None)?;
+
+        // Verify the directory and file were created
+        assert!(subdir.exists());
+        assert!(std::path::Path::new(&file_path).exists());
+
+        Ok(())
+    }
 
     #[test]
     fn test_create_vault_file_exists() -> Result<(), CommandError> {

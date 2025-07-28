@@ -13,6 +13,7 @@ export default class VaultCommands {
 		password: string,
 		vaultContent?: VaultContent,
 	) {
+		console.log("Writing vault content:", vaultContent, filePath, password);
 		if (!vaultContent) {
 			throw new Error("Vault content is required for writing");
 		}

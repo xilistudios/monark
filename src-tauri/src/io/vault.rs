@@ -31,6 +31,15 @@ pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
 }
 
 pub fn write_vault(file_path: String, vault_file: &VaultFile) -> Result<(), CommandError> {
+    use std::path::Path;
+    use std::fs;
+
+    let path = Path::new(&file_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| CommandError::Io(format!("Failed to create parent directories: {}", e)))?;
+    }
+
     let signed_vault = io::signature::sign_vault(&vault_file);
     io::fs::write_file(&file_path, &signed_vault)
         .map_err(|e| CommandError::Io(format!("Failed to write vault file: {}", e)))?;

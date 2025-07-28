@@ -28,7 +28,6 @@ export interface Vault {
 
 export interface VaultState {
 	vaults: Vault[]
-	savedVaults?: Vault[] // For migration safety
 	currentVaultId: string | null
 	loading: boolean
 	error: string | null
@@ -66,16 +65,6 @@ export const loadVaultStateFromSettings = async (): Promise<
 		if (vaults && Array.isArray(vaults)) {
 			return {
 				vaults: vaults.map((vault: any) => ({
-					...vault,
-					lastAccessed: vault.lastAccessed || undefined,
-					isLocked: true,
-				})),
-				currentVaultId: null,
-			}
-		} else if (savedVaults && Array.isArray(savedVaults)) {
-			// Migrate legacy savedVaults to vaults
-			return {
-				vaults: savedVaults.map((vault: any) => ({
 					...vault,
 					lastAccessed: vault.lastAccessed || undefined,
 					isLocked: true,
@@ -261,7 +250,6 @@ export const deleteVaultEntry = createAsyncThunk<
 
 const initialState: VaultState = {
 	vaults: [],
-	savedVaults: [],
 	currentVaultId: null,
 	loading: false,
 	error: null,
@@ -329,9 +317,6 @@ export const vaultSlice = createSlice({
 		) => {
 			if (action.payload.vaults && Array.isArray(action.payload.vaults)) {
 				state.vaults = action.payload.vaults
-			} else if (action.payload.savedVaults && Array.isArray(action.payload.savedVaults)) {
-				// Migration: handle legacy savedVaults
-				state.vaults = action.payload.savedVaults
 			} else {
 				state.vaults = []
 			}
