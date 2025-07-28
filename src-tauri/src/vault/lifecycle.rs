@@ -16,8 +16,8 @@ pub fn write_vault(
 	password: String,
 	vault_content: Option<Vault>,
 ) -> Result<(), CommandError> {
-	if vault_content.is_none() {
-		// CREATE logic
+	// Helper to create a new vault file
+	fn create_vault_file(file_path: String, password: String) -> Result<(), CommandError> {
 		if std::path::Path::new(&file_path).exists() {
 			return Err(CommandError::Io("Vault file already exists".to_string()));
 		}
@@ -62,7 +62,6 @@ pub fn write_vault(
 			credentials,
 			vault: vault_encrypted,
 		};
-		// Ensure parent directory exists
 		let parent = std::path::Path::new(&file_path)
 			.parent()
 			.ok_or_else(|| CommandError::Io("Invalid parent directory".to_string()))?;
@@ -70,8 +69,19 @@ pub fn write_vault(
 			.map_err(|e| CommandError::Io(format!("Failed to create parent directory: {}", e)))?;
 		io::vault::write_vault(file_path, &vault_file)?;
 		Ok(())
+	}
+
+	let path = std::path::Path::new(&file_path);
+
+	if vault_content.is_none() {
+		// CREATE logic
+		return create_vault_file(file_path, password);
 	} else {
 		// UPDATE logic
+		if !path.exists() {
+			// If file does not exist, create it
+			return create_vault_file(file_path, password);
+		}
 		let mut vault_file = io::vault::read_vault(file_path.clone())?;
 		let user_salt = URL_SAFE_NO_PAD
 			.decode(&vault_file.argon2_params.salt)
@@ -101,8 +111,7 @@ pub fn write_vault(
 		let vault_ciphertext = crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
 		vault_file.vault.nonce = URL_SAFE_NO_PAD.encode(vault_nonce);
 		vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
-		// Ensure parent directory exists
-		let parent = std::path::Path::new(&file_path)
+		let parent = path
 			.parent()
 			.ok_or_else(|| CommandError::Io("Invalid parent directory".to_string()))?;
 		std::fs::create_dir_all(parent)

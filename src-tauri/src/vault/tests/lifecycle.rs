@@ -189,7 +189,8 @@ mod tests {
 
     #[test]
     fn test_update_vault_nonexistent_file() {
-        let file_path = "/nonexistent/path/vault.vault".to_string();
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir.path().join("update_nonexistent.vault").to_str().unwrap().to_string();
         let password = "test_password".to_string();
         let vault = Vault {
             updated_at: Utc::now(),
@@ -197,8 +198,14 @@ mod tests {
             entries: Vec::new(),
         };
 
-        let result = lifecycle::write_vault(file_path, password, Some(vault));
-        assert!(matches!(result, Err(CommandError::Io(_))));
+        // Should succeed and create the file
+        let result = lifecycle::write_vault(file_path.clone(), password.clone(), Some(vault));
+        assert!(result.is_ok(), "Expected Ok(()), got {:?}", result);
+        assert!(std::path::Path::new(&file_path).exists(), "Vault file was not created");
+
+        // Optionally, verify the vault can be opened
+        let open_result = lifecycle::read_vault(file_path, password);
+        assert!(open_result.is_ok(), "Vault file could not be opened after creation");
     }
     #[test]
     fn test_delete_vault_success() -> Result<(), CommandError> {
@@ -243,5 +250,58 @@ mod tests {
             Err(CommandError::Io(msg)) => assert_eq!(msg, "Vault file does not exist"),
             _ => panic!("Expected CommandError::Io with 'Vault file does not exist'"),
         }
+    }
+    #[test]
+    fn test_write_vault_tmp_path() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use crate::vault::lifecycle;
+        use crate::commands::errors::CommandError;
+
+        let file_path = "/tmp/test_vault.monark".to_string();
+        let password = "test123".to_string();
+
+        // Clean up before test
+        let _ = fs::remove_file(&file_path);
+
+        // 1. Write vault
+        let write_result = lifecycle::write_vault(file_path.clone(), password.clone(), None);
+
+        // 2. Check file existence
+        let file_exists = std::path::Path::new(&file_path).exists();
+
+        // 3. Check permissions and contents
+        let (permissions, file_len, file_content) = if file_exists {
+            let meta = fs::metadata(&file_path).expect("metadata");
+            let perms = meta.permissions().mode();
+            let len = meta.len();
+            let content = fs::read(&file_path).unwrap_or_default();
+            (Some(perms), Some(len), Some(content))
+        } else {
+            (None, None, None)
+        };
+
+        // 4. Try to open with read_vault
+        let read_result = lifecycle::read_vault(file_path.clone(), password.clone());
+
+        // 5. Clean up after test
+        let _ = fs::remove_file(&file_path);
+
+        // 6. Report
+        println!("write_result: {:?}", write_result);
+        println!("file_exists: {:?}", file_exists);
+        println!("permissions: {:?}", permissions);
+        println!("file_len: {:?}", file_len);
+        println!("file_content (first 32 bytes): {:?}", file_content.as_ref().map(|v| &v[..std::cmp::min(32, v.len())]));
+        println!("read_result: {:?}", read_result);
+
+        // 7. Assert for error reproduction
+        if let Err(CommandError::Io(msg)) = &read_result {
+            assert!(msg.contains("Failed to read vault file"), "Expected 'Failed to read vault file' error, got: {}", msg);
+        }
+
+        // 8. Assert file was created and has content
+        assert!(file_exists, "Vault file was not created");
+        assert!(file_len.unwrap_or(0) > 0, "Vault file is empty");
     }
 }
