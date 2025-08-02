@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { z } from "zod";
 import type { DataEntry, Field } from "../../interfaces/vault.interface";
-import { addVaultEntry } from "../../redux/actions/vault";
 import type { AppDispatch, RootState } from "../../redux/store";
+import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 import { addEntryFormSchema, tagSchema } from "../../utils/validation/vaultSchemas";
 
@@ -12,7 +12,7 @@ interface AddEntryModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	onSuccess?: () => void;
-	parentId: string | null;
+	path: string[];
 }
 
 interface FormField {
@@ -26,11 +26,13 @@ export const AddEntryModal = ({
 	isOpen,
 	onClose,
 	onSuccess,
-	parentId,
+	path,
 }: AddEntryModalProps) => {
 	const dispatch = useDispatch<AppDispatch>();
 	const { t } = useTranslation("home");
-	const { currentVault } = useSelector((state: RootState) => state.vault);
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
+	const vaults = useSelector((state: RootState) => state.vault.vaults);
+	const currentVault = vaults.find(v => v.id === currentVaultId) ?? null;
 
 	const [entryTitle, setEntryTitle] = useState("");
 	const [fields, setFields] = useState<FormField[]>([
@@ -120,8 +122,15 @@ export const AddEntryModal = ({
 				tags: validatedData.tags,
 			};
 
-			// Use new thunk to add entry and save
-			await dispatch(addVaultEntry({ parentId, newEntry }));
+			// Use VaultManager to add entry and save
+			if (currentVaultId) {
+				// Get the VaultInstance from VaultManager
+				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
+				if (vaultInstance) {
+					// Add the entry using VaultManager
+					await vaultInstance.addEntry(path, newEntry);
+				}
+			}
 
 			// Reset form
 			setEntryTitle("");

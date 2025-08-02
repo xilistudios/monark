@@ -7,30 +7,33 @@ import {
 	isGroupEntry,
 	getEntryDepth,
 } from "../../interfaces/vault.interface";
-import { deleteVaultEntry } from "../../redux/actions/vault";
 import type { AppDispatch, RootState } from "../../redux/store";
+import { VaultManager } from "../../services/vault";
 
 interface VaultTreeProps {
 	vaultId: string;
-	onAddEntry: (vaultId: string, parentId: string | null) => void;
-	onAddGroup: (vaultId: string, parentId: string | null) => void;
-	onEdit: (vaultId: string, entry: Entry) => void;
-	onView: (vaultId: string, entry: Entry) => void;
-	onNavigate: (vaultId: string, groupId: string) => void;
+	entries: Entry[];
+	basePath: string[];
+	onAddEntry: (vaultId: string, path: string[]) => void;
+	onAddGroup: (vaultId: string, path: string[]) => void;
+	onEdit: (vaultId: string, path: string[], entry: Entry) => void;
+	onView: (vaultId: string, path: string[], entry: Entry) => void;
+	onNavigate: (vaultId: string, path: string[]) => void;
 }
 
 interface TreeNodeProps {
 	entry: Entry;
 	vaultId: string;
-	onAddEntry: (vaultId: string, parentId: string | null) => void;
-	onAddGroup: (vaultId: string, parentId: string | null) => void;
-	onEdit: (vaultId: string, entry: Entry) => void;
-	onView: (vaultId: string, entry: Entry) => void;
-	onNavigate: (vaultId: string, groupId: string) => void;
-	onDelete: (entryId: string) => void;
+	onAddEntry: (vaultId: string, path: string[]) => void;
+	onAddGroup: (vaultId: string, path: string[]) => void;
+	onEdit: (vaultId: string, path: string[], entry: Entry) => void;
+	onView: (vaultId: string, path: string[], entry: Entry) => void;
+	onNavigate: (vaultId: string, path: string[]) => void;
+	onDelete: (vaultId: string, path: string[]) => void;
 	deletingId: string | null;
 	level: number;
 	isLastChild: boolean;
+	currentPath: string[];
 }
 
 // TreeNode component for recursive rendering
@@ -46,6 +49,7 @@ const TreeNode = ({
 	deletingId,
 	level,
 	isLastChild,
+	currentPath,
 }: TreeNodeProps) => {
 	const { t } = useTranslation();
 	const [isExpanded, setIsExpanded] = useState(true);
@@ -59,11 +63,11 @@ const TreeNode = ({
 
 	const handleNavigate = useCallback(() => {
 		if (isGroupEntry(entry)) {
-			onNavigate(vaultId, entry.id);
+			onNavigate(vaultId, currentPath);
 		} else {
-			onView(vaultId, entry);
+			onView(vaultId, currentPath, entry);
 		}
-	}, [entry, vaultId, onNavigate, onView]);
+	}, [entry, vaultId, onNavigate, onView, currentPath]);
 
 	const getIndentStyle = useCallback(() => {
 		const baseIndent = level * 24; // 24px per level
@@ -158,7 +162,7 @@ const TreeNode = ({
 							<>
 								<button
 									className="btn btn-xs btn-primary"
-									onClick={() => onAddEntry(vaultId, entry.id)}
+									onClick={() => onAddEntry(vaultId, currentPath)}
 									title={t("home.vault.tree.addEntry")}
 								>
 									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,7 +171,7 @@ const TreeNode = ({
 								</button>
 								<button
 									className="btn btn-xs btn-secondary"
-									onClick={() => onAddGroup(vaultId, entry.id)}
+									onClick={() => onAddGroup(vaultId, currentPath)}
 									title={t("home.vault.tree.addGroup")}
 								>
 									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +182,7 @@ const TreeNode = ({
 						)}
 						<button
 							className="btn btn-xs btn-accent"
-							onClick={() => onEdit(vaultId, entry)}
+							onClick={() => onEdit(vaultId, currentPath, entry)}
 							title={t("home.vault.tree.edit")}
 						>
 							<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,7 +191,7 @@ const TreeNode = ({
 						</button>
 						<button
 							className="btn btn-xs btn-error"
-							onClick={() => onDelete(entry.id)}
+							onClick={() => onDelete(vaultId, currentPath)}
 							disabled={deletingId === entry.id}
 							title={t("home.vault.tree.delete")}
 						>
@@ -218,6 +222,7 @@ const TreeNode = ({
 								deletingId={deletingId}
 								level={level + 1}
 								isLastChild={index === entry.children.length - 1}
+								currentPath={[...currentPath, child.id]}
 							/>
 						))}
 					</div>
@@ -230,6 +235,8 @@ const TreeNode = ({
 // Main VaultTree component
 const VaultTree = ({
 	vaultId,
+	entries,
+	basePath,
 	onAddEntry,
 	onAddGroup,
 	onEdit,
@@ -240,26 +247,26 @@ const VaultTree = ({
 	const dispatch = useDispatch<AppDispatch>();
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 
-	// Use selector to get vault entries
-	const vaults = useSelector((state: RootState) => state.vault.vaults);
-	const currentVault = useMemo(
-		() => vaults.find((v) => v.id === vaultId),
-		[vaults, vaultId]
-	);
-	const entries = currentVault?.volatile?.entries ?? [];
-
-	const handleDelete = useCallback(async (entryId: string) => {
+	const handleDelete = useCallback(async (vaultId: string, path: string[]) => {
 		if (confirm(t("home.vault.tree.deleteConfirm"))) {
+			const entryId = path[path.length - 1];
 			setDeletingId(entryId);
 			try {
-				await dispatch(deleteVaultEntry(entryId)).unwrap();
+				if (vaultId) {
+					// Get the VaultInstance from VaultManager
+					const vaultInstance = VaultManager.getInstance().getInstance(vaultId);
+					if (vaultInstance) {
+						// Delete the entry using VaultManager
+						await vaultInstance.deleteEntry(path);
+					}
+				}
 			} catch (err) {
 				console.error("Delete failed:", err);
 			} finally {
 				setDeletingId(null);
 			}
 		}
-	}, [dispatch, t]);
+	}, [t]);
 
 	const renderEmptyState = useCallback(() => (
 		<div className="text-center py-12">
@@ -272,13 +279,13 @@ const VaultTree = ({
 			<div className="mt-4 space-x-2">
 				<button
 					className="btn btn-sm btn-primary"
-					onClick={() => onAddEntry(vaultId, null)}
+					onClick={() => onAddEntry(vaultId, [])}
 				>
 					{t("home.vault.tree.addFirstEntry")}
 				</button>
 				<button
 					className="btn btn-sm btn-secondary"
-					onClick={() => onAddGroup(vaultId, null)}
+					onClick={() => onAddGroup(vaultId, [])}
 				>
 					{t("home.vault.tree.addFirstGroup")}
 				</button>
@@ -306,6 +313,7 @@ const VaultTree = ({
 							deletingId={deletingId}
 							level={0}
 							isLastChild={index === entries.length - 1}
+							currentPath={[...basePath, entry.id]}
 						/>
 					))}
 				</div>

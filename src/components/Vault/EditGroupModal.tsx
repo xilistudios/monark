@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import type { GroupEntry } from "../../interfaces/vault.interface";
-import { updateVaultEntry } from "../../redux/actions/vault";
-import type { AppDispatch } from "../../redux/store";
+import type { AppDispatch, RootState } from "../../redux/store";
+import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 
 /**
@@ -14,6 +14,7 @@ interface EditGroupModalProps {
 	onClose: () => void;
 	onSuccess?: () => void;
 	entry: GroupEntry;
+	path: string[];
 }
 
 /**
@@ -25,9 +26,11 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
 	onClose,
 	onSuccess,
 	entry,
+	path,
 }) => {
 	const dispatch = useDispatch<AppDispatch>();
 	const { t } = useTranslation("home");
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
 	const [groupName, setGroupName] = useState(entry.name);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -49,12 +52,14 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
 		setLoading(true);
 
 		try {
-			await dispatch(
-				updateVaultEntry({
-					entryId: entry.id,
-					updates: { name: trimmed },
-				}),
-			).unwrap();
+			if (currentVaultId) {
+				// Get the VaultInstance from VaultManager
+				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
+				if (vaultInstance) {
+					// Update the entry using VaultManager
+					await vaultInstance.updateEntry(path, { name: trimmed, updated_at: new Date().toISOString() });
+				}
+			}
 
 			onSuccess?.();
 			onClose();

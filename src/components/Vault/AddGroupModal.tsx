@@ -1,26 +1,27 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import type { GroupEntry } from "../../interfaces/vault.interface";
-import { addVaultEntry } from "../../redux/actions/vault";
-import type { AppDispatch } from "../../redux/store";
+import type { AppDispatch, RootState } from "../../redux/store";
+import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 
 interface AddGroupModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	parentId: string | null;
+	path: string[];
 	onSuccess?: () => void;
 }
 
 export const AddGroupModal = ({
 	isOpen,
 	onClose,
-	parentId,
+	path,
 	onSuccess,
 }: AddGroupModalProps) => {
 	const dispatch = useDispatch<AppDispatch>();
 	const { t } = useTranslation("home");
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
 	const [groupName, setGroupName] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
@@ -40,10 +41,20 @@ export const AddGroupModal = ({
 				entry_type: "group",
 				name: groupName.trim(),
 				data_type: "group",
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
 				children: [],
 			};
 
-			await dispatch(addVaultEntry({ parentId, newEntry: newGroup })).unwrap();
+			// Use the current vault ID from Redux
+			if (currentVaultId) {
+				// Get the VaultInstance from VaultManager
+				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
+				if (vaultInstance) {
+					// Add the entry using VaultManager
+					await vaultInstance.addEntry(path, newGroup);
+				}
+			}
 
 			setGroupName("");
 			onSuccess?.();

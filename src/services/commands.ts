@@ -11,12 +11,13 @@ export default class VaultCommands {
 	static async write(
 		filePath: string,
 		password: string,
-		vaultContent?: VaultContent,
+		vaultContent: {
+			updated_at: string;
+			hmac: string;
+			entries: any[];
+		}
 	) {
 		console.log("Writing vault content:", vaultContent, filePath, password);
-		if (!vaultContent) {
-			throw new Error("Vault content is required for writing");
-		}
 		return await invoke("write_vault", { filePath, password, vaultContent });
 	}
 

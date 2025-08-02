@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import type { DataEntry, Field } from "../../interfaces/vault.interface";
-import { updateVaultEntry } from "../../redux/actions/vault";
 import type { AppDispatch, RootState } from "../../redux/store";
+import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 
 /**
@@ -14,6 +14,7 @@ interface EditEntryModalProps {
 	onClose: () => void;
 	onSuccess?: () => void;
 	entry: DataEntry;
+	path: string[];
 }
 
 /**
@@ -36,10 +37,13 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
 	onClose,
 	onSuccess,
 	entry,
+	path,
 }) => {
 	const dispatch = useDispatch<AppDispatch>();
 	const { t } = useTranslation("home");
-	const { currentVault } = useSelector((state: RootState) => state.vault);
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
+	const vaults = useSelector((state: RootState) => state.vault.vaults);
+	const currentVault = vaults.find(v => v.id === currentVaultId) ?? null;
 
 	const [entryTitle, setEntryTitle] = useState(entry.name);
 	const [dataType, setDataType] = useState(entry.data_type);
@@ -125,7 +129,14 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
 				updated_at: new Date().toISOString(),
 			};
 
-			await dispatch(updateVaultEntry({ entryId: entry.id, updates })).unwrap();
+			if (currentVaultId) {
+				// Get the VaultInstance from VaultManager
+				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
+				if (vaultInstance) {
+					// Update the entry using VaultManager
+					await vaultInstance.updateEntry(path, updates);
+				}
+			}
 
 			onSuccess?.();
 			onClose();
@@ -175,6 +186,8 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
 						onChange={(e) => setDataType(e.target.value)}
 					/>
 				</div>
+
+				
 
 				{/* Fields */}
 				<div className="form-control">

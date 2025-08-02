@@ -17,10 +17,11 @@ import {
 } from "../interfaces/vault.interface";
 import {
 	lockVault,
-	readVault,
 	setNavigationPath,
 	setVaultCredential,
+	setVaultLocked,
 } from "../redux/actions/vault";
+import { VaultManager } from "../services/vault";
 import type { AppDispatch, RootState } from "../redux/store";
 
 const HomeScreen = () => {
@@ -37,9 +38,9 @@ const HomeScreen = () => {
 	const [password, setPassword] = useState("");
 	const [unlockError, setUnlockError] = useState("");
 	const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
-	const [addEntryParentId, setAddEntryParentId] = useState<string | null>(null);
+	const [addEntryPath, setAddEntryPath] = useState<string[]>([]);
 	const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
-	const [addGroupParentId, setAddGroupParentId] = useState<string | null>(null);
+	const [addGroupPath, setAddGroupPath] = useState<string[]>([]);
 	const [selectedEntry, setSelectedEntry] = useState<
 		DataEntry | GroupEntry | null
 	>(null);
@@ -47,31 +48,48 @@ const HomeScreen = () => {
 	const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
 	const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
 
-	const getCurrentParentId = () => {
+	const getCurrentPath = (): string[] => {
 		const pathParts = navigationPath.split("/").filter(Boolean);
-		return pathParts.length > 0 ? pathParts[pathParts.length - 1] : null;
+		return pathParts;
 	};
 
-	const getCurrentEntries = (entries: Entry[], parentId: string | null) => {
-		if (!parentId) {
-			const allChildren = new Set<string>();
-			entries.forEach((e) => {
-				if (isGroupEntry(e)) {
-					e.children.forEach((c) => allChildren.add(c));
+	const findPathById = (entries: Entry[], targetId: string, currentPath: string[] = []): string[] => {
+		for (const entry of entries) {
+			const newPath = [...currentPath, entry.id];
+			
+			if (entry.id === targetId) {
+				return newPath;
+			}
+			
+			if (isGroupEntry(entry) && entry.children) {
+				const childPath = findPathById(entry.children, targetId, newPath);
+				if (childPath.length > 0) {
+					return childPath;
 				}
-			});
-			return entries.filter((e) => !allChildren.has(e.id));
-		} else {
-			const parent = entries.find((e) => e.id === parentId);
-			if (!parent || !isGroupEntry(parent)) return [];
-			return parent.children
-				.map((childId) => entries.find((e) => e.id === childId))
-				.filter(Boolean) as Entry[];
+			}
 		}
+		return [];
 	};
 
-	const handleNavigate = (groupId: string) => {
-		const newPath = `${navigationPath === "/" ? "" : navigationPath}/${groupId}`;
+	const getCurrentEntries = (entries: Entry[], path: string[]): Entry[] => {
+		if (path.length === 0) {
+			return entries;
+		}
+
+		let currentLevel = entries;
+		for (const id of path) {
+			const parentEntry = currentLevel.find((e) => e.id === id);
+			if (parentEntry && isGroupEntry(parentEntry) && parentEntry.children) {
+				currentLevel = parentEntry.children;
+			} else {
+				return [];
+			}
+		}
+		return currentLevel;
+	};
+
+	const handleNavigate = (path: string[]) => {
+		const newPath = path.length > 0 ? `/${path.join("/")}` : "/";
 		if (currentVault) {
 			dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: newPath }));
 		}
@@ -118,16 +136,13 @@ const HomeScreen = () => {
 
 		setUnlockError("");
 		try {
-			await dispatch(
-				readVault({
-					password: password.trim(),
-					filePath: currentVault.path,
-				}),
-			).unwrap();
-
 			if (currentVault) {
-				dispatch(setVaultCredential({ vaultId: currentVault.id, credential: password.trim() }));
-				dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: "/" }));
+				const vaultInstance = VaultManager.getInstance().getInstance(currentVault.id);
+				if (vaultInstance) {
+					await vaultInstance.unlock(password.trim());
+					dispatch(setVaultLocked({ vaultId: currentVault.id, isLocked: false }));
+					dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: "/" }));
+				}
 			}
 			setPassword("");
 		} catch (err) {
@@ -144,7 +159,6 @@ const HomeScreen = () => {
 	};
 
 	const handleEntryClick = (entry: Entry) => {
-		// Future: Navigate to entry details
 		console.log("Entry clicked:", entry);
 	};
 
@@ -170,19 +184,6 @@ const HomeScreen = () => {
 					<div className="card w-96 bg-base-100 shadow-xl">
 						<div className="card-body">
 							<h2 className="card-title justify-center mb-4">
-								<svg
-									className="w-6 h-6 mr-2"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-									/>
-								</svg>
 								{t("vault.unlock.title")}
 							</h2>
 
@@ -205,10 +206,7 @@ const HomeScreen = () => {
 							{(unlockError || error) && (
 								<div className="alert alert-error mt-4">
 									<span>
-										{unlockError ||
-											(typeof error === "string"
-												? error
-												: JSON.stringify(error))}
+										{unlockError || (typeof error === "string" ? error : JSON.stringify(error))}
 									</span>
 								</div>
 							)}
@@ -235,10 +233,8 @@ const HomeScreen = () => {
 			);
 		}
 
-		// Unlocked vault manager
 		return (
 			<div className="h-full flex flex-col">
-				{/* Header with actions */}
 				<div className="p-4 border-b border-base-300">
 					<div className="flex justify-between items-center">
 						<h2 className="text-2xl font-bold">{currentVault.name}</h2>
@@ -246,112 +242,64 @@ const HomeScreen = () => {
 							<button
 								className="btn btn-primary btn-sm"
 								onClick={() => {
-									setAddEntryParentId(getCurrentParentId());
+									setAddEntryPath(getCurrentPath());
 									setIsAddEntryModalOpen(true);
 								}}
 							>
-								<svg
-									className="w-4 h-4 mr-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
 								{t("vault.manager.addEntry")}
 							</button>
 							<button
 								className="btn btn-outline btn-sm"
 								onClick={() => {
-									setAddGroupParentId(getCurrentParentId());
+									setAddGroupPath(getCurrentPath());
 									setIsAddGroupModalOpen(true);
 								}}
 							>
-								<svg
-									className="w-4 h-4 mr-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
 								{t("vault.manager.addGroup")}
 							</button>
 							<button
 								className="btn btn-ghost btn-sm"
 								onClick={handleLockVault}
 							>
-								<svg
-									className="w-4 h-4 mr-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-									/>
-								</svg>
-								Lock
+								{t("vault.manager.lock")}
 							</button>
 						</div>
 					</div>
 				</div>
 
-				{/* Content area */}
 				<div className="flex-1 overflow-auto">
 					{renderBreadcrumbs()}
 					<div className="p-4">
-						{getCurrentEntries(currentVault?.volatile?.entries ?? [], getCurrentParentId())
+						{getCurrentEntries(currentVault?.volatile?.entries ?? [], getCurrentPath())
 							.length === 0 ? (
 							<div className="text-center py-12">
 								<div className="text-base-content/60 mb-4">
-									<svg
-										className="w-16 h-16 mx-auto mb-4"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={1}
-											d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-										/>
-									</svg>
 									<p className="text-lg">{t("vault.manager.emptyVault")}</p>
 								</div>
 							</div>
 						) : (
 							<VaultTree
-								vaultId={currentVault?.id ?? ""}
-								onAddEntry={(vaultId, parentId) => {
-									setAddEntryParentId(parentId);
+								vaultId={currentVault.id}
+								entries={getCurrentEntries(
+									currentVault?.volatile?.entries ?? [],
+									getCurrentPath(),
+								)}
+								basePath={getCurrentPath()}
+								onAddEntry={(_vaultId, path) => {
+									setAddEntryPath(path);
 									setIsAddEntryModalOpen(true);
 								}}
-								onAddGroup={(vaultId, parentId) => {
-									setAddGroupParentId(parentId);
+								onAddGroup={(_vaultId, path) => {
+									setAddGroupPath(path);
 									setIsAddGroupModalOpen(true);
 								}}
-								onView={(vaultId, entry: Entry) => {
+								onView={(_vaultId, _path, entry) => {
 									if (isDataEntry(entry)) {
 										setSelectedEntry(entry);
 										setIsDetailsModalOpen(true);
 									}
 								}}
-								onEdit={(vaultId, entry: Entry) => {
+								onEdit={(_vaultId, _path, entry) => {
 									setSelectedEntry(entry);
 									if (isGroupEntry(entry)) {
 										setIsEditGroupModalOpen(true);
@@ -359,7 +307,7 @@ const HomeScreen = () => {
 										setIsEditEntryModalOpen(true);
 									}
 								}}
-								onNavigate={(vaultId, groupId) => handleNavigate(groupId)}
+								onNavigate={(_vaultId, path) => handleNavigate(path)}
 							/>
 						)}
 					</div>
@@ -375,18 +323,17 @@ const HomeScreen = () => {
 			</div>
 			<div className="vault-content w-4/5 h-full">{renderVaultContent()}</div>
 
-			{/* Add Entry Modal */}
 			<AddEntryModal
 				isOpen={isAddEntryModalOpen}
 				onClose={() => setIsAddEntryModalOpen(false)}
 				onSuccess={() => setIsAddEntryModalOpen(false)}
-				parentId={addEntryParentId}
+				path={addEntryPath}
 			/>
 			<AddGroupModal
 				isOpen={isAddGroupModalOpen}
 				onClose={() => setIsAddGroupModalOpen(false)}
 				onSuccess={() => setIsAddGroupModalOpen(false)}
-				parentId={addGroupParentId}
+				path={addGroupPath}
 			/>
 			{selectedEntry && isDataEntry(selectedEntry) && (
 				<EntryDetailsModal
@@ -414,6 +361,7 @@ const HomeScreen = () => {
 						setSelectedEntry(null);
 					}}
 					entry={selectedEntry}
+					path={getCurrentPath()}
 				/>
 			)}
 			{selectedEntry && isGroupEntry(selectedEntry) && (
@@ -428,6 +376,7 @@ const HomeScreen = () => {
 						setSelectedEntry(null);
 					}}
 					entry={selectedEntry}
+					path={getCurrentPath()}
 				/>
 			)}
 		</div>

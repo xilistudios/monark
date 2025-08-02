@@ -6,6 +6,8 @@ export interface BaseEntry {
 	entry_type: EntryType;
 	name: string;
 	data_type: string;
+	created_at: string; // ISO 8601 string
+	updated_at: string; // ISO 8601 string
 }
 
 // Group entry interface with nested children
@@ -17,8 +19,6 @@ export interface GroupEntry extends BaseEntry {
 // Data entry interface with additional fields
 export interface DataEntry extends BaseEntry {
 	entry_type: "entry";
-	created_at: string; // ISO 8601 string
-	updated_at: string; // ISO 8601 string
 	fields: Field[];
 	tags: string[];
 }
