@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import type { DataEntry, Field } from "../../interfaces/vault.interface";
-import type { AppDispatch, RootState } from "../../redux/store";
+import type {  RootState } from "../../redux/store";
 import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 
@@ -38,12 +38,9 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
 	onSuccess,
 	entry,
 	path,
-}) => {
-	const dispatch = useDispatch<AppDispatch>();
+}) => { 
 	const { t } = useTranslation("home");
-	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
-	const vaults = useSelector((state: RootState) => state.vault.vaults);
-	const currentVault = vaults.find(v => v.id === currentVaultId) ?? null;
+	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId); 
 
 	const [entryTitle, setEntryTitle] = useState(entry.name);
 	const [dataType, setDataType] = useState(entry.data_type);

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { z } from "zod";
 import type { DataEntry, Field } from "../../interfaces/vault.interface";
-import type { AppDispatch, RootState } from "../../redux/store";
+import type { RootState } from "../../redux/store";
 import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 import { addEntryFormSchema, tagSchema } from "../../utils/validation/vaultSchemas";
@@ -28,11 +28,8 @@ export const AddEntryModal = ({
 	onSuccess,
 	path,
 }: AddEntryModalProps) => {
-	const dispatch = useDispatch<AppDispatch>();
 	const { t } = useTranslation("home");
 	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
-	const vaults = useSelector((state: RootState) => state.vault.vaults);
-	const currentVault = vaults.find(v => v.id === currentVaultId) ?? null;
 
 	const [entryTitle, setEntryTitle] = useState("");
 	const [fields, setFields] = useState<FormField[]>([

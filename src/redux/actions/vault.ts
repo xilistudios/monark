@@ -4,7 +4,6 @@ import {
 } from "@reduxjs/toolkit"
 import type { Entry } from "../../interfaces/vault.interface"
 import { settingsStore } from "../../store/settings"
-import type { RootState } from "../store"
 import { VaultManager } from "../../services/vault"
 
 export interface Vault {
@@ -59,7 +58,7 @@ export const loadVaultStateFromSettings = async (): Promise<
 > => {
 	try {
 		const vaults = await settingsStore.get("vaults")
-		const savedVaults = await settingsStore.get("savedVaults")
+		await settingsStore.get("savedVaults")
 		if (vaults && Array.isArray(vaults)) {
 			return {
 				vaults: vaults.map((vault: any) => ({

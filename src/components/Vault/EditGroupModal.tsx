@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import type { GroupEntry } from "../../interfaces/vault.interface";
-import type { AppDispatch, RootState } from "../../redux/store";
+import type { RootState } from "../../redux/store";
 import { VaultManager } from "../../services/vault";
 import { Modal } from "../UI/Modal";
 
@@ -28,7 +28,6 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
 	entry,
 	path,
 }) => {
-	const dispatch = useDispatch<AppDispatch>();
 	const { t } = useTranslation("home");
 	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
 	const [groupName, setGroupName] = useState(entry.name);
