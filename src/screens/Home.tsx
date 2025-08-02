@@ -372,7 +372,7 @@ const HomeScreen = () => {
 						setSelectedEntry(null);
 					}}
 					entry={selectedEntry}
-					path={getCurrentPath()}
+					path={[...getCurrentPath(), selectedEntry.id]}
 				/>
 			)}
 			{selectedEntry && isGroupEntry(selectedEntry) && (
@@ -387,7 +387,7 @@ const HomeScreen = () => {
 						setSelectedEntry(null);
 					}}
 					entry={selectedEntry}
-					path={getCurrentPath()}
+					path={[...getCurrentPath(), selectedEntry.id]}
 				/>
 			)}
 		</div>

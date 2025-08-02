@@ -130,6 +130,9 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
 				// Get the VaultInstance from VaultManager
 				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
 				if (vaultInstance) {
+					// Debug: log the path being used
+					console.log("Updating entry with path:", path);
+					
 					// Update the entry using VaultManager
 					await vaultInstance.updateEntry(path, updates);
 				}
@@ -139,7 +142,7 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
 			onClose();
 		} catch (err) {
 			console.error("Error updating entry:", err);
-			setError(t("editEntry.errors.updateFailed"));
+			setError(err instanceof Error ? err.message : t("editEntry.errors.updateFailed"));
 		} finally {
 			setLoading(false);
 		}

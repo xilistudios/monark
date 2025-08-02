@@ -55,6 +55,9 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
 				// Get the VaultInstance from VaultManager
 				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
 				if (vaultInstance) {
+					// Debug: log the path being used
+					console.log("Updating group with path:", path);
+					
 					// Update the entry using VaultManager
 					await vaultInstance.updateEntry(path, { name: trimmed, updated_at: new Date().toISOString() });
 				}
@@ -64,7 +67,7 @@ export const EditGroupModal: React.FC<EditGroupModalProps> = ({
 			onClose();
 		} catch (err) {
 			console.error("Error updating group:", err);
-			setError(t("editGroup.errors.updateFailed"));
+			setError(err instanceof Error ? err.message : t("editGroup.errors.updateFailed"));
 		} finally {
 			setLoading(false);
 		}
