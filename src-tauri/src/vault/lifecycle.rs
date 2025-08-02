@@ -14,7 +14,7 @@ const ARGON2_MEMORY_COST_KIB: u32 = 65536;
 const ARGON2_ITERATIONS: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn write_vault(
     file_path: String,
     password: String,
@@ -34,7 +34,7 @@ pub fn write_vault(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_vault(file_path: String, password: String) -> Result<Vault, CommandError> {
     let vault_file = io::vault::read_vault(file_path)?;
 
@@ -55,7 +55,7 @@ pub fn read_vault(file_path: String, password: String) -> Result<Vault, CommandE
         .map_err(|e| CommandError::Io(format!("Failed to deserialize vault: {}", e)))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_vault(file_path: String) -> Result<(), CommandError> {
     let path = Path::new(&file_path);
 

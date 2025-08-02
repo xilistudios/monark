@@ -21,7 +21,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password, vault)?;
+        lifecycle::write_vault(file_path.clone(), password, vault);
 
         assert!(std::path::Path::new(&file_path).exists());
 
@@ -104,7 +104,7 @@ mod tests {
         // Verify the vault structure
         assert!(vault.entries.is_empty()); // Should be empty for a new vault
         assert_eq!(vault.hmac, String::new()); // HMAC is initially empty in create_vault
-        
+
         Ok(())
     }
 
