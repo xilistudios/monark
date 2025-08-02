@@ -60,7 +60,7 @@ pub enum Entry {
         id: Uuid,
         name: String,
         data_type: String,
-        children: Vec<Uuid>,
+        children: Vec<Entry>,
     },
     #[serde(rename = "entry")]
     Data {
