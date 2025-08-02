@@ -28,7 +28,6 @@ const HomeScreen = () => {
 	const dispatch = useDispatch<AppDispatch>();
 	const vaults = useSelector((state: RootState) => state.vault.vaults);
 	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
-	const loading = useSelector((state: RootState) => state.vault.loading);
 	const error = useSelector((state: RootState) => state.vault.error);
 
 	const currentVault = vaults.find(v => v.id === currentVaultId) ?? null;
@@ -46,6 +45,8 @@ const HomeScreen = () => {
 	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 	const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
 	const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
+	const [loading, setLoading] = useState(false);
+
 
 	const getCurrentPath = (): string[] => {
 		const pathParts = navigationPath.split("/").filter(Boolean);
@@ -55,11 +56,11 @@ const HomeScreen = () => {
 	const findPathById = (entries: Entry[], targetId: string, currentPath: string[] = []): string[] => {
 		for (const entry of entries) {
 			const newPath = [...currentPath, entry.id];
-			
+
 			if (entry.id === targetId) {
 				return newPath;
 			}
-			
+
 			if (isGroupEntry(entry) && entry.children) {
 				const childPath = findPathById(entry.children, targetId, newPath);
 				if (childPath.length > 0) {
@@ -96,26 +97,26 @@ const HomeScreen = () => {
 
 	const renderBreadcrumbs = () => {
 		const parts = navigationPath.split("/").filter(Boolean);
-		
+
 		const findEntryByPath = (entries: Entry[], pathParts: string[]): Entry | null => {
 			if (pathParts.length === 0) return null;
-			
+
 			let currentEntries = entries;
 			let foundEntry: Entry | null = null;
-			
+
 			for (const id of pathParts) {
 				const entry = currentEntries.find((e: Entry) => e.id === id);
 				if (!entry) return null;
-				
+
 				foundEntry = entry;
-				
+
 				if (isGroupEntry(entry) && entry.children) {
 					currentEntries = entry.children;
 				} else {
 					break;
 				}
 			}
-			
+
 			return foundEntry;
 		};
 
@@ -156,6 +157,7 @@ const HomeScreen = () => {
 			setUnlockError(t("errors.missingFields"));
 			return;
 		}
+		setLoading(true);
 
 		setUnlockError("");
 		try {
@@ -170,6 +172,8 @@ const HomeScreen = () => {
 			setPassword("");
 		} catch (err) {
 			setUnlockError(t("errors.unlockFailed"));
+		} finally {
+			setLoading(false);
 		}
 	};
 

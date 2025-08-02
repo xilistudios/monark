@@ -79,11 +79,11 @@ export const AddGroupModal = ({
 
 				<div className="form-control">
 					<label className="label">
-						<span className="label-text">{t("addGroup.groupName")} *</span>
+						<span className="label-text">{t("addGroup.name")} *</span>
 					</label>
 					<input
 						type="text"
-						placeholder={t("addGroup.groupNamePlaceholder")}
+						placeholder={t("addGroup.namePlaceholder")}
 						className="input input-bordered"
 						value={groupName}
 						onChange={(e) => setGroupName(e.target.value)}

@@ -79,6 +79,17 @@
 				"fileDialog": "Error opening file dialog"
 			}
 		},
+		"addGroup": {
+			"title": "Add Group",
+			"name": "Group Name",
+			"namePlaceholder": "Enter group name",
+			"addGroup": "Add Group",
+			"adding": "Adding...",
+			"cancel": "Cancel",
+			"errors": {
+				"nameRequired": "Group name is required"
+			}
+		},
 		"importVault": {
 			"title": "Import Existing Vault",
 			"name": "Vault Name (Optional)",
@@ -132,6 +143,8 @@
 				"addGroup": "Add Group",
 				"entries": "Entries",
 				"groups": "Groups",
+				"lock": "Lock",
+				"unlock": "Unlock",
 				"noEntries": "No entries found",
 				"noGroups": "No groups found",
 				"emptyVault": "Your vault is empty. Add some entries to get started.",
