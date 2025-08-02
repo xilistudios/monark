@@ -1,21 +1,15 @@
-import { useState, useCallback, useMemo } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
-	type Entry,
-	isDataEntry,
-	isGroupEntry,
-	getEntryDepth,
-} from "../../interfaces/vault.interface";
-import type { AppDispatch, RootState } from "../../redux/store";
+	type Entry, 
+	isGroupEntry, 
+} from "../../interfaces/vault.interface"; 
 import { VaultManager } from "../../services/vault";
 
 interface VaultTreeProps {
 	vaultId: string;
 	entries: Entry[];
 	basePath: string[];
-	onAddEntry: (vaultId: string, path: string[]) => void;
-	onAddGroup: (vaultId: string, path: string[]) => void;
 	onEdit: (vaultId: string, path: string[], entry: Entry) => void;
 	onView: (vaultId: string, path: string[], entry: Entry) => void;
 	onNavigate: (vaultId: string, path: string[]) => void;
@@ -24,8 +18,6 @@ interface VaultTreeProps {
 interface TreeNodeProps {
 	entry: Entry;
 	vaultId: string;
-	onAddEntry: (vaultId: string, path: string[]) => void;
-	onAddGroup: (vaultId: string, path: string[]) => void;
 	onEdit: (vaultId: string, path: string[], entry: Entry) => void;
 	onView: (vaultId: string, path: string[], entry: Entry) => void;
 	onNavigate: (vaultId: string, path: string[]) => void;
@@ -40,8 +32,6 @@ interface TreeNodeProps {
 const TreeNode = ({
 	entry,
 	vaultId,
-	onAddEntry,
-	onAddGroup,
 	onEdit,
 	onView,
 	onNavigate,
@@ -52,14 +42,6 @@ const TreeNode = ({
 	currentPath,
 }: TreeNodeProps) => {
 	const { t } = useTranslation();
-	const [isExpanded, setIsExpanded] = useState(true);
-
-	const handleToggleExpand = useCallback((e: React.MouseEvent) => {
-		e.stopPropagation();
-		if (isGroupEntry(entry)) {
-			setIsExpanded(!isExpanded);
-		}
-	}, [isGroupEntry(entry), isExpanded]);
 
 	const handleNavigate = useCallback(() => {
 		if (isGroupEntry(entry)) {
@@ -102,27 +84,6 @@ const TreeNode = ({
 						className="flex items-center cursor-pointer flex-1 py-2 px-3"
 						onClick={handleNavigate}
 					>
-						{isGroupEntry(entry) && (
-							<button
-								className={`btn btn-ghost btn-xs mr-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-								onClick={handleToggleExpand}
-							>
-								<svg
-									className="w-3 h-3"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M9 5l7 7-7 7"
-									/>
-								</svg>
-							</button>
-						)}
-						
 						<div className="flex items-center">
 							{isGroupEntry(entry) ? (
 								<svg
@@ -158,28 +119,6 @@ const TreeNode = ({
 					</div>
 					
 					<div className="flex gap-1 px-2">
-						{isGroupEntry(entry) && (
-							<>
-								<button
-									className="btn btn-xs btn-primary"
-									onClick={() => onAddEntry(vaultId, currentPath)}
-									title={t("home.vault.tree.addEntry")}
-								>
-									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-									</svg>
-								</button>
-								<button
-									className="btn btn-xs btn-secondary"
-									onClick={() => onAddGroup(vaultId, currentPath)}
-									title={t("home.vault.tree.addGroup")}
-								>
-									<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-									</svg>
-								</button>
-							</>
-						)}
 						<button
 							className="btn btn-xs btn-accent"
 							onClick={() => onEdit(vaultId, currentPath, entry)}
@@ -206,27 +145,7 @@ const TreeNode = ({
 					</div>
 				</div>
 				
-				{isGroupEntry(entry) && isExpanded && (
-					<div className="mt-1">
-						{entry.children.map((child, index) => (
-							<TreeNode
-								key={child.id}
-								entry={child}
-								vaultId={vaultId}
-								onAddEntry={onAddEntry}
-								onAddGroup={onAddGroup}
-								onEdit={onEdit}
-								onView={onView}
-								onNavigate={onNavigate}
-								onDelete={onDelete}
-								deletingId={deletingId}
-								level={level + 1}
-								isLastChild={index === entry.children.length - 1}
-								currentPath={[...currentPath, child.id]}
-							/>
-						))}
-					</div>
-				)}
+				{/* Children are not rendered when displaying only parent entries */}
 			</div>
 		</div>
 	);
@@ -237,14 +156,11 @@ const VaultTree = ({
 	vaultId,
 	entries,
 	basePath,
-	onAddEntry,
-	onAddGroup,
 	onEdit,
 	onView,
 	onNavigate,
 }: VaultTreeProps) => {
 	const { t } = useTranslation();
-	const dispatch = useDispatch<AppDispatch>();
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 
 	const handleDelete = useCallback(async (vaultId: string, path: string[]) => {
@@ -276,43 +192,43 @@ const VaultTree = ({
 				</svg>
 			</div>
 			<p className="text-base-content/70">{t("home.vault.tree.noEntries")}</p>
-			<div className="mt-4 space-x-2">
-				<button
-					className="btn btn-sm btn-primary"
-					onClick={() => onAddEntry(vaultId, [])}
-				>
-					{t("home.vault.tree.addFirstEntry")}
-				</button>
-				<button
-					className="btn btn-sm btn-secondary"
-					onClick={() => onAddGroup(vaultId, [])}
-				>
-					{t("home.vault.tree.addFirstGroup")}
-				</button>
+			<div className="mt-4">
+				<p className="text-sm text-base-content/60">{t("home.vault.tree.importOrCreateVault")}</p>
 			</div>
 		</div>
-	), [vaultId, onAddEntry, onAddGroup, t]);
+	), [vaultId, t]);
+
+	// Sort entries: groups first, then by name
+	const processedEntries = [...entries].sort((a, b) => {
+		// Sort groups first, then by name
+		const aIsGroup = isGroupEntry(a);
+		const bIsGroup = isGroupEntry(b);
+		
+		if (aIsGroup && !bIsGroup) return -1;
+		if (!aIsGroup && bIsGroup) return 1;
+		
+		// Both are groups or both are entries, sort by name
+		return a.name.localeCompare(b.name);
+	});
 
 	return (
 		<div className="w-full">
-			{entries.length === 0 ? (
+			{processedEntries.length === 0 ? (
 				renderEmptyState()
 			) : (
 				<div className="space-y-1">
-					{entries.map((entry, index) => (
+					{processedEntries.map((entry, index) => (
 						<TreeNode
 							key={entry.id}
 							entry={entry}
 							vaultId={vaultId}
-							onAddEntry={onAddEntry}
-							onAddGroup={onAddGroup}
 							onEdit={onEdit}
 							onView={onView}
 							onNavigate={onNavigate}
 							onDelete={handleDelete}
 							deletingId={deletingId}
 							level={0}
-							isLastChild={index === entries.length - 1}
+							isLastChild={index === processedEntries.length - 1}
 							currentPath={[...basePath, entry.id]}
 						/>
 					))}

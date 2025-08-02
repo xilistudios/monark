@@ -18,7 +18,6 @@ import {
 import {
 	lockVault,
 	setNavigationPath,
-	setVaultCredential,
 	setVaultLocked,
 } from "../redux/actions/vault";
 import { VaultManager } from "../services/vault";
@@ -97,6 +96,29 @@ const HomeScreen = () => {
 
 	const renderBreadcrumbs = () => {
 		const parts = navigationPath.split("/").filter(Boolean);
+		
+		const findEntryByPath = (entries: Entry[], pathParts: string[]): Entry | null => {
+			if (pathParts.length === 0) return null;
+			
+			let currentEntries = entries;
+			let foundEntry: Entry | null = null;
+			
+			for (const id of pathParts) {
+				const entry = currentEntries.find((e: Entry) => e.id === id);
+				if (!entry) return null;
+				
+				foundEntry = entry;
+				
+				if (isGroupEntry(entry) && entry.children) {
+					currentEntries = entry.children;
+				} else {
+					break;
+				}
+			}
+			
+			return foundEntry;
+		};
+
 		return (
 			<div className="breadcrumbs text-sm p-4 border-b border-base-300">
 				<ul>
@@ -108,9 +130,10 @@ const HomeScreen = () => {
 						}}>/</a>
 					</li>
 					{parts.map((id, index) => {
-						const entry = currentVault?.volatile?.entries?.find((e: Entry) => e.id === id);
+						const pathUpToParts = parts.slice(0, index + 1);
+						const entry = findEntryByPath(currentVault?.volatile?.entries ?? [], pathUpToParts);
 						if (!entry) return null;
-						const pathUpTo = "/" + parts.slice(0, index + 1).join("/");
+						const pathUpTo = "/" + pathUpToParts.join("/");
 						return (
 							<li key={id}>
 								<a onClick={() => {
@@ -156,10 +179,6 @@ const HomeScreen = () => {
 		}
 		setPassword("");
 		setUnlockError("");
-	};
-
-	const handleEntryClick = (entry: Entry) => {
-		console.log("Entry clicked:", entry);
 	};
 
 	const renderVaultContent = () => {
@@ -285,14 +304,6 @@ const HomeScreen = () => {
 									getCurrentPath(),
 								)}
 								basePath={getCurrentPath()}
-								onAddEntry={(_vaultId, path) => {
-									setAddEntryPath(path);
-									setIsAddEntryModalOpen(true);
-								}}
-								onAddGroup={(_vaultId, path) => {
-									setAddGroupPath(path);
-									setIsAddGroupModalOpen(true);
-								}}
 								onView={(_vaultId, _path, entry) => {
 									if (isDataEntry(entry)) {
 										setSelectedEntry(entry);
