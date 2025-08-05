@@ -1,16 +1,21 @@
 #[cfg(test)]
 mod tests {
-    use crate::vault::lifecycle;
     use crate::commands::errors::CommandError;
-    use tempfile::tempdir;
+    use crate::models::{Entry, Vault};
+    use crate::vault::lifecycle;
     use chrono::Utc;
-    use crate::models::{Vault, Entry};
+    use tempfile::tempdir;
     use uuid::Uuid;
 
     #[test]
     fn test_create_vault_success() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("test_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         assert!(!std::path::Path::new(&file_path).exists());
@@ -35,7 +40,11 @@ mod tests {
     fn test_create_vault_in_new_subdirectory() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let subdir = temp_dir.path().join("nested_dir");
-        let file_path = subdir.join("test_vault.vault").to_str().unwrap().to_string();
+        let file_path = subdir
+            .join("test_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         // Ensure the directory and file do not exist before creation
@@ -59,7 +68,12 @@ mod tests {
     #[test]
     fn test_create_vault_file_exists() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("existing_vault.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("existing_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         // Create a dummy file to simulate an existing vault file
@@ -85,7 +99,12 @@ mod tests {
     #[test]
     fn test_create_and_open_vault_success() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("test_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         let vault = Vault {
@@ -111,7 +130,12 @@ mod tests {
     #[test]
     fn test_open_vault_wrong_password() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("test_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "correct_password".to_string();
         let wrong_password = "wrong_password".to_string();
 
@@ -129,7 +153,7 @@ mod tests {
         // Should fail with a crypto error (decryption failure)
         assert!(result.is_err());
         match result {
-            Err(CommandError::Crypto(_)) => {}, // Expected
+            Err(CommandError::Crypto(_)) => {} // Expected
             _ => panic!("Expected CommandError::Crypto"),
         }
 
@@ -147,7 +171,7 @@ mod tests {
         // Should fail with an IO error
         assert!(result.is_err());
         match result {
-            Err(CommandError::Io(_)) => {}, // Expected
+            Err(CommandError::Io(_)) => {} // Expected
             _ => panic!("Expected CommandError::Io"),
         }
 
@@ -156,7 +180,12 @@ mod tests {
     #[test]
     fn test_update_vault_success() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("test_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         let vault = Vault {
@@ -194,7 +223,12 @@ mod tests {
     #[test]
     fn test_update_vault_wrong_password() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("test_vault.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("test_vault.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "correct_password".to_string();
         let wrong_password = "wrong_password".to_string();
 
@@ -218,7 +252,12 @@ mod tests {
     #[test]
     fn test_update_vault_nonexistent_file() {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("update_nonexistent.vault").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("update_nonexistent.vault")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
         let vault = Vault {
             updated_at: Utc::now(),
@@ -229,15 +268,26 @@ mod tests {
         // Should succeed and create the file
         let result = lifecycle::write_vault(file_path.clone(), password.clone(), vault);
         assert!(result.is_ok(), "Expected Ok(()), got {:?}", result);
-        assert!(std::path::Path::new(&file_path).exists(), "Vault file was not created");
+        assert!(
+            std::path::Path::new(&file_path).exists(),
+            "Vault file was not created"
+        );
 
         let open_result = lifecycle::read_vault(file_path, password);
-        assert!(open_result.is_ok(), "Vault file could not be opened after creation");
+        assert!(
+            open_result.is_ok(),
+            "Vault file could not be opened after creation"
+        );
     }
     #[test]
     fn test_delete_vault_success() -> Result<(), CommandError> {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("delete_me.monark").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("delete_me.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         // Create the vault file
@@ -254,7 +304,12 @@ mod tests {
     #[test]
     fn test_delete_vault_invalid_extension() {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
-        let file_path = temp_dir.path().join("invalid.txt").to_str().unwrap().to_string();
+        let file_path = temp_dir
+            .path()
+            .join("invalid.txt")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         // Create a dummy file with invalid extension
         std::fs::File::create(&file_path).expect("Failed to create dummy file");
@@ -280,10 +335,10 @@ mod tests {
     }
     #[test]
     fn test_write_vault_tmp_path() {
+        use crate::commands::errors::CommandError;
+        use crate::vault::lifecycle;
         use std::fs;
         use std::os::unix::fs::PermissionsExt;
-        use crate::vault::lifecycle;
-        use crate::commands::errors::CommandError;
 
         let file_path = "/tmp/test_vault.monark".to_string();
         let password = "test123".to_string();
@@ -324,12 +379,21 @@ mod tests {
         println!("file_exists: {:?}", file_exists);
         println!("permissions: {:?}", permissions);
         println!("file_len: {:?}", file_len);
-        println!("file_content (first 32 bytes): {:?}", file_content.as_ref().map(|v| &v[..std::cmp::min(32, v.len())]));
+        println!(
+            "file_content (first 32 bytes): {:?}",
+            file_content
+                .as_ref()
+                .map(|v| &v[..std::cmp::min(32, v.len())])
+        );
         println!("read_result: {:?}", read_result);
 
         // 7. Assert for error reproduction
         if let Err(CommandError::Io(msg)) = &read_result {
-            assert!(msg.contains("Failed to read vault file"), "Expected 'Failed to read vault file' error, got: {}", msg);
+            assert!(
+                msg.contains("Failed to read vault file"),
+                "Expected 'Failed to read vault file' error, got: {}",
+                msg
+            );
         }
 
         // 8. Assert file was created and has content

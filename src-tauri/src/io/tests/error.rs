@@ -1,20 +1,25 @@
-use std::io::{self, Write};
 use crate::io::error::IoError;
+use std::io::{self, Write};
 use std::io::{Error, ErrorKind};
-   
 
 #[test]
 fn test_display_read_error() {
     let io_err = Error::new(ErrorKind::Other, "test read error");
     let io_error = IoError::ReadError(io_err);
-    assert_eq!(format!("{}", io_error), "Failed to read file: test read error");
+    assert_eq!(
+        format!("{}", io_error),
+        "Failed to read file: test read error"
+    );
 }
 
 #[test]
 fn test_display_write_error() {
     let io_err = Error::new(ErrorKind::Other, "test write error");
     let io_error = IoError::WriteError(io_err);
-    assert_eq!(format!("{}", io_error), "Failed to write file: test write error");
+    assert_eq!(
+        format!("{}", io_error),
+        "Failed to write file: test write error"
+    );
 }
 
 #[test]

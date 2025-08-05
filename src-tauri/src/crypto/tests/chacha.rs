@@ -1,4 +1,4 @@
-use crate::crypto::chacha::{encrypt_xchacha20poly1305, decrypt_xchacha20poly1305};
+use crate::crypto::chacha::{decrypt_xchacha20poly1305, encrypt_xchacha20poly1305};
 use crate::crypto::constants::{KEY_LEN, NONCE_LEN};
 use crate::crypto::error::CryptoError;
 use rand::{rngs::OsRng, RngCore};
@@ -11,8 +11,10 @@ fn test_encrypt_decrypt_xchacha20poly1305() {
     OsRng.fill_bytes(&mut nonce_bytes);
     let plaintext = b"This is a test message.";
 
-    let ciphertext = encrypt_xchacha20poly1305(&key_bytes, &nonce_bytes, plaintext).expect("Encryption failed");
-    let decrypted_plaintext = decrypt_xchacha20poly1305(&key_bytes, &nonce_bytes, &ciphertext).expect("Decryption failed");
+    let ciphertext =
+        encrypt_xchacha20poly1305(&key_bytes, &nonce_bytes, plaintext).expect("Encryption failed");
+    let decrypted_plaintext = decrypt_xchacha20poly1305(&key_bytes, &nonce_bytes, &ciphertext)
+        .expect("Decryption failed");
 
     assert_eq!(plaintext.to_vec(), decrypted_plaintext);
 }

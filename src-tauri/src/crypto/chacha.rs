@@ -1,11 +1,9 @@
+use crate::crypto::constants::{KEY_LEN, NONCE_LEN};
+use crate::crypto::error::CryptoError;
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
-    Key as ChaChaKey,
-    XChaCha20Poly1305,
-    XNonce,
+    Key as ChaChaKey, XChaCha20Poly1305, XNonce,
 };
-use crate::crypto::error::CryptoError;
-use crate::crypto::constants::{KEY_LEN, NONCE_LEN};
 
 // --- XChaCha20Poly1305 Encryption/Decryption ---
 
