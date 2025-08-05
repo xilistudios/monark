@@ -40,3 +40,4 @@ chrono = { version = "0.4.41", features = ["serde"] }
 tempfile = "3"
 tokio = "1.47.1"
 tauri-plugin-fs = "2.4.1"
+tauri-plugin-os = "2"

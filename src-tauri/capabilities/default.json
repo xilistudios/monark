@@ -14,6 +14,7 @@
     "deep-link:default",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:default",
-    "fs:allow-app-read"
+    "fs:allow-app-read",
+    "os:default"
   ]
 }
