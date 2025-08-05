@@ -11,6 +11,9 @@
     "dialog:default",
     "store:default",
     "clipboard-manager:default",
-    "deep-link:default"
+    "deep-link:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:default",
+    "fs:allow-app-read"
   ]
 }
