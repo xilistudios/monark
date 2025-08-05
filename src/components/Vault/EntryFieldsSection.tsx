@@ -1,14 +1,21 @@
 import { useTranslation } from 'react-i18next';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import type { Field } from '../../interfaces/vault.interface';
+import type { Field, FieldType } from '../../interfaces/vault.interface';
+import { useState } from 'react';
+import { PasswordFieldInput } from './PasswordFieldInput';
+import { PasswordFieldView } from './PasswordFieldView';
 
 interface FormField extends Field {
   id: string;
-  title: string;
-  property: string;
-  value: string;
-  secret: boolean;
 }
+
+const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
+  { value: 'text', label: 'Text' },
+  { value: 'url', label: 'URL' },
+  { value: 'note', label: 'Note' },
+  { value: 'otp', label: 'OTP' },
+  { value: 'password', label: 'Password' },
+  { value: 'ssh key', label: 'SSH Key' },
+];
 
 interface EntryFieldsSectionProps {
   fields: FormField[];
@@ -25,11 +32,159 @@ interface EntryFieldsSectionProps {
   handleRemoveField: (index: number) => void;
 }
 
+/**
+ * Validates URL format
+ */
+const isValidUrl = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Renders the appropriate input component based on field type
+ */
+const renderFieldInput = (
+  field: FormField,
+  idx: number,
+  editMode: boolean,
+  handleUpdateField: (
+    index: number,
+    key: keyof FormField,
+    value: string | boolean
+  ) => void,
+  t: (key: string) => string
+) => {
+  const baseClasses =
+    'w-full px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary';
+  const readOnlyClasses = editMode ? '' : 'bg-base-100';
+
+  if (!editMode) {
+    // View mode rendering
+    return renderFieldValue(field);
+  }
+
+  switch (field.property) {
+    case 'url':
+      return (
+        <div className="space-y-1">
+          <input
+            type="url"
+            className={`input ${baseClasses} ${readOnlyClasses} ${
+              field.value && !isValidUrl(field.value) ? 'border-error' : ''
+            }`}
+            placeholder="https://example.com"
+            value={field.value}
+            onChange={(e) => handleUpdateField(idx, 'value', e.target.value)}
+            maxLength={512}
+            readOnly={!editMode}
+          />
+          {field.value && !isValidUrl(field.value) && (
+            <p className="text-xs text-error">Please enter a valid URL</p>
+          )}
+        </div>
+      );
+
+    case 'note':
+      return (
+        <textarea
+          className={`textarea ${baseClasses} ${readOnlyClasses} min-h-[80px] resize-y`}
+          placeholder={t('vault.fields.valuePlaceholder')}
+          value={field.value}
+          onChange={(e) => handleUpdateField(idx, 'value', e.target.value)}
+          maxLength={1000}
+          readOnly={!editMode}
+        />
+      );
+
+    case 'password':
+      return (
+        <PasswordFieldInput
+          value={field.value}
+          onChange={(value) => handleUpdateField(idx, 'value', value)}
+          readOnly={!editMode}
+        />
+      );
+
+    case 'text':
+    case 'otp':
+    case 'ssh key':
+    default:
+      return (
+        <input
+          type="text"
+          className={`input ${baseClasses} ${readOnlyClasses} ${field.property === 'otp' || field.property === 'ssh key' ? 'font-mono' : ''}`}
+          placeholder={t('vault.fields.valuePlaceholder')}
+          value={field.value}
+          onChange={(e) => handleUpdateField(idx, 'value', e.target.value)}
+          maxLength={field.property === 'ssh key' ? 2048 : 128}
+          readOnly={!editMode}
+        />
+      );
+  }
+};
+
+/**
+ * Renders the appropriate view component based on field type
+ */
+const renderFieldValue = (field: FormField) => {
+  if (!field.value) {
+    return <p className="text-base-content/60 italic">No value</p>;
+  }
+
+  switch (field.property) {
+    case 'url':
+      return isValidUrl(field.value) ? (
+        <a
+          href={field.value}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:text-primary-focus underline break-all"
+        >
+          {field.value}
+        </a>
+      ) : (
+        <p className="text-base-content break-all">{field.value}</p>
+      );
+
+    case 'note':
+      return (
+        <p className="text-base-content whitespace-pre-wrap break-words">
+          {field.value}
+        </p>
+      );
+
+    case 'password':
+      return <PasswordFieldView value={field.value} />;
+
+    case 'otp':
+      return (
+        <p className="text-base-content font-mono text-lg tracking-wider">
+          {field.value}
+        </p>
+      );
+
+    case 'text':
+    case 'ssh key':
+    default:
+      return (
+        <p
+          className={`text-base-content break-all ${field.property === 'ssh key' ? 'font-mono text-xs' : ''}`}
+        >
+          {field.value}
+        </p>
+      );
+  }
+};
+
 export function EntryFieldsSection({
   fields,
-  revealed,
+  revealed: _revealed,
   editMode,
-  toggleReveal,
+  toggleReveal: _toggleReveal,
   handleCopy,
   handleAddField,
   handleUpdateField,
@@ -89,22 +244,30 @@ export function EntryFieldsSection({
                   readOnly={!editMode}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-base-content mb-1 uppercase tracking-wide">
-                  {t('vault.fields.propertyLabel')}
-                </label>
-                <input
-                  type="text"
-                  className="input w-full px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder={t('vault.fields.propertyPlaceholder')}
-                  value={field.property}
-                  onChange={(e) =>
-                    handleUpdateField(idx, 'property', e.target.value)
-                  }
-                  maxLength={32}
-                  readOnly={!editMode}
-                />
-              </div>
+              {editMode && (
+                <div>
+                  <label className="block text-xs font-medium text-base-content mb-1 uppercase tracking-wide">
+                    {t('vault.fields.propertyLabel')}
+                  </label>
+                  <select
+                    className="select w-full px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={field.property}
+                    onChange={(e) =>
+                      handleUpdateField(
+                        idx,
+                        'property',
+                        e.target.value as FieldType
+                      )
+                    }
+                  >
+                    {FIELD_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="mb-4">
@@ -112,69 +275,9 @@ export function EntryFieldsSection({
                 {t('vault.fields.valueLabel')}
               </label>
               <div className="flex gap-2">
-                <input
-                  type={
-                    field.secret && !revealed[field.property] && !editMode
-                      ? 'password'
-                      : 'text'
-                  }
-                  className="input flex-1 px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                  placeholder={t('vault.fields.valuePlaceholder')}
-                  value={field.value}
-                  onChange={(e) =>
-                    handleUpdateField(idx, 'value', e.target.value)
-                  }
-                  maxLength={128}
-                  readOnly={!editMode}
-                />
-                {field.secret && (
-                  <button
-                    className="btn px-3 py-2 text-base-content border border-base-300 rounded-md hover:bg-base-200 focus:outline-none focus:ring-2 focus:ring-primary"
-                    onClick={() => toggleReveal(field.property)}
-                    type="button"
-                    title={
-                      revealed[field.property]
-                        ? t('vault.fields.hideButton')
-                        : t('vault.fields.showButton')
-                    }
-                  >
-                    {revealed[field.property] ? (
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L7.05 6.05M9.878 9.878a3 3 0 105.303-.572m0 0a3 3 0 01-4.243-4.243m4.242 4.243L15.95 17.95"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                )}
+                <div className="flex-1">
+                  {renderFieldInput(field, idx, editMode, handleUpdateField, t)}
+                </div>
                 <button
                   className="btn px-3 py-2 text-white bg-primary rounded-md hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                   onClick={() => handleCopy(field.value, field.title)}
@@ -200,7 +303,7 @@ export function EntryFieldsSection({
               </div>
             </div>
 
-            {editMode && (
+            {editMode && field.property !== 'password' && (
               <div className="flex items-center justify-between">
                 <label className="flex items-center">
                   <input
@@ -215,6 +318,30 @@ export function EntryFieldsSection({
                     {t('vault.fields.secretLabel')}
                   </span>
                 </label>
+                <button
+                  className="btn inline-flex items-center px-2 py-1 border border-error text-xs font-medium rounded text-error bg-base-100 hover:bg-error-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error"
+                  onClick={() => handleRemoveField(idx)}
+                  type="button"
+                >
+                  <svg
+                    className="w-3 h-3 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  {t('vault.fields.removeButton')}
+                </button>
+              </div>
+            )}
+            {editMode && field.property === 'password' && (
+              <div className="flex justify-end">
                 <button
                   className="btn inline-flex items-center px-2 py-1 border border-error text-xs font-medium rounded text-error bg-base-100 hover:bg-error-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error"
                   onClick={() => handleRemoveField(idx)}
