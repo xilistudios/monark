@@ -182,9 +182,9 @@ function UnlockedVaultView({
             />
 
             {/* Mobile Sidebar */}
-            <div className="md:hidden fixed inset-y-0 right-0 w-full max-w-sm bg-base-100 z-50 shadow-xl">
+            <div className="md:hidden fixed inset-0 w-full bg-base-100 z-50 shadow-xl">
               {/* Mobile Header */}
-              <div className="flex items-center justify-between p-4 border-b bg-base-200">
+              <div className="w-full flex items-center justify-between p-4 border-b bg-base-200">
                 <h3 className="font-semibold text-lg">Entry Details</h3>
                 <button
                   className="btn btn-sm btn-ghost"

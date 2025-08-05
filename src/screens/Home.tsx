@@ -156,10 +156,43 @@ function HomeScreen() {
 
   return (
     <div className="flex h-screen w-screen">
-      <div className="vault-selector w-1/5 h-full border-r border-base-300">
-        <VaultSelector />
+      <div className="drawer lg:drawer-open">
+        <input id="vault-drawer" type="checkbox" className="drawer-toggle" />
+        <div className="drawer-content flex flex-col">
+          <div className="w-full px-4 py-2 bg-base-200 border-b border-base-300">
+            <label
+              htmlFor="vault-drawer"
+              className="btn btn-ghost btn-sm lg:hidden"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </label>
+          </div>
+          <div className="vault-content flex-1">{vaultContent}</div>
+        </div>
+        <div className="drawer-side">
+          <label
+            htmlFor="vault-drawer"
+            aria-label="close sidebar"
+            className="drawer-overlay"
+          ></label>
+          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
+            <VaultSelector />
+          </div>
+        </div>
       </div>
-      <div className="vault-content w-4/5 h-full">{vaultContent}</div>
       <AddEntryModal />
       <AddGroupModal />
       <ImportCsvModal />
