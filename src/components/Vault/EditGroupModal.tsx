@@ -1,128 +1,147 @@
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useSelector } from "react-redux";
-import type { GroupEntry } from "../../interfaces/vault.interface";
-import type { RootState } from "../../redux/store";
-import { VaultManager } from "../../services/vault";
-import { Modal } from "../UI/Modal";
-
-/**
- * Props for the EditGroupModal component.
- */
-interface EditGroupModalProps {
-	isOpen: boolean;
-	onClose: () => void;
-	onSuccess?: () => void;
-	entry: GroupEntry;
-	path: string[];
-}
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../../redux/store';
+import { VaultManager } from '../../services/vault';
+import { Modal } from '../UI/Modal';
+import { useContext } from 'react';
+import { VaultModalContext } from './VaultContext';
 
 /**
  * Modal component for editing a group entry's name.
  * Implements validation and error handling.
  */
-export const EditGroupModal: React.FC<EditGroupModalProps> = ({
-	isOpen,
-	onClose,
-	onSuccess,
-	entry,
-	path,
-}) => {
-	const { t } = useTranslation("home");
-	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
-	const [groupName, setGroupName] = useState(entry.name);
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+export const EditGroupModal: React.FC = () => {
+  const { t } = useTranslation('home');
+  const currentVaultId = useSelector(
+    (state: RootState) => state.vault.currentVaultId
+  );
+  const context = useContext(VaultModalContext);
+  if (!context)
+    throw new Error(
+      'VaultModalContext must be used within a VaultModalProvider'
+    );
+  const { isEditGroupModalOpen, selectedEntry, closeAllModals } = context;
+  const [groupName, setGroupName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-	// Prefill name
-	useEffect(() => {
-		setGroupName(entry.name);
-	}, [entry]);
+  // Extract current path from Redux state using selector
+  const currentPath =
+    useSelector((state: RootState) => {
+      const vault = state.vault.vaults.find(
+        (v) => v.id === state.vault.currentVaultId
+      );
+      return vault?.volatile?.navigationPath
+        ? vault.volatile.navigationPath.split('/').filter(Boolean)
+        : [];
+    }) || [];
 
-	// Submit update
-	const handleSubmit = async (): Promise<void> => {
-		const trimmed = groupName.trim();
-		if (!trimmed) {
-			setError(t("editGroup.errors.nameRequired"));
-			return;
-		}
+  // Prefill name when modal opens or entry changes
+  useEffect(() => {
+    if (isEditGroupModalOpen && selectedEntry && 'name' in selectedEntry) {
+      setGroupName(selectedEntry.name);
+    }
+  }, [isEditGroupModalOpen, selectedEntry]);
 
-		setError(null);
-		setLoading(true);
+  // Close modal
+  const handleClose = (): void => {
+    setError(null);
+    closeAllModals();
+  };
 
-		try {
-			if (currentVaultId) {
-				// Get the VaultInstance from VaultManager
-				const vaultInstance = VaultManager.getInstance().getInstance(currentVaultId);
-				if (vaultInstance) {
-					// Debug: log the path being used
-					console.log("Updating group with path:", path);
-					
-					// Update the entry using VaultManager
-					await vaultInstance.updateEntry(path, { name: trimmed, updated_at: new Date().toISOString() });
-				}
-			}
+  // Submit update
+  const handleSubmit = async (): Promise<void> => {
+    // Verify selectedEntry is a GroupEntry
+    if (!selectedEntry || !('children' in selectedEntry)) {
+      setError(t('editGroup.errors.invalidEntry'));
+      return;
+    }
 
-			onSuccess?.();
-			onClose();
-		} catch (err) {
-			console.error("Error updating group:", err);
-			setError(err instanceof Error ? err.message : t("editGroup.errors.updateFailed"));
-		} finally {
-			setLoading(false);
-		}
-	};
+    const trimmed = groupName.trim();
+    if (!trimmed) {
+      setError(t('editGroup.errors.nameRequired'));
+      return;
+    }
 
-	// Cancel
-	const handleCancel = (): void => {
-		setError(null);
-		onClose();
-	};
+    setError(null);
+    setLoading(true);
 
-	return (
-		<Modal isOpen={isOpen} onClose={handleCancel}>
-			<div className="space-y-4">
-				<h3 className="font-bold text-lg">{t("editGroup.title")}</h3>
+    try {
+      if (currentVaultId) {
+        // Get the VaultInstance from VaultManager
+        const vaultInstance =
+          VaultManager.getInstance().getInstance(currentVaultId);
+        if (vaultInstance) {
+          // Debug: log the path being used
+          console.log('Updating group with path:', [
+            ...currentPath,
+            selectedEntry.id,
+          ]);
 
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">{t("editGroup.groupName")} *</span>
-					</label>
-					<input
-						type="text"
-						placeholder={t("editGroup.groupNamePlaceholder")}
-						className="input input-bordered"
-						value={groupName}
-						onChange={(e) => setGroupName(e.target.value)}
-					/>
-				</div>
+          // Update the entry using VaultManager
+          await vaultInstance.updateEntry([...currentPath, selectedEntry.id], {
+            name: trimmed,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
 
-				{error && (
-					<div className="alert alert-error">
-						<span>{error}</span>
-					</div>
-				)}
+      closeAllModals();
+    } catch (err) {
+      console.error('Error updating group:', err);
+      setError(
+        err instanceof Error ? err.message : t('editGroup.errors.updateFailed')
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-				<div className="modal-action">
-					<button
-						className="btn btn-primary"
-						onClick={handleSubmit}
-						disabled={loading}
-					>
-						{loading ? (
-							<>
-								<span className="loading loading-spinner loading-sm"></span>
-								{t("editGroup.saving")}
-							</>
-						) : (
-							t("editGroup.save")
-						)}
-					</button>
-					<button className="btn" onClick={handleCancel} disabled={loading}>
-						{t("editGroup.cancel")}
-					</button>
-				</div>
-			</div>
-		</Modal>
-	);
+  return (
+    <Modal isOpen={isEditGroupModalOpen} onClose={handleClose}>
+      <div className="space-y-4">
+        <h3 className="font-bold text-lg">{t('editGroup.title')}</h3>
+
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">{t('editGroup.groupName')} *</span>
+          </label>
+          <input
+            type="text"
+            placeholder={t('editGroup.groupNamePlaceholder')}
+            className="input input-bordered"
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+          />
+        </div>
+
+        {error && (
+          <div className="alert alert-error">
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="modal-action">
+          <button
+            className="btn btn-primary"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className="loading loading-spinner loading-sm"></span>
+                {t('editGroup.saving')}
+              </>
+            ) : (
+              t('editGroup.save')
+            )}
+          </button>
+          <button className="btn" onClick={handleClose} disabled={loading}>
+            {t('editGroup.cancel')}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 };

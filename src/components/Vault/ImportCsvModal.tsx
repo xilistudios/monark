@@ -11,13 +11,8 @@ import { csvParsers } from '../../parsers/csvParsersRegistry';
 import type { ICsvParser } from '../../interfaces/csv.interface';
 import { parseCSV } from '../../utils/csv';
 import type { ParsedEntry } from '../../interfaces/parsers.interface';
-
-interface ImportCsvModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-  path: string[];
-}
+import { useContext } from 'react';
+import { VaultModalContext } from './VaultContext';
 
 /**
  * ImportCsvModal component for importing CSV vault data with manual format selection.
@@ -42,27 +37,28 @@ interface ImportCsvModalProps {
  *
  * ## Example Usage
  * ```tsx
- * <ImportCsvModal
- *   isOpen={modalOpen}
- *   onClose={handleClose}
- *   onSuccess={refreshVault}
- *   path={['/vaults']}
- * />
+ * <ImportCsvModal />
  * ```
  *
  * @see csvParsersRegistry.ts for supported formats
  * @see en.json for translation keys (importCsv.parserSelector, etc.)
  */
-export const ImportCsvModal = ({
-  isOpen,
-  onClose,
-  onSuccess,
-  path,
-}: ImportCsvModalProps) => {
+export const ImportCsvModal = () => {
   const { t } = useTranslation('home');
   const currentVaultId = useSelector(
     (state: RootState) => state.vault.currentVaultId
   );
+  const context = useContext(VaultModalContext);
+  if (!context)
+    throw new Error(
+      'VaultModalContext must be used within a VaultModalProvider'
+    );
+  const {
+    isImportCsvModalOpen,
+    closeImportCsvModal,
+    importCsvPath,
+    importCsvOnSuccess,
+  } = context;
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [parsedEntries, setParsedEntries] = useState<ParsedEntry[]>([]);
@@ -167,7 +163,7 @@ export const ImportCsvModal = ({
       ) {
         const result = (selectedParser as any).processHierarchy(
           parsedEntries,
-          path
+          importCsvPath
         );
         groups = result.groups;
         entries = result.entries;
@@ -208,8 +204,8 @@ export const ImportCsvModal = ({
       setParsedEntries([]);
       setShowPreview(false);
 
-      onSuccess?.();
-      onClose();
+      importCsvOnSuccess?.();
+      closeImportCsvModal();
     } catch (err) {
       console.error('Error importing CSV:', err);
       setError(t('importCsv.errors.importFailed'));
@@ -223,7 +219,7 @@ export const ImportCsvModal = ({
     setParsedEntries([]);
     setShowPreview(false);
     setError('');
-    onClose();
+    closeImportCsvModal();
   };
 
   const renderPreview = () => {
@@ -347,7 +343,7 @@ export const ImportCsvModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleCancel}>
+    <Modal isOpen={isImportCsvModalOpen} onClose={handleCancel}>
       <div className="space-y-4">
         <h3 className="font-bold text-lg">{t('importCsv.title')}</h3>
 
