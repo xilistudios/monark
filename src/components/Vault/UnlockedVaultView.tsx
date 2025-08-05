@@ -101,7 +101,6 @@ function UnlockedVaultView({
     entry: DataEntry;
     path: string[];
   }) => {
-    console.log('Navigating to entry from search:', item);
     handleNavigate(item.path);
     setIsSearchModalOpen(false);
     setSelectedEntry(item.entry);
