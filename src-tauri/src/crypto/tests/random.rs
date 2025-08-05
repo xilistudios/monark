@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use crate::crypto::random::{generate_random_bytes, generate_salt, generate_key, generate_nonce};
-    use crate::crypto::constants::{SALT_LEN, KEY_LEN, NONCE_LEN};
+    use crate::crypto::constants::{KEY_LEN, NONCE_LEN, SALT_LEN};
+    use crate::crypto::random::{
+        generate_key, generate_nonce, generate_random_bytes, generate_salt,
+    };
 
     #[test]
     fn test_generate_random_bytes() {

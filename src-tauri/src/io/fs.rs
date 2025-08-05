@@ -1,6 +1,6 @@
+use crate::io::error;
 use std::fs::File;
 use std::io::{self, Read, Write};
-use crate::io::error;
 /// Reads the entire content of a file.
 pub fn read_file(path: &str) -> Result<String, error::IoError> {
     let mut file = File::open(path).map_err(|e| {

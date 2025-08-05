@@ -50,4 +50,4 @@ graph TD
 4. Document changes in [Memory Bank](projectbrief.md)
 
 ## License
-AGPL-3.0 © 2025 Monark Security
+AGPL-3.0 © 2025 Xili Studios

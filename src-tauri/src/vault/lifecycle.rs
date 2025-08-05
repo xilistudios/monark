@@ -1,9 +1,9 @@
+use crate::commands::errors::CommandError;
 use crate::crypto;
 use crate::io;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
-use crate::commands::errors::CommandError;
 use std::path::Path;
 
 const CURRENT_VAULT_VERSION: &str = "1.0";
@@ -62,9 +62,7 @@ pub fn delete_vault(file_path: String) -> Result<(), CommandError> {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some(VAULT_EXTENSION) => {}
         _ => {
-            return Err(CommandError::Io(
-                "Invalid vault file extension".to_string(),
-            ));
+            return Err(CommandError::Io("Invalid vault file extension".to_string()));
         }
     }
 
@@ -76,16 +74,15 @@ pub fn delete_vault(file_path: String) -> Result<(), CommandError> {
         .map_err(|e| CommandError::Io(format!("Failed to delete vault file: {}", e)))
 }
 
-
 fn create_new_vault(
     file_path: &str,
     password: &str,
     mut initial_vault_content: Vault,
 ) -> Result<(), CommandError> {
     let master_key_vec = crypto::random::generate_key()?;
-    let master_key: [u8; KEY_LENGTH] = master_key_vec.try_into().map_err(|_| {
-        CommandError::Crypto("Invalid generated master key length".to_string())
-    })?;
+    let master_key: [u8; KEY_LENGTH] = master_key_vec
+        .try_into()
+        .map_err(|_| CommandError::Crypto("Invalid generated master key length".to_string()))?;
     let user_salt = crypto::random::generate_salt()?;
 
     let argon2_params = Argon2Params {
@@ -175,12 +172,14 @@ fn derive_and_decrypt_master_key(
         .map_err(|e| CommandError::Crypto(format!("Failed to decode master key nonce: {}", e)))?;
     let mk_ciphertext = URL_SAFE_NO_PAD
         .decode(&vault_file.credentials.ciphertext)
-        .map_err(|e| CommandError::Crypto(format!("Failed to decode master key ciphertext: {}", e)))?;
+        .map_err(|e| {
+            CommandError::Crypto(format!("Failed to decode master key ciphertext: {}", e))
+        })?;
 
     let master_key_vec =
         crypto::chacha::decrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &mk_ciphertext)?;
 
-    master_key_vec.try_into().map_err(|_| {
-        CommandError::Crypto("Invalid decrypted master key length".to_string())
-    })
+    master_key_vec
+        .try_into()
+        .map_err(|_| CommandError::Crypto("Invalid decrypted master key length".to_string()))
 }

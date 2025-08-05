@@ -1,3 +1,3 @@
-mod signature;
 mod error;
 mod fs;
+mod signature;

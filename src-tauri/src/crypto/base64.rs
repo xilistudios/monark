@@ -1,5 +1,5 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use crate::crypto::error::CryptoError;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 // --- Base64 Helpers ---
 

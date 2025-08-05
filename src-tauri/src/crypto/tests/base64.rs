@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::crypto::base64::{encode_base64_urlsafe, decode_base64_urlsafe};
+    use crate::crypto::base64::{decode_base64_urlsafe, encode_base64_urlsafe};
 
     #[test]
     fn test_encode_base64_urlsafe() {

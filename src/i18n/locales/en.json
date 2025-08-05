@@ -1,4 +1,9 @@
 {
+  "hide": "Hide",
+  "show": "Show",
+  "copy": "Copy",
+  "edit": "Edit",
+  "close": "Close",
   "settings": {
     "title": "Settings",
     "language": "Language",
@@ -168,6 +173,7 @@
     "vault": {
       "unlock": {
         "title": "Unlock Vault",
+        "description": "Enter the password to unlock {name}",
         "password": "Password",
         "passwordPlaceholder": "Enter vault password",
         "unlockButton": "Unlock",
@@ -181,11 +187,15 @@
         "groups": "Groups",
         "lock": "Lock",
         "unlock": "Unlock",
+        "search": "Search",
         "noEntries": "No entries found",
         "noGroups": "No groups found",
         "emptyVault": "Your vault is empty. Add some entries to get started.",
         "noVaultSelected": "No Vault Selected",
-        "selectVaultToStart": "Select a vault from the sidebar to get started"
+        "selectVaultToStart": "Select a vault from the sidebar to get started",
+        "copied": "Copied to clipboard!",
+        "copyFailed": "Failed to copy to clipboard.",
+        "noSearchResults": "No entries match your search"
       },
       "tree": {
         "noEntries": "No entries",
@@ -194,13 +204,68 @@
         "edit": "Edit",
         "delete": "Delete",
         "deleting": "Deleting...",
+        "tree": {
+          "edit": "Edit",
+          "delete": "Delete"
+        },
         "deleteConfirm": "Are you sure you want to delete this entry? This action cannot be undone."
+      },
+      "fields": {
+        "title": "Fields",
+        "titleLabel": "Title",
+        "propertyLabel": "Property",
+        "valueLabel": "Value",
+        "addButton": "Add Field",
+        "titlePlaceholder": "Enter field name",
+        "propertyPlaceholder": "Enter property name",
+        "valuePlaceholder": "Enter value",
+        "hideButton": "Hide",
+        "showButton": "Show",
+        "copyButton": "Copy",
+        "secretLabel": "Secret",
+        "removeButton": "Remove"
+      },
+      "tags": {
+        "title": "Tags",
+        "noTags": "No Tags",
+        "addPlaceholder": "Enter tag",
+        "addButton": "Add Tag"
+      },
+      "entry": {
+        "dataType": "Data Type",
+        "createdAt": "Created At",
+        "updatedAt": "Updated At",
+        "tags": "Tags",
+        "noTags": "No Tags",
+        "fields": "Fields",
+        "type": {
+          "entry": "Entry",
+          "group": "Group"
+        },
+        "name": "Name"
+      },
+      "basicInfo": {
+        "title": "Basic Info"
+      },
+      "sidebar": {
+        "empty": {
+          "title": "No Vault Selected",
+          "description": "Select a vault from the sidebar to get started"
+        }
       }
     },
     "errors": {
       "missingFields": "Please fill in all fields",
       "invalidPassword": "Invalid password",
       "unlockFailed": "Failed to unlock vault"
+    },
+    "editEntry": {
+      "title": "Edit Entry",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "editGroup": {
+      "title": "Edit Group"
     }
   }
 }

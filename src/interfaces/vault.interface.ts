@@ -1,5 +1,8 @@
 export type EntryType = "group" | "entry";
 
+// Field types for vault entries
+export type FieldType = 'text' | 'url' | 'note' | 'otp' | 'password' | 'ssh key';
+
 // Base interface for all vault items
 export interface BaseEntry {
 	id: string; // UUID v4 string from Rust
@@ -35,7 +38,7 @@ export interface VaultContent {
 // Field interface for data entries
 export interface Field {
 	title: string;
-	property: string;
+	property: FieldType;
 	value: string;
 	secret: boolean;
 }
@@ -58,14 +61,14 @@ export interface EntryPath {
 // Helper function to find entry by path
 export function findEntryByPath(entries: Entry[], path: string[]): Entry | null {
 	if (path.length === 0) return null;
-	
+
 	let currentEntries = entries;
 	let foundEntry: Entry | null = null;
-	
+
 	for (const id of path) {
 		foundEntry = currentEntries.find(entry => entry.id === id) || null;
 		if (!foundEntry) return null;
-		
+
 		if (isGroupEntry(foundEntry)) {
 			currentEntries = foundEntry.children;
 		} else if (path.indexOf(id) < path.length - 1) {
@@ -73,14 +76,14 @@ export function findEntryByPath(entries: Entry[], path: string[]): Entry | null 
 			return null;
 		}
 	}
-	
+
 	return foundEntry;
 }
 
 // Helper function to get all nested entries (flattened)
 export function flattenEntries(entries: Entry[]): Entry[] {
 	const result: Entry[] = [];
-	
+
 	function traverse(entryList: Entry[]) {
 		for (const entry of entryList) {
 			result.push(entry);
@@ -89,7 +92,7 @@ export function flattenEntries(entries: Entry[]): Entry[] {
 			}
 		}
 	}
-	
+
 	traverse(entries);
 	return result;
 }
@@ -108,14 +111,14 @@ export function getEntryDepth(entries: Entry[], targetId: string): number {
 		}
 		return -1;
 	}
-	
+
 	return findDepth(entries, targetId, 0);
 }
 
 // Helper function to get parent path
 export function getParentPath(entryId: string, entries: Entry[]): string[] {
 	const path: string[] = [];
-	
+
 	function findPath(entryList: Entry[], id: string, currentPath: string[]): boolean {
 		for (const entry of entryList) {
 			if (entry.id === id) {
@@ -131,7 +134,7 @@ export function getParentPath(entryId: string, entries: Entry[]): string[] {
 		}
 		return false;
 	}
-	
+
 	findPath(entries, entryId, []);
 	return path;
 }

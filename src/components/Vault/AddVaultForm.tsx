@@ -1,174 +1,182 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useDispatch } from "react-redux";
-import { addVault, type Vault } from "../../redux/actions/vault";
-import VaultCommands from "../../services/commands";
+import { BaseDirectory } from '@tauri-apps/plugin-fs';
+import * as path from '@tauri-apps/api/path';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
+import { addVault, type Vault } from '../../redux/actions/vault';
+import VaultCommands from '../../services/commands';
+import { isMobile } from '../../utils/platform';
 
 interface AddVaultFormProps {
-	onSuccess: () => void
-	onCancel: () => void
-	vault?: Vault
+  onSuccess: () => void;
+  onCancel: () => void;
+  vault?: Vault;
 }
 
 export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
-	const dispatch = useDispatch();
-	const { t } = useTranslation("home");
-	const [filePath, setFilePath] = useState("");
-	const [password, setPassword] = useState("");
-	const [vaultName, setVaultName] = useState("");
-	const [error, setError] = useState("");
-	const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
+  const { t } = useTranslation('home');
+  const [filePath, setFilePath] = useState('');
+  const [password, setPassword] = useState('');
+  const [vaultName, setVaultName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const mobile = useMemo(() => isMobile(), []);
 
-	const generateVaultId = () => {
-		return crypto.randomUUID();
-	};
+  const generateVaultId = () => {
+    return crypto.randomUUID();
+  };
 
-	const extractVaultNameFromPath = (path: string) => {
-		const fileName = path.split("/").pop() || "";
-		return fileName.replace(".monark", "");
-	};
+  const extractVaultNameFromPath = (path: string) => {
+    const fileName = path.split('/').pop() || '';
+    return fileName.replace('.monark', '');
+  };
 
-	const handleCreateVault = async () => {
-		if (!filePath || !password || !vaultName) {
-			setError(t("errors.missingFields"));
-			return;
-		}
+  const handleCreateVault = async () => {
+    if (!password || !vaultName) {
+      setError(t('errors.missingFields'));
+      return;
+    }
 
-		setError("");
-		setLoading(true);
+    setError('');
+    setLoading(true);
 
-		try {
-			const path = `${filePath}/${vaultName}.monark`;
-			const initialContent = {
-				updated_at: new Date().toISOString(),
-				hmac: "",
-				entries: []
-			};
-			await VaultCommands.write(path, password, initialContent);
+    try {
+      const filepath = await path.join(
+        filePath || (await path.appDataDir()),
+        `${vaultName}.monark`
+      );
+      const initialContent = {
+        updated_at: new Date().toISOString(),
+        hmac: '',
+        entries: [],
+      };
+      await VaultCommands.write(filepath, password, initialContent);
 
-			const newVault: Vault = {
-				id: generateVaultId(),
-				name: vaultName,
-				path,
-				lastAccessed: new Date().toISOString(),
-				isLocked: false,
-				volatile: {
-					credential: password,
-					entries: [],
-					navigationPath: '/',
-					encryptedData: undefined,
-				},
-			};
+      const newVault: Vault = {
+        id: generateVaultId(),
+        name: vaultName,
+        path: filepath,
+        lastAccessed: new Date().toISOString(),
+        isLocked: false,
+        volatile: {
+          credential: password,
+          entries: [],
+          navigationPath: '/',
+          encryptedData: undefined,
+        },
+      };
 
-			dispatch(addVault(newVault));
-			onSuccess();
-		} catch (err) {
-			console.error("Error creating vault:", err);
-			setError(String(err));
-		} finally {
-			setLoading(false);
-		}
-	};
+      dispatch(addVault(newVault));
+      onSuccess();
+    } catch (err) {
+      console.error('Error creating vault:', err);
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	const handleSelectFile = async () => {
-		try {
-			const result = await open({
-				multiple: false,
-				directory: true,
-				filters: [{ name: "Monark Vault", extensions: ["monark"] }],
-			});
+  const handleSelectFile = async () => {
+    try {
+      const result = await open({
+        multiple: false,
+        directory: true,
+        filters: [{ name: 'Monark Vault', extensions: ['monark'] }],
+      });
 
-			if (result) {
-				setFilePath(result);
-				// Auto-generate vault name from file path if not already set
-				if (!vaultName) {
-					setVaultName(extractVaultNameFromPath(result));
-				}
-			}
-		} catch (err) {
-			console.error("Error selecting file:", err);
-			setError(t("addVault.errors.fileDialog"));
-		}
-	};
+      if (result) {
+        setFilePath(result);
+        // Auto-generate vault name from file path if not already set
+        if (!vaultName) {
+          setVaultName(extractVaultNameFromPath(result));
+        }
+      }
+    } catch (err) {
+      console.error('Error selecting file:', err);
+      setError(t('addVault.errors.fileDialog'));
+    }
+  };
 
-	return (
-		<div className="space-y-4">
-			<h3 className="font-bold text-lg">{t("addVault.title")}</h3>
+  return (
+    <div className="space-y-4">
+      <h3 className="font-bold text-lg">{t('addVault.title')}</h3>
 
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("addVault.name")}</span>
-				</label>
-				<input
-					type="text"
-					placeholder={t("addVault.namePlaceholder")}
-					className="input input-bordered"
-					value={vaultName}
-					onChange={(e) => setVaultName(e.target.value)}
-				/>
-			</div>
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text">{t('addVault.name')}</span>
+        </label>
+        <input
+          type="text"
+          placeholder={t('addVault.namePlaceholder')}
+          className="input input-bordered"
+          value={vaultName}
+          onChange={(e) => setVaultName(e.target.value)}
+        />
+      </div>
+      {!mobile && (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">{t('addVault.filePath')}</span>
+          </label>
+          <div className="join">
+            <input
+              type="text"
+              placeholder={t('addVault.filePathPlaceholder')}
+              className="input input-bordered join-item flex-1"
+              value={filePath}
+              onChange={(e) => setFilePath(e.target.value)}
+            />
+            <button
+              className="btn join-item"
+              onClick={handleSelectFile}
+              type="button"
+            >
+              {t('addVault.browse')}
+            </button>
+          </div>
+        </div>
+      )}
 
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("addVault.filePath")}</span>
-				</label>
-				<div className="join">
-					<input
-						type="text"
-						placeholder={t("addVault.filePathPlaceholder")}
-						className="input input-bordered join-item flex-1"
-						value={filePath}
-						onChange={(e) => setFilePath(e.target.value)}
-					/>
-					<button
-						className="btn join-item"
-						onClick={handleSelectFile}
-						type="button"
-					>
-						{t("addVault.browse")}
-					</button>
-				</div>
-			</div>
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text">{t('addVault.password')}</span>
+        </label>
+        <input
+          type="password"
+          placeholder={t('addVault.passwordPlaceholder')}
+          className="input input-bordered"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
 
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("addVault.password")}</span>
-				</label>
-				<input
-					type="password"
-					placeholder={t("addVault.passwordPlaceholder")}
-					className="input input-bordered"
-					value={password}
-					onChange={(e) => setPassword(e.target.value)}
-				/>
-			</div>
+      {error && (
+        <div className="alert alert-error">
+          <span>{JSON.stringify(error.toString())}</span>
+        </div>
+      )}
 
-			{error && (
-				<div className="alert alert-error">
-					<span>{error}</span>
-				</div>
-			)}
-
-			<div className="modal-action">
-				<button
-					className="btn btn-primary"
-					onClick={handleCreateVault}
-					disabled={loading}
-				>
-					{loading ? (
-						<>
-							<span className="loading loading-spinner loading-sm"></span>
-							{t("addVault.creating")}
-						</>
-					) : (
-						t("addVault.createVault")
-					)}
-				</button>
-				<button className="btn" onClick={onCancel} disabled={loading}>
-					{t("addVault.cancel")}
-				</button>
-			</div>
-		</div>
-	);
+      <div className="modal-action">
+        <button
+          className="btn btn-primary"
+          onClick={handleCreateVault}
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <span className="loading loading-spinner loading-sm"></span>
+              {t('addVault.creating')}
+            </>
+          ) : (
+            t('addVault.createVault')
+          )}
+        </button>
+        <button className="btn" onClick={onCancel} disabled={loading}>
+          {t('addVault.cancel')}
+        </button>
+      </div>
+    </div>
+  );
 };
