@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 import type { Field, FieldType } from '../../interfaces/vault.interface';
-import { useState } from 'react';
 import { PasswordFieldInput } from './PasswordFieldInput';
 import { PasswordFieldView } from './PasswordFieldView';
 
