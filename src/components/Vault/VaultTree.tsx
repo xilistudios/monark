@@ -1,8 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type Entry, isGroupEntry } from '../../interfaces/vault.interface';
 import { VaultManager } from '../../services/vault';
-import { useContext } from 'react';
 import { VaultModalContext } from './VaultContext';
 
 /**
@@ -11,12 +10,14 @@ import { VaultModalContext } from './VaultContext';
  * @property entries - The list of entries to display.
  * @property basePath - The base path for the tree.
  * @property onNavigate - Handler for navigating to a group.
+ * @property onEntrySelect - Optional callback for entry selection (bypasses modal if provided).
  */
 interface VaultTreeProps {
   vaultId: string;
   entries: Entry[];
   basePath: string[];
   onNavigate: (vaultId: string, path: string[]) => void;
+  onEntrySelect?: (entry: Entry) => void;
 }
 
 /**
@@ -39,6 +40,10 @@ interface TreeNodeProps {
   level: number;
   isLastChild: boolean;
   currentPath: string[];
+  /**
+   * Optional callback for entry selection (bypasses modal if provided).
+   */
+  onEntrySelect?: (entry: Entry) => void;
 }
 
 // TreeNode component for recursive rendering
@@ -54,6 +59,7 @@ const TreeNode = ({
   level,
   isLastChild,
   currentPath,
+  onEntrySelect,
 }: TreeNodeProps) => {
   const { t } = useTranslation();
   const context = useContext(VaultModalContext);
@@ -66,16 +72,25 @@ const TreeNode = ({
   const handleNavigate = useCallback(() => {
     if (isGroupEntry(entry)) {
       onNavigate(vaultId, currentPath);
+    } else if (onEntrySelect) {
+      onEntrySelect(entry);
     } else {
       openEntryDetails(entry);
     }
-  }, [entry, vaultId, onNavigate, openEntryDetails, currentPath]);
+  }, [
+    entry,
+    vaultId,
+    onNavigate,
+    openEntryDetails,
+    currentPath,
+    onEntrySelect,
+  ]);
 
   const getIndentStyle = useCallback(() => {
-    const baseIndent = level * 24; // 24px per level
+    const baseIndent = level * 16; // Reduced indent for mobile
     return {
-      paddingLeft: `${baseIndent + 12}px`,
-      marginLeft: level > 0 ? '12px' : '0',
+      paddingLeft: `${baseIndent + 8}px`,
+      marginLeft: level > 0 ? '8px' : '0',
     };
   }, [level]);
 
@@ -84,8 +99,8 @@ const TreeNode = ({
 
     return (
       <div
-        className="absolute left-0 top-0 bottom-0 w-px bg-base-300"
-        style={{ left: `${(level - 1) * 24 + 12}px` }}
+        className="absolute left-0 top-0 bottom-0 w-px bg-base-300 hidden sm:block"
+        style={{ left: `${(level - 1) * 16 + 8}px` }}
       >
         {!isLastChild && (
           <div
@@ -99,21 +114,21 @@ const TreeNode = ({
   }, [level, isLastChild]);
 
   return (
-    <div className="relative">
+    <div className="relative mb-1">
       {renderTreeLines()}
       <div className="relative">
         <div
-          className="flex items-center justify-between bg-base-200 hover:bg-base-300 transition-colors rounded-lg border border-base-300"
+          className="flex items-center justify-between bg-base-200 hover:bg-base-300 active:bg-base-300 transition-colors rounded-lg border border-base-300 touch-manipulation"
           style={getIndentStyle()}
         >
           <div
-            className="flex items-center cursor-pointer flex-1 py-2 px-3"
+            className="flex items-center cursor-pointer flex-1 py-3 px-3 sm:py-2 min-h-[44px] sm:min-h-[36px]"
             onClick={handleNavigate}
           >
             <div className="flex items-center">
               {isGroupEntry(entry) ? (
                 <svg
-                  className="w-4 h-4 mr-2 text-primary"
+                  className="w-5 h-5 sm:w-4 sm:h-4 mr-3 sm:mr-2 text-primary flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -127,7 +142,7 @@ const TreeNode = ({
                 </svg>
               ) : (
                 <svg
-                  className="w-4 h-4 mr-2 text-secondary"
+                  className="w-5 h-5 sm:w-4 sm:h-4 mr-3 sm:mr-2 text-secondary flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -140,22 +155,32 @@ const TreeNode = ({
                   />
                 </svg>
               )}
-              <span className="font-medium text-sm">{entry.name}</span>
+              <div className="min-w-0 flex-1">
+                <span className="font-medium text-sm sm:text-sm block truncate">
+                  {entry.name}
+                </span>
+                {isGroupEntry(entry) && (
+                  <span className="text-xs text-base-content/60 block sm:hidden">
+                    Group
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-1 px-2">
+          <div className="flex gap-1 px-2 flex-shrink-0">
             <button
-              className="btn btn-xs btn-accent"
-              onClick={() =>
+              className="btn btn-sm sm:btn-xs btn-accent min-h-[40px] sm:min-h-[24px] px-3 sm:px-2"
+              onClick={(e) => {
+                e.stopPropagation();
                 isGroupEntry(entry)
                   ? openEditGroup(entry)
-                  : openEditEntry(entry)
-              }
+                  : openEditEntry(entry);
+              }}
               title={t('home.vault.tree.edit')}
             >
               <svg
-                className="w-3 h-3"
+                className="w-4 h-4 sm:w-3 sm:h-3"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -167,29 +192,36 @@ const TreeNode = ({
                   d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                 />
               </svg>
+              <span className="hidden sm:inline ml-1">Edit</span>
             </button>
             <button
-              className="btn btn-xs btn-error"
-              onClick={() => onDelete(vaultId, currentPath)}
+              className="btn btn-sm sm:btn-xs btn-error min-h-[40px] sm:min-h-[24px] px-3 sm:px-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(vaultId, currentPath);
+              }}
               disabled={deletingId === entry.id}
               title={t('home.vault.tree.delete')}
             >
               {deletingId === entry.id ? (
-                <span className="loading loading-spinner loading-xs"></span>
+                <span className="loading loading-spinner loading-sm sm:loading-xs"></span>
               ) : (
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
+                <>
+                  <svg
+                    className="w-4 h-4 sm:w-3 sm:h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  <span className="hidden sm:inline ml-1">Delete</span>
+                </>
               )}
             </button>
           </div>
@@ -206,11 +238,18 @@ const TreeNode = ({
  * VaultTree component for rendering the vault's entry/group tree.
  * Uses VaultModalContext for modal actions.
  */
+/**
+ * VaultTree component for rendering the vault's entry/group tree.
+ * Uses VaultModalContext for modal actions.
+ *
+ * @param onEntrySelect Optional callback for entry selection (bypasses modal if provided).
+ */
 const VaultTree = ({
   vaultId,
   entries,
   basePath,
   onNavigate,
+  onEntrySelect,
 }: VaultTreeProps) => {
   const { t } = useTranslation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -242,10 +281,10 @@ const VaultTree = ({
 
   const renderEmptyState = useCallback(
     () => (
-      <div className="text-center py-12">
+      <div className="text-center py-8 sm:py-12 px-4">
         <div className="text-base-content/60 mb-4">
           <svg
-            className="w-16 h-16 mx-auto"
+            className="w-12 h-12 sm:w-16 sm:h-16 mx-auto"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -258,7 +297,9 @@ const VaultTree = ({
             />
           </svg>
         </div>
-        <p className="text-base-content/70">{t('home.vault.tree.noEntries')}</p>
+        <p className="text-base-content/70 text-base sm:text-lg font-medium mb-2">
+          {t('home.vault.tree.noEntries')}
+        </p>
         <div className="mt-4">
           <p className="text-sm text-base-content/60">
             {t('home.vault.tree.importOrCreateVault')}
@@ -287,7 +328,7 @@ const VaultTree = ({
       {processedEntries.length === 0 ? (
         renderEmptyState()
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-2 sm:space-y-1">
           {processedEntries.map((entry, index) => (
             <TreeNode
               key={entry.id}
@@ -299,6 +340,7 @@ const VaultTree = ({
               level={0}
               isLastChild={index === processedEntries.length - 1}
               currentPath={[...basePath, entry.id]}
+              onEntrySelect={onEntrySelect}
             />
           ))}
         </div>

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import HomeScreen from '../screens/Home';
-import { VaultModalProvider } from 'src/components/Vault/VaultContext';
+import { VaultModalProvider } from '../components/Vault/VaultContext';
 
 const Component = () => {
   return (
