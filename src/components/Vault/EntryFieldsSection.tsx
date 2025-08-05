@@ -3,6 +3,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { Field } from '../../interfaces/vault.interface';
 
 interface FormField extends Field {
+  id: string;
   title: string;
   property: string;
   value: string;
@@ -70,10 +71,7 @@ export function EntryFieldsSection({
 
       <div className="p-4 space-y-4">
         {fields.map((field, idx) => (
-          <div
-            key={field.property || idx}
-            className="bg-base-200 rounded-lg p-4"
-          >
+          <div key={field.id} className="bg-base-200 rounded-lg p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-medium text-base-content mb-1 uppercase tracking-wide">

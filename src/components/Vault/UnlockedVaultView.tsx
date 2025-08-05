@@ -126,9 +126,11 @@ function UnlockedVaultView({
       </div>
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* Left column: Breadcrumbs + VaultTree */}
-        <div className={`w-full md:w-[70%] flex flex-col h-full overflow-auto border-r border-base-300 ${
-          isMobileSidebarOpen ? 'hidden md:flex' : 'flex'
-        }`}>
+        <div
+          className={`w-full md:w-[40%] flex flex-col h-full overflow-auto border-r border-base-300 ${
+            isMobileSidebarOpen ? 'hidden md:flex' : 'flex'
+          }`}
+        >
           <VaultBreadcrumbs
             navigationPath={currentPath.join('/')}
             currentVault={{
@@ -160,7 +162,7 @@ function UnlockedVaultView({
         </div>
 
         {/* Desktop Sidebar */}
-        <div className="hidden md:block w-full md:w-[30%] h-full">
+        <div className="hidden md:block w-full md:w-[60%] h-full">
           <EntryDetailsSidebar
             entry={selectedEntry}
             mode={sidebarMode}
@@ -188,8 +190,18 @@ function UnlockedVaultView({
                   className="btn btn-sm btn-ghost"
                   onClick={handleCloseMobileSidebar}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -216,8 +228,18 @@ function UnlockedVaultView({
               className="btn btn-primary btn-circle shadow-lg"
               onClick={() => setIsMobileSidebarOpen(true)}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </button>
           </div>

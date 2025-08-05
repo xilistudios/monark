@@ -173,6 +173,7 @@
     "vault": {
       "unlock": {
         "title": "Unlock Vault",
+        "description": "Enter the password to unlock {name}",
         "password": "Password",
         "passwordPlaceholder": "Enter vault password",
         "unlockButton": "Unlock",
@@ -201,6 +202,10 @@
         "edit": "Edit",
         "delete": "Delete",
         "deleting": "Deleting...",
+        "tree": {
+          "edit": "Edit",
+          "delete": "Delete"
+        },
         "deleteConfirm": "Are you sure you want to delete this entry? This action cannot be undone."
       },
       "fields": {
@@ -239,6 +244,12 @@
       },
       "basicInfo": {
         "title": "Basic Info"
+      },
+      "sidebar": {
+        "empty": {
+          "title": "No Vault Selected",
+          "description": "Select a vault from the sidebar to get started"
+        }
       }
     },
     "errors": {

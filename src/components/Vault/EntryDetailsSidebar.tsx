@@ -1,5 +1,5 @@
 // EntryDetailsSidebar.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DataEntry, GroupEntry } from '../../interfaces/vault.interface';
 import { EmptyState } from './EmptyState';
@@ -30,8 +30,14 @@ export function EntryDetailsSidebar({
   const [editMode, setEditMode] = useState(mode === 'edit');
   const [entryTitle, setEntryTitle] = useState(entry?.name || '');
   const [dataType, setDataType] = useState(entry?.data_type || '');
+  const nextFieldId = useRef(0);
   const [fields, setFields] = useState<any[]>( // Using any[] as FormField is in EntryFieldsSection
-    isDataEntry(entry) ? entry.fields.map((f) => ({ ...f })) : []
+    isDataEntry(entry)
+      ? entry.fields.map((f) => ({
+          ...f,
+          id: f.property || `field-${nextFieldId.current++}`,
+        }))
+      : []
   );
   const [tags, setTags] = useState<string[]>(
     isDataEntry(entry) ? entry.tags : []
@@ -52,7 +58,12 @@ export function EntryDetailsSidebar({
       setEntryTitle(entry.name);
       setDataType(entry.data_type);
       if (isDataEntry(entry)) {
-        setFields(entry.fields.map((f) => ({ ...f })));
+        setFields(
+          entry.fields.map((f) => ({
+            ...f,
+            id: f.property || `field-${nextFieldId.current++}`,
+          }))
+        );
         setTags(entry.tags);
       }
     }
@@ -93,7 +104,13 @@ export function EntryDetailsSidebar({
   const handleAddField = () => {
     setFields((prev) => [
       ...prev,
-      { title: '', property: '', value: '', secret: false },
+      {
+        id: `new-${nextFieldId.current++}`,
+        title: '',
+        property: '',
+        value: '',
+        secret: false,
+      },
     ]);
   };
 
@@ -136,7 +153,7 @@ export function EntryDetailsSidebar({
         ...entry,
         name: entryTitle,
         data_type: dataType,
-        fields,
+        fields: fields.map(({ id, ...rest }) => rest),
         tags,
       };
       onSave?.(updated);
@@ -309,8 +326,9 @@ export function EntryDetailsSidebar({
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             {isDataEntry(entry) && entry.fields.length > 0 && (
               <EntryFieldsSection
-                fields={entry.fields.map((f) => ({
+                fields={entry.fields.map((f, idx) => ({
                   ...f,
+                  id: f.property || `view-${idx}`,
                   title: f.title || f.property,
                   property: f.property,
                   value: f.value,
