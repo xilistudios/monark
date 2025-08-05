@@ -6,7 +6,7 @@
  */
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import AppearanceSettings from "../components/Settings//AppearanceSettings";
+import AppearanceSettings from "../components/Settings/AppearanceSettings";
 import GeneralSettings from "../components/Settings/GeneralSettings";
 import ResetSection from "../components/Settings/ResetSection";
 
