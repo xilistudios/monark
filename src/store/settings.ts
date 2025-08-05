@@ -11,6 +11,8 @@ export class SettingsStore {
 		load("store.json", { autoSave: false }).then((store) => {
 			this.initalized = true;
 			this.store = store;
+		}).catch((err) => {
+			console.error("Failed to load store in SettingsStore constructor:", err);
 		});
 	}
 	init = async () => {
