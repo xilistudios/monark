@@ -6,6 +6,7 @@ import { AddGroupModal } from "../components/Vault/AddGroupModal";
 import { EditEntryModal } from "../components/Vault/EditEntryModal";
 import { EditGroupModal } from "../components/Vault/EditGroupModal";
 import { EntryDetailsModal } from "../components/Vault/EntryDetailsModal";
+import { ImportCsvModal } from "../components/Vault/ImportCsvModal";
 import VaultSelector from "../components/Vault/VaultSelector";
 import VaultTree from "../components/Vault/VaultTree";
 import {
@@ -39,6 +40,8 @@ const HomeScreen = () => {
 	const [addEntryPath, setAddEntryPath] = useState<string[]>([]);
 	const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
 	const [addGroupPath, setAddGroupPath] = useState<string[]>([]);
+	const [isImportCsvModalOpen, setIsImportCsvModalOpen] = useState(false);
+	const [importCsvPath, setImportCsvPath] = useState<string[]>([]);
 	const [selectedEntry, setSelectedEntry] = useState<
 		DataEntry | GroupEntry | null
 	>(null);
@@ -281,6 +284,15 @@ const HomeScreen = () => {
 								{t("vault.manager.addGroup")}
 							</button>
 							<button
+								className="btn btn-accent btn-sm"
+								onClick={() => {
+									setImportCsvPath(getCurrentPath());
+									setIsImportCsvModalOpen(true);
+								}}
+							>
+								{t("vault.manager.importCsv")}
+							</button>
+							<button
 								className="btn btn-ghost btn-sm"
 								onClick={handleLockVault}
 							>
@@ -349,6 +361,12 @@ const HomeScreen = () => {
 				onClose={() => setIsAddGroupModalOpen(false)}
 				onSuccess={() => setIsAddGroupModalOpen(false)}
 				path={addGroupPath}
+			/>
+			<ImportCsvModal
+				isOpen={isImportCsvModalOpen}
+				onClose={() => setIsImportCsvModalOpen(false)}
+				onSuccess={() => setIsImportCsvModalOpen(false)}
+				path={importCsvPath}
 			/>
 			{selectedEntry && isDataEntry(selectedEntry) && (
 				<EntryDetailsModal

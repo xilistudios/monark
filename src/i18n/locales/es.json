@@ -97,6 +97,38 @@
 				"importVault": "Error al importar la bóveda"
 			}
 		},
+		"importCsv": {
+			"title": "Importar Archivo CSV",
+			"csvFile": "Archivo CSV",
+			"csvFilePlaceholder": "Selecciona un archivo CSV",
+			"browse": "Examinar",
+			"import": "Importar",
+			"importing": "Importando...",
+			"cancel": "Cancelar",
+			"help": {
+				"title": "Requisitos del Formato CSV",
+				"description": "Tu archivo CSV debe tener estas columnas:",
+				"specialFields": "!type, !group_id, !group_name, !group_parent (para estructura)",
+				"typeField": "!type debe ser 'group' o 'entry'",
+				"regularFields": "Todas las demás columnas se convierten en campos de entrada (soporta contenido multi-línea entre comillas)"
+			},
+			"preview": {
+				"title": "Vista Previa de Importación",
+				"button": "Vista Previa",
+				"selectDifferentFile": "Seleccionar Archivo Diferente",
+				"groups": "Grupos",
+				"entries": "Entradas",
+				"groupType": "Grupo",
+				"entryType": "Entrada",
+				"fieldsCount": "{{count}} campos",
+				"andMore": "...y {{count}} más"
+			},
+			"errors": {
+				"fileSelection": "Error al seleccionar archivo",
+				"noData": "No hay datos para importar",
+				"importFailed": "Error al importar datos CSV"
+			}
+		},
 		"errors": {
 			"missingFields": "Por favor, completa todos los campos",
 			"invalidPassword": "Contraseña inválida"
@@ -113,6 +145,7 @@
 		"manager": {
 			"addEntry": "Agregar Entrada",
 			"addGroup": "Agregar Grupo",
+			"importCsv": "Importar CSV",
 			"entries": "Entradas",
 			"groups": "Grupos",
 			"noEntries": "No se encontraron entradas",
