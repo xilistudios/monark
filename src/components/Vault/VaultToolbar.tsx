@@ -18,6 +18,9 @@ interface Vault {
  * @param {string[]} props.currentPath - Current navigation path
  * @param {Function} props.handleLockVault - Function to handle vault locking
  * @param {Function} props.t - Translation function
+ * @param {boolean} props.isSearchActive - Whether search is currently active
+ * @param {Function} props.setIsSearchActive - Function to set search active state
+ * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 import { useContext } from 'react';
 import { VaultModalContext } from './VaultContext';
@@ -30,16 +33,19 @@ import { VaultModalContext } from './VaultContext';
  * @param {string[]} props.currentPath - Current navigation path
  * @param {Function} props.handleLockVault - Function to handle vault locking
  * @param {Function} props.t - Translation function
+ * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 const VaultToolbar = ({
   currentPath,
   handleLockVault,
   t,
+  onSearchToggle,
 }: {
   currentVault: Vault;
   currentPath: string[];
   handleLockVault: () => void;
   t: (key: string) => string;
+  onSearchToggle: () => void;
 }) => {
   const context = useContext(VaultModalContext);
   if (!context)
@@ -71,6 +77,27 @@ const VaultToolbar = ({
         </button>
         <button className="btn btn-ghost btn-sm" onClick={handleLockVault}>
           {t('vault.manager.lock')}
+        </button>
+      </div>
+      <div className="flex items-center">
+        <button
+          className={`btn btn-ghost btn-sm`}
+          onClick={onSearchToggle}
+          aria-label={t('vault.manager.search')}
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
         </button>
       </div>
     </div>

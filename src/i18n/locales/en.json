@@ -187,13 +187,15 @@
         "groups": "Groups",
         "lock": "Lock",
         "unlock": "Unlock",
+        "search": "Search",
         "noEntries": "No entries found",
         "noGroups": "No groups found",
         "emptyVault": "Your vault is empty. Add some entries to get started.",
         "noVaultSelected": "No Vault Selected",
         "selectVaultToStart": "Select a vault from the sidebar to get started",
         "copied": "Copied to clipboard!",
-        "copyFailed": "Failed to copy to clipboard."
+        "copyFailed": "Failed to copy to clipboard.",
+        "noSearchResults": "No entries match your search"
       },
       "tree": {
         "noEntries": "No entries",

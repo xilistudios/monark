@@ -148,11 +148,13 @@
       "importCsv": "Importar CSV",
       "entries": "Entradas",
       "groups": "Grupos",
+      "search": "Buscar",
       "noEntries": "No se encontraron entradas",
       "noGroups": "No se encontraron grupos",
       "emptyVault": "Tu bóveda está vacía. Agrega algunas entradas para comenzar.",
       "noVaultSelected": "No se ha seleccionado bóveda",
-      "selectVaultToStart": "Selecciona una bóveda del panel lateral para comenzar"
+      "selectVaultToStart": "Selecciona una bóveda del panel lateral para comenzar",
+      "noSearchResults": "No hay entradas que coincidan con tu búsqueda"
     },
     "tree": {
       "noEntries": "No hay entradas",

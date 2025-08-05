@@ -31,6 +31,8 @@ interface VaultModalState {
   isEditEntryModalOpen: boolean;
   /** Whether the edit group modal is open */
   isEditGroupModalOpen: boolean;
+  /** Whether the search modal is open */
+  isSearchModalOpen: boolean;
 }
 
 /**
@@ -57,6 +59,8 @@ interface VaultModalActions {
   closeImportCsvModal: () => void;
   /** Closes all modals and resets their states */
   closeAllModals: () => void;
+  /** Sets the search modal open state */
+  setIsSearchModalOpen: (open: boolean) => void;
 }
 
 /**
@@ -99,6 +103,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
   const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   /**
    * Opens the add entry modal with the specified path
@@ -207,6 +212,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       isDetailsModalOpen,
       isEditEntryModalOpen,
       isEditGroupModalOpen,
+      isSearchModalOpen,
       // Actions
       openAddEntryModal: (path: string[]) => {
         setAddEntryPath(path);
@@ -226,6 +232,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       closeAddEntryModal,
       closeAddGroupModal,
       closeImportCsvModal,
+      setIsSearchModalOpen,
       closeAllModals,
     }),
     [

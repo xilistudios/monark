@@ -1,12 +1,14 @@
 // src/components/Vault/UnlockedVaultView.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
 import { AddEntryModal } from './AddEntryModal';
 import { AddGroupModal } from './AddGroupModal';
 import { ImportCsvModal } from './ImportCsvModal';
 import { EntryDetailsSidebar } from './EntryDetailsSidebar';
 import { VaultManager } from '../../services/vault';
+import { flattenEntries } from '../../utils/vaultSearch';
+import VaultSearchBar from './VaultSearchBar';
 /**
  * Vault interface for unlocked vault view props.
  */
@@ -20,6 +22,7 @@ interface Vault {
 import VaultToolbar from './VaultToolbar';
 import VaultBreadcrumbs from './VaultBreadcrumbs';
 import VaultTree from './VaultTree';
+import { VaultModalContext } from './VaultContext';
 
 /**
  * Props for UnlockedVaultView component.
@@ -57,6 +60,7 @@ export interface UnlockedVaultViewProps {
 /**
  * Renders the unlocked vault UI, including toolbar, breadcrumbs, and entry tree.
  * Handles empty vault state and delegates entry actions via VaultModalContext.
+ * Also provides search functionality for vault entries.
  */
 function UnlockedVaultView({
   currentVault,
@@ -69,18 +73,39 @@ function UnlockedVaultView({
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
+  const { setIsSearchModalOpen } = useContext(VaultModalContext)!;
   useEffect(() => {
-    setSelectedEntry(null);
     setSidebarMode('view');
     setIsMobileSidebarOpen(false);
   }, [currentPath]);
 
+  /**
+   * Handles the selection of an entry, either from search results or the tree.
+   * Clears the search query when navigating to an entry.
+   *
+   * @param entry - The selected entry
+   */
   const handleEntrySelect = (entry: Entry) => {
     setSelectedEntry(entry);
     setSidebarMode('view');
     // Open sidebar on mobile when an entry is selected
     setIsMobileSidebarOpen(true);
+  };
+  /**
+   * Handles the selection of a search result.
+   * Navigates to the entry's location and sets it as pending for selection.
+   *
+   * @param item - The search result item containing the entry and its path
+   */
+  const handleSearchResultSelect = (item: {
+    entry: DataEntry;
+    path: string[];
+  }) => {
+    console.log('Navigating to entry from search:', item);
+    handleNavigate(item.path);
+    setIsSearchModalOpen(false);
+    setSelectedEntry(item.entry);
+    setSidebarMode('view');
   };
 
   const handleCloseMobileSidebar = () => {
@@ -122,10 +147,11 @@ function UnlockedVaultView({
           currentPath={currentPath}
           handleLockVault={handleLockVault}
           t={t}
+          onSearchToggle={() => setIsSearchModalOpen(true)}
         />
       </div>
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        {/* Left column: Breadcrumbs + VaultTree */}
+        {/* Left column: Breadcrumbs + VaultTree always visible */}
         <div
           className={`w-full md:w-[40%] flex flex-col h-full overflow-auto border-r border-base-300 ${
             isMobileSidebarOpen ? 'hidden md:flex' : 'flex'
@@ -142,7 +168,8 @@ function UnlockedVaultView({
             }}
             onNavigate={handleNavigate}
           />
-          <div className="p-4 flex-1 overflow-auto">
+          <div className="p-4 flex-1 overflow-auto relative">
+            {/* VaultTree always visible */}
             {entries.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-base-content/60 mb-4">
@@ -158,6 +185,11 @@ function UnlockedVaultView({
                 onEntrySelect={handleEntrySelect}
               />
             )}
+
+            <VaultSearchBar
+              currentVault={currentVault}
+              handleSearchResultSelect={handleSearchResultSelect}
+            />
           </div>
         </div>
 
