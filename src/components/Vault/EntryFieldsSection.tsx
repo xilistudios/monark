@@ -37,15 +37,15 @@ export function EntryFieldsSection({
   const { t } = useTranslation('home');
 
   return (
-    <div className="bg-white rounded-lg">
+    <div className="bg-base-100 rounded-lg">
       <div className="p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+          <h3 className="text-sm font-semibold text-base-content uppercase tracking-wide">
             {t('vault.fields.title')}
           </h3>
           {editMode && (
             <button
-              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="btn inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
               onClick={handleAddField}
               type="button"
             >
@@ -72,16 +72,16 @@ export function EntryFieldsSection({
         {fields.map((field, idx) => (
           <div
             key={field.property || idx}
-            className="bg-gray-50 rounded-lg p-4"
+            className="bg-base-200 rounded-lg p-4"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-base-content mb-1 uppercase tracking-wide">
                   {t('vault.fields.titleLabel')}
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input w-full px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder={t('vault.fields.titlePlaceholder')}
                   value={field.title}
                   onChange={(e) =>
@@ -92,12 +92,12 @@ export function EntryFieldsSection({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-base-content mb-1 uppercase tracking-wide">
                   {t('vault.fields.propertyLabel')}
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input w-full px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder={t('vault.fields.propertyPlaceholder')}
                   value={field.property}
                   onChange={(e) =>
@@ -110,7 +110,7 @@ export function EntryFieldsSection({
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-600 mb-1 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-base-content mb-1 uppercase tracking-wide">
                 {t('vault.fields.valueLabel')}
               </label>
               <div className="flex gap-2">
@@ -120,7 +120,7 @@ export function EntryFieldsSection({
                       ? 'password'
                       : 'text'
                   }
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  className="input flex-1 px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary font-mono"
                   placeholder={t('vault.fields.valuePlaceholder')}
                   value={field.value}
                   onChange={(e) =>
@@ -131,7 +131,7 @@ export function EntryFieldsSection({
                 />
                 {field.secret && (
                   <button
-                    className="px-3 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="btn px-3 py-2 text-base-content border border-base-300 rounded-md hover:bg-base-200 focus:outline-none focus:ring-2 focus:ring-primary"
                     onClick={() => toggleReveal(field.property)}
                     type="button"
                     title={
@@ -178,7 +178,7 @@ export function EntryFieldsSection({
                   </button>
                 )}
                 <button
-                  className="px-3 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="btn px-3 py-2 text-white bg-primary rounded-md hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                   onClick={() => handleCopy(field.value, field.title)}
                   type="button"
                   title={t('vault.fields.copyButton', {
@@ -207,18 +207,18 @@ export function EntryFieldsSection({
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="checkbox h-4 w-4 text-primary border-base-300 rounded focus:ring-primary"
                     checked={field.secret}
                     onChange={(e) =>
                       handleUpdateField(idx, 'secret', e.target.checked)
                     }
                   />
-                  <span className="ml-2 text-sm text-gray-600">
+                  <span className="ml-2 text-sm text-base-content">
                     {t('vault.fields.secretLabel')}
                   </span>
                 </label>
                 <button
-                  className="inline-flex items-center px-2 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  className="btn inline-flex items-center px-2 py-1 border border-error text-xs font-medium rounded text-error bg-base-100 hover:bg-error-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error"
                   onClick={() => handleRemoveField(idx)}
                   type="button"
                 >

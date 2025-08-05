@@ -20,9 +20,9 @@ export function EntryTagsSection({
   const { t } = useTranslation('home');
 
   return (
-    <div className="bg-white rounded-lg">
+    <div className="bg-base-100 rounded-lg">
       <div className="p-4">
-        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+        <h3 className="text-sm font-semibold text-base-content uppercase tracking-wide">
           {t('vault.tags.title')}
         </h3>
       </div>
@@ -30,10 +30,7 @@ export function EntryTagsSection({
       <div className="p-4">
         <div className="flex flex-wrap gap-2 mb-4">
           {tags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800"
-            >
+            <span key={tag} className="badge badge-primary">
               {editMode && (
                 <svg
                   className="w-3 h-3 mr-1"
@@ -52,7 +49,7 @@ export function EntryTagsSection({
               {tag}
               {editMode && (
                 <button
-                  className="ml-1 h-4 w-4 text-blue-600 hover:text-blue-800 focus:outline-none"
+                  className="btn btn-ghost btn-xs ml-1 h-4 w-4 text-primary hover:text-primary-focus focus:outline-none"
                   onClick={() => handleRemoveTag(tag)}
                   type="button"
                 >
@@ -74,7 +71,9 @@ export function EntryTagsSection({
             </span>
           ))}
           {!editMode && tags.length === 0 && (
-            <p className="text-gray-500 text-sm">{t('vault.tags.noTags')}</p>
+            <p className="text-base-content text-sm">
+              {t('vault.tags.noTags')}
+            </p>
           )}
         </div>
 
@@ -82,7 +81,7 @@ export function EntryTagsSection({
           <div className="flex gap-2">
             <input
               type="text"
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input flex-1 px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder={t('vault.tags.addPlaceholder')}
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
@@ -90,7 +89,7 @@ export function EntryTagsSection({
               onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
             />
             <button
-              className="px-3 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="btn px-3 py-2 text-white bg-primary rounded-md hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
               onClick={handleAddTag}
               type="button"
               disabled={!newTag.trim()}

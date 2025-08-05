@@ -1,44 +1,46 @@
-import { Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useDispatch, useSelector } from "react-redux";
+import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
 import {
-	setCurrentVault,
-	updateLastAccessed,
-	type Vault,
-} from "../../redux/actions/vault";
-import type { RootState } from "../../redux/store";
-import { Modal } from "../UI/Modal";
-import { VaultTabs } from "./VaultTabs";
+  setCurrentVault,
+  updateLastAccessed,
+  type Vault,
+} from '../../redux/actions/vault';
+import type { RootState } from '../../redux/store';
+import { Modal } from '../UI/Modal';
+import { VaultTabs } from './VaultTabs';
 
 const VaultSelector = () => {
-	const { t } = useTranslation("home");
-	const dispatch = useDispatch();
-	const vaults = useSelector((state: RootState) => state.vault.vaults);
-	const currentVaultId = useSelector((state: RootState) => state.vault.currentVaultId);
-	const loading = useSelector((state: RootState) => state.vault.loading);
-	const [modalOpen, setModalOpen] = useState(false);
-	const handleVaultSelect = (vault: Vault) => {
-		dispatch(setCurrentVault(vault.id));
-		dispatch(updateLastAccessed(vault.id));
-	};
-	const formatLastAccessed = (dateStr?: string) => {
-		if (!dateStr) return t("vaultSelector.never");
-		const date = new Date(dateStr);
-		return isNaN(date.getTime())
-			? t("vaultSelector.never")
-			: date.toLocaleDateString();
-	};
+  const { t } = useTranslation('home');
+  const dispatch = useDispatch();
+  const vaults = useSelector((state: RootState) => state.vault.vaults);
+  const currentVaultId = useSelector(
+    (state: RootState) => state.vault.currentVaultId
+  );
+  const loading = useSelector((state: RootState) => state.vault.loading);
+  const [modalOpen, setModalOpen] = useState(false);
+  const handleVaultSelect = (vault: Vault) => {
+    dispatch(setCurrentVault(vault.id));
+    dispatch(updateLastAccessed(vault.id));
+  };
+  const formatLastAccessed = (dateStr?: string) => {
+    if (!dateStr) return t('vaultSelector.never');
+    const date = new Date(dateStr);
+    return isNaN(date.getTime())
+      ? t('vaultSelector.never')
+      : date.toLocaleDateString();
+  };
 
-	if (loading) {
-		return (
-			<div className="flex items-center justify-center h-full w-full">
-				<span className="loading loading-spinner loading-md"></span>
-			</div>
-		);
-	}
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full w-full">
+        <span className="loading loading-spinner loading-md text-primary"></span>
+      </div>
+    );
+  }
 
-	return (
+  return (
     <div className="h-full w-full">
       <div className="flex p-2">
         <div className="dropdown">
@@ -62,10 +64,10 @@ const VaultSelector = () => {
       </div>
       {vaults.length === 0 && (
         <div className="text-center p-4">
-          <div className="text-base-content/60 mb-2">
+          <div className="text-base-content opacity-60 mb-2">
             {t('vaultSelector.noVaults')}
           </div>
-          <div className="text-sm text-base-content/40">
+          <div className="text-sm text-base-content opacity-40">
             {t('vaultSelector.emptyState')}
           </div>
         </div>

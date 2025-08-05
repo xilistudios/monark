@@ -163,7 +163,7 @@ export function EntryDetailsSidebar({
 
   return (
     <aside
-      className={`w-full h-full bg-base-50 flex flex-col overflow-hidden ${className}`}
+      className={`w-full h-full bg-base-100 flex flex-col overflow-hidden ${className}`}
     >
       {editMode ? (
         <>
@@ -208,20 +208,20 @@ export function EntryDetailsSidebar({
 
           {(error || copyError || copySuccess) && (
             <div className="px-6 py-2">
-              {error && <div className="text-red-600 text-sm">{error}</div>}
+              {error && <div className="text-error text-sm">{error}</div>}
               {copyError && (
-                <div className="text-red-600 text-sm">{copyError}</div>
+                <div className="text-error text-sm">{copyError}</div>
               )}
               {copySuccess && (
-                <div className="text-green-600 text-sm">{copySuccess}</div>
+                <div className="text-success text-sm">{copySuccess}</div>
               )}
             </div>
           )}
 
-          <div className="border-t bg-white px-6 py-4">
+          <div className="border-t bg-base-100 px-6 py-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                className="flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="btn flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
                 onClick={handleSave}
                 disabled={loading}
               >
@@ -274,7 +274,7 @@ export function EntryDetailsSidebar({
                 )}
               </button>
               <button
-                className="flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="btn flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-base-300 text-sm font-medium rounded-md text-base-content bg-base-100 hover:bg-base-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 onClick={handleCancel}
                 disabled={loading}
               >
@@ -341,19 +341,19 @@ export function EntryDetailsSidebar({
           {(copyError || copySuccess) && (
             <div className="px-6 py-2">
               {copyError && (
-                <div className="text-red-600 text-sm">{copyError}</div>
+                <div className="text-error text-sm">{copyError}</div>
               )}
               {copySuccess && (
-                <div className="text-green-600 text-sm">{copySuccess}</div>
+                <div className="text-success text-sm">{copySuccess}</div>
               )}
             </div>
           )}
 
-          <div className="border-t bg-white px-6 py-4">
+          <div className="border-t bg-base-100 px-6 py-4">
             <div className="flex flex-col sm:flex-row gap-3">
               {onEdit && (
                 <button
-                  className="flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="btn flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                   onClick={() => {
                     setEditMode(true);
                     onEdit();
@@ -377,7 +377,7 @@ export function EntryDetailsSidebar({
               )}
               {onCancel && (
                 <button
-                  className="flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="btn flex-1 sm:flex-none inline-flex justify-center items-center px-4 py-2 border border-base-300 text-sm font-medium rounded-md text-base-content bg-base-100 hover:bg-base-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                   onClick={onCancel}
                 >
                   <svg
