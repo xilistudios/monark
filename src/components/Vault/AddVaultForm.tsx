@@ -1,5 +1,4 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { BaseDirectory } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -100,7 +99,7 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4">
       <h3 className="font-bold text-lg">{t('addVault.title')}</h3>
 
       <div className="form-control">

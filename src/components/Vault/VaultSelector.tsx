@@ -8,10 +8,8 @@ import {
   type Vault,
 } from '../../redux/actions/vault';
 import type { RootState } from '../../redux/store';
-import { Modal } from '../UI/Modal';
-import { VaultTabs } from './VaultTabs';
 
-const VaultSelector = () => {
+const VaultSelector = ({ onAddVault }: { onAddVault: () => void }) => {
   const { t } = useTranslation('home');
   const dispatch = useDispatch();
   const vaults = useSelector((state: RootState) => state.vault.vaults);
@@ -52,7 +50,7 @@ const VaultSelector = () => {
             className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52"
           >
             <li>
-              <a onClick={() => setModalOpen(true)}>
+              <a onClick={onAddVault}>
                 {t('vaultSelector.addVault')}
               </a>
             </li>
@@ -139,12 +137,6 @@ const VaultSelector = () => {
         ))}
       </ul>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)}>
-        <VaultTabs
-          onSuccess={() => setModalOpen(false)}
-          onCancel={() => setModalOpen(false)}
-        />
-      </Modal>
     </div>
   );
 };

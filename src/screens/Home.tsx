@@ -8,6 +8,7 @@ import { EditEntryModal } from '../components/Vault/EditEntryModal';
 import { EditGroupModal } from '../components/Vault/EditGroupModal';
 import { EntryDetailsModal } from '../components/Vault/EntryDetailsModal';
 import { ImportCsvModal } from '../components/Vault/ImportCsvModal';
+import { AddVaultModal } from '../components/Vault/AddVaultModal';
 import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
 import {
   lockVault,
@@ -45,7 +46,7 @@ function HomeScreen() {
     throw new Error(
       'VaultModalContext must be used within a VaultModalProvider'
     );
-  const { selectedEntry } = context;
+  const { selectedEntry, isAddVaultModalOpen, openAddVaultModal, closeAddVaultModal } = context;
 
   const currentPath = parseNavigationPath(navigationPath);
 
@@ -189,7 +190,7 @@ function HomeScreen() {
             className="drawer-overlay"
           ></label>
           <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
-            <VaultSelector />
+            <VaultSelector onAddVault={() => openAddVaultModal()} />
           </div>
         </div>
       </div>
@@ -199,6 +200,10 @@ function HomeScreen() {
       {selectedEntry && isDataEntry(selectedEntry) && <EntryDetailsModal />}
       {selectedEntry && isDataEntry(selectedEntry) && <EditEntryModal />}
       {selectedEntry && isGroupEntry(selectedEntry) && <EditGroupModal />}
+      <AddVaultModal
+        isOpen={isAddVaultModalOpen}
+        onClose={() => closeAddVaultModal()}
+      />
     </div>
   );
 }

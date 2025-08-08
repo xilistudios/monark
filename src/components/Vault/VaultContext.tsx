@@ -33,6 +33,8 @@ interface VaultModalState {
   isEditGroupModalOpen: boolean;
   /** Whether the search modal is open */
   isSearchModalOpen: boolean;
+  /** Whether the add vault modal is open */
+  isAddVaultModalOpen: boolean;
 }
 
 /**
@@ -61,6 +63,10 @@ interface VaultModalActions {
   closeAllModals: () => void;
   /** Sets the search modal open state */
   setIsSearchModalOpen: (open: boolean) => void;
+  /** Opens the add vault modal */
+  openAddVaultModal: () => void;
+  /** Closes the add vault modal */
+  closeAddVaultModal: () => void;
 }
 
 /**
@@ -104,6 +110,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
   const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
   const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isAddVaultModalOpen, setIsAddVaultModalOpen] = useState(false);
 
   /**
    * Opens the add entry modal with the specified path
@@ -197,6 +204,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
     setIsDetailsModalOpen(false);
     setIsEditEntryModalOpen(false);
     setIsEditGroupModalOpen(false);
+    setIsAddVaultModalOpen(false);
   };
 
   const contextValue: VaultModalContextType = useMemo(
@@ -213,6 +221,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       isEditEntryModalOpen,
       isEditGroupModalOpen,
       isSearchModalOpen,
+      isAddVaultModalOpen,
       // Actions
       openAddEntryModal: (path: string[]) => {
         setAddEntryPath(path);
@@ -234,6 +243,12 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       closeImportCsvModal,
       setIsSearchModalOpen,
       closeAllModals,
+      openAddVaultModal: () => {
+        setIsAddVaultModalOpen(true);
+      },
+      closeAddVaultModal: () => {
+        setIsAddVaultModalOpen(false);
+      },
     }),
     [
       isAddEntryModalOpen,
@@ -246,6 +261,8 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       isDetailsModalOpen,
       isEditEntryModalOpen,
       isEditGroupModalOpen,
+      isSearchModalOpen,
+      isAddVaultModalOpen,
       openAddEntryModal,
       openAddGroupModal,
       openImportCsvModal,
