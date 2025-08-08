@@ -9,6 +9,9 @@ import { EditGroupModal } from '../components/Vault/EditGroupModal';
 import { EntryDetailsModal } from '../components/Vault/EntryDetailsModal';
 import { ImportCsvModal } from '../components/Vault/ImportCsvModal';
 import { AddVaultModal } from '../components/Vault/AddVaultModal';
+import { EditVaultModal } from '../components/Vault/EditVaultModal';
+import { DeleteVaultModal } from '../components/Vault/DeleteVaultModal';
+import { deleteVault, type Vault } from '../redux/actions/vault';
 import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
 import {
   lockVault,
@@ -40,6 +43,9 @@ function HomeScreen() {
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const context = useContext(VaultModalContext);
   if (!context)
@@ -106,6 +112,32 @@ function HomeScreen() {
       console.error('Failed to lock vault:', error);
       setUnlockError(t('errors.lockFailed'));
     }
+  };
+
+  const handleDeleteVault = (vault: Vault) => {
+    setVaultToDelete(vault);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (deleteFile: boolean) => {
+    if (!vaultToDelete) return;
+    
+    setDeleting(true);
+    try {
+      await dispatch(deleteVault(vaultToDelete.id, deleteFile) as any);
+      setDeleteModalOpen(false);
+    } catch (error) {
+      console.error('Failed to delete vault:', error);
+      alert(t('vault.delete.error', 'Failed to delete vault'));
+    } finally {
+      setDeleting(false);
+      setVaultToDelete(null);
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setVaultToDelete(null);
   };
 
   const entries = getCurrentEntries(
@@ -190,7 +222,7 @@ function HomeScreen() {
             className="drawer-overlay"
           ></label>
           <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
-            <VaultSelector onAddVault={() => openAddVaultModal()} />
+            <VaultSelector onAddVault={() => openAddVaultModal()} onDeleteVault={handleDeleteVault} />
           </div>
         </div>
       </div>
@@ -203,6 +235,14 @@ function HomeScreen() {
       <AddVaultModal
         isOpen={isAddVaultModalOpen}
         onClose={() => closeAddVaultModal()}
+      />
+      <EditVaultModal />
+      <DeleteVaultModal
+        isOpen={deleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        vault={vaultToDelete}
+        onConfirm={handleConfirmDelete}
+        deleting={deleting}
       />
     </div>
   );

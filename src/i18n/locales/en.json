@@ -4,6 +4,18 @@
   "copy": "Copy",
   "edit": "Edit",
   "close": "Close",
+  "delete": "Delete",
+  "vault": {
+    "delete": {
+      "confirmTitle": "Delete Vault",
+      "confirmMessage": "Are you sure you want to delete the vault \"{{name}}\"?",
+      "deleteFileOption": "Also delete the vault file from disk",
+      "warning": "Warning: This action cannot be undone. If you choose to delete the file, all data will be permanently lost.",
+      "lockedWarning": "This vault is currently locked. You must unlock it before deleting the file.",
+      "deleting": "Deleting...",
+      "error": "Failed to delete vault"
+    }
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",
@@ -82,6 +94,25 @@
       "cancel": "Cancel",
       "errors": {
         "fileDialog": "Error opening file dialog"
+      }
+    },
+    "editVault": {
+      "title": "Edit Vault",
+      "name": "Vault Name",
+      "namePlaceholder": "Enter vault name",
+      "filePath": "File Path",
+      "filePathPlaceholder": "Vault file path",
+      "filePathHelp": "File path cannot be changed for existing vaults",
+      "newPassword": "New Password",
+      "newPasswordPlaceholder": "Enter new password (leave empty to keep current)",
+      "passwordHelp": "Leave empty to keep the current password",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "errors": {
+        "vaultNotFound": "Vault not found",
+        "updateFailed": "Failed to update vault",
+        "vaultLocked": "Cannot update password: vault is locked. Unlock the vault first."
       }
     },
     "addGroup": {

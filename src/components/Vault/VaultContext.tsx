@@ -37,6 +37,8 @@ interface VaultModalState {
   searchQuery: string;
   /** Whether the add vault modal is open */
   isAddVaultModalOpen: boolean;
+  /** Whether the edit vault modal is open */
+  isEditVaultModalOpen: boolean;
 }
 
 /**
@@ -71,6 +73,10 @@ interface VaultModalActions {
   openAddVaultModal: () => void;
   /** Closes the add vault modal */
   closeAddVaultModal: () => void;
+  /** Opens the edit vault modal */
+  openEditVaultModal: () => void;
+  /** Closes the edit vault modal */
+  closeEditVaultModal: () => void;
 }
 
 /**
@@ -115,6 +121,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
   const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isAddVaultModalOpen, setIsAddVaultModalOpen] = useState(false);
+  const [isEditVaultModalOpen, setIsEditVaultModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   /**
@@ -228,6 +235,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       isSearchModalOpen,
       searchQuery,
       isAddVaultModalOpen,
+      isEditVaultModalOpen,
       // Actions
       openAddEntryModal: (path: string[]) => {
         setAddEntryPath(path);
@@ -256,6 +264,12 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       closeAddVaultModal: () => {
         setIsAddVaultModalOpen(false);
       },
+      openEditVaultModal: () => {
+        setIsEditVaultModalOpen(true);
+      },
+      closeEditVaultModal: () => {
+        setIsEditVaultModalOpen(false);
+      },
     }),
     [
       isAddEntryModalOpen,
@@ -271,6 +285,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
       isSearchModalOpen,
       searchQuery,
       isAddVaultModalOpen,
+      isEditVaultModalOpen,
       openAddEntryModal,
       openAddGroupModal,
       openImportCsvModal,

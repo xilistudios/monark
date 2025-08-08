@@ -1,38 +1,55 @@
 {
+  "hide": "Ocultar",
+  "show": "Mostrar",
+  "copy": "Copiar",
+  "edit": "Editar",
+  "close": "Cerrar",
+  "delete": "Eliminar",
+  "vault": {
+    "delete": {
+      "confirmTitle": "Eliminar Bóveda",
+      "confirmMessage": "¿Está seguro de que desea eliminar la bóveda \"{{name}}\"?",
+      "deleteFileOption": "También eliminar el archivo de la bóveda del disco",
+      "warning": "Advertencia: Esta acción no se puede deshacer. Si elige eliminar el archivo, todos los datos se perderán permanentemente.",
+      "lockedWarning": "Esta bóveda está actualmente bloqueada. Debe desbloquearla antes de eliminar el archivo.",
+      "deleting": "Eliminando...",
+      "error": "Error al eliminar la bóveda"
+    }
+  },
   "settings": {
     "title": "Configuración",
     "language": "Idioma",
     "theme": "Tema",
-    "resetButton": "Restablecer valores",
+    "resetButton": "Restablecer valores predeterminados",
     "backButton": "Volver al inicio",
-    "clearDataButton": "Borrar todos los datos de la app",
-    "clearDataButtonAria": "Borrar todos los datos de la app",
-    "clearDataConfirmTitle": "¿Borrar todos los datos de la app?",
-    "clearDataConfirmDesc": "Esto eliminará todos los datos de la aplicación. Esta acción no se puede deshacer.",
+    "clearDataButton": "Borrar todos los datos de la aplicación",
+    "clearDataButtonAria": "Borrar todos los datos de la aplicación",
+    "clearDataConfirmTitle": "¿Borrar todos los datos de la aplicación?",
+    "clearDataConfirmDesc": "Esto borrará todos los datos de la aplicación. Esta acción no se puede deshacer.",
     "clearDataConfirmYes": "Sí, borrar",
     "clearDataConfirmNo": "Cancelar",
     "clearDataLoading": "Borrando...",
-    "clearDataSuccess": "Datos de la aplicación borrados exitosamente.",
+    "clearDataSuccess": "Datos de la aplicación borrados correctamente.",
     "clearDataError": "Error al borrar los datos de la aplicación",
     "errors": {
-      "invalidLanguage": "Selección de idioma inválida"
+      "invalidLanguage": "Selección de idioma no válida"
     },
     "themes": {
       "light": "Claro",
       "dark": "Oscuro",
       "cupcake": "Cupcake",
-      "bumblebee": "Abeja",
+      "bumblebee": "Bumblebee",
       "emerald": "Esmeralda",
       "corporate": "Corporativo",
       "synthwave": "Synthwave",
       "retro": "Retro",
       "cyberpunk": "Cyberpunk",
-      "valentine": "San Valentín",
+      "valentine": "Valentín",
       "halloween": "Halloween",
       "garden": "Jardín",
       "forest": "Bosque",
       "aqua": "Aqua",
-      "lofi": "Lofi",
+      "lofi": "LoFi",
       "pastel": "Pastel",
       "fantasy": "Fantasía",
       "wireframe": "Wireframe",
@@ -60,17 +77,17 @@
       "emptyState": "Crea una nueva bóveda para comenzar",
       "lastAccessed": "Último acceso",
       "never": "Nunca",
-      "locked": "Bloqueada",
-      "unlocked": "Desbloqueada"
+      "locked": "Bloqueado",
+      "unlocked": "Desbloqueado"
     },
     "addVault": {
       "title": "Crear Nueva Bóveda",
       "name": "Nombre de la Bóveda",
-      "namePlaceholder": "Ingresa el nombre de la bóveda",
+      "namePlaceholder": "Ingrese el nombre de la bóveda",
       "filePath": "Ruta del Archivo",
-      "filePathPlaceholder": "Selecciona una carpeta",
+      "filePathPlaceholder": "Seleccione una carpeta",
       "password": "Contraseña",
-      "passwordPlaceholder": "Ingresa la contraseña",
+      "passwordPlaceholder": "Ingrese la contraseña",
       "createVault": "Crear Bóveda",
       "creating": "Creando...",
       "browse": "Examinar",
@@ -79,15 +96,45 @@
         "fileDialog": "Error al abrir el diálogo de archivos"
       }
     },
+    "editVault": {
+      "title": "Editar Bóveda",
+      "name": "Nombre de la Bóveda",
+      "namePlaceholder": "Ingrese el nombre de la bóveda",
+      "filePath": "Ruta del Archivo",
+      "filePathPlaceholder": "Ruta del archivo de la bóveda",
+      "filePathHelp": "La ruta del archivo no se puede cambiar para bóvedas existentes",
+      "newPassword": "Nueva Contraseña",
+      "newPasswordPlaceholder": "Ingrese nueva contraseña (deje vacío para mantener la actual)",
+      "passwordHelp": "Deje vacío para mantener la contraseña actual",
+      "save": "Guardar Cambios",
+      "saving": "Guardando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "vaultNotFound": "Bóveda no encontrada",
+        "updateFailed": "Error al actualizar la bóveda",
+        "vaultLocked": "No se puede actualizar la contraseña: la bóveda está bloqueada. Desbloquee la bóveda primero."
+      }
+    },
+    "addGroup": {
+      "title": "Agregar Grupo",
+      "name": "Nombre del Grupo",
+      "namePlaceholder": "Ingrese el nombre del grupo",
+      "addGroup": "Agregar Grupo",
+      "adding": "Agregando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "nameRequired": "El nombre del grupo es obligatorio"
+      }
+    },
     "importVault": {
       "title": "Importar Bóveda Existente",
       "name": "Nombre de la Bóveda (Opcional)",
-      "namePlaceholder": "Ingresa el nombre de la bóveda (opcional)",
-      "fileHelp": "Deja vacío para usar el nombre del archivo",
+      "namePlaceholder": "Ingrese el nombre de la bóveda (opcional)",
+      "fileHelp": "Deje vacío para usar el nombre del archivo",
       "vaultFile": "Archivo de Bóveda",
-      "vaultFilePlaceholder": "Selecciona un archivo de bóveda",
+      "vaultFilePlaceholder": "Seleccione un archivo de bóveda",
       "password": "Contraseña",
-      "passwordPlaceholder": "Ingresa la contraseña",
+      "passwordPlaceholder": "Ingrese la contraseña",
       "importVault": "Importar Bóveda",
       "importing": "Importando...",
       "browse": "Examinar",
@@ -97,24 +144,49 @@
         "importVault": "Error al importar la bóveda"
       }
     },
+    "addEntry": {
+      "title": "Agregar Nueva Entrada",
+      "entryTitle": "Título de la Entrada",
+      "entryTitlePlaceholder": "Ingrese el título de la entrada",
+      "fields": "Campos",
+      "fieldTitle": "Nombre del campo",
+      "fieldProperty": "Propiedad",
+      "fieldValue": "Valor",
+      "secret": "Secreto",
+      "addField": "Agregar Campo",
+      "tags": "Etiquetas",
+      "tagPlaceholder": "Ingrese etiqueta",
+      "addTag": "Agregar Etiqueta",
+      "addEntry": "Agregar Entrada",
+      "adding": "Agregando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "titleRequired": "El título de la entrada es obligatorio",
+        "fieldsRequired": "Se requiere al menos un campo",
+        "addFailed": "Error al agregar la entrada"
+      }
+    },
     "importCsv": {
+      "parserSelector": "Formato de Importación",
+      "parserSelector.auto": "Detección automática",
       "title": "Importar Archivo CSV",
       "csvFile": "Archivo CSV",
-      "csvFilePlaceholder": "Selecciona un archivo CSV",
+      "csvFilePlaceholder": "Seleccione un archivo CSV",
       "browse": "Examinar",
+      "clear": "Limpiar",
       "import": "Importar",
       "importing": "Importando...",
       "cancel": "Cancelar",
       "help": {
         "title": "Requisitos del Formato CSV",
-        "description": "Tu archivo CSV debe tener estas columnas:",
+        "description": "Su archivo CSV debe tener estas columnas:",
         "specialFields": "!type, !group_id, !group_name, !group_parent (para estructura)",
         "typeField": "!type debe ser 'group' o 'entry'",
-        "regularFields": "Todas las demás columnas se convierten en campos de entrada (soporta contenido multi-línea entre comillas)"
+        "regularFields": "Todas las demás columnas se convierten en campos de entrada (admite contenido multilínea entre comillas)"
       },
       "preview": {
         "title": "Vista Previa de Importación",
-        "button": "Vista Previa",
+        "button": "Vista Previa de Importación",
         "selectDifferentFile": "Seleccionar Archivo Diferente",
         "groups": "Grupos",
         "entries": "Entradas",
@@ -124,50 +196,107 @@
         "andMore": "...y {{count}} más"
       },
       "errors": {
-        "fileSelection": "Error al seleccionar archivo",
+        "fileSelection": "Error al seleccionar el archivo",
         "noData": "No hay datos para importar",
         "importFailed": "Error al importar datos CSV"
       }
     },
+    "vault": {
+      "unlock": {
+        "title": "Desbloquear Bóveda",
+        "description": "Ingrese la contraseña para desbloquear {name}",
+        "password": "Contraseña",
+        "passwordPlaceholder": "Ingrese la contraseña de la bóveda",
+        "unlockButton": "Desbloquear",
+        "unlocking": "Desbloqueando..."
+      },
+      "manager": {
+        "addEntry": "Agregar Entrada",
+        "addGroup": "Agregar Grupo",
+        "importCsv": "Importar CSV",
+        "entries": "Entradas",
+        "groups": "Grupos",
+        "lock": "Bloquear",
+        "unlock": "Desbloquear",
+        "search": "Buscar",
+        "noEntries": "No se encontraron entradas",
+        "noGroups": "No se encontraron grupos",
+        "emptyVault": "Su bóveda está vacía. Agregue algunas entradas para comenzar.",
+        "noVaultSelected": "Ninguna Bóveda Seleccionada",
+        "selectVaultToStart": "Seleccione una bóveda de la barra lateral para comenzar",
+        "copied": "¡Copiado al portapapeles!",
+        "copyFailed": "Error al copiar al portapapeles.",
+        "noSearchResults": "Ninguna entrada coincide con su búsqueda"
+      },
+      "tree": {
+        "noEntries": "Sin entradas",
+        "addEntry": "+ Entrada",
+        "addGroup": "+ Grupo",
+        "edit": "Editar",
+        "delete": "Eliminar",
+        "deleting": "Eliminando...",
+        "tree": {
+          "edit": "Editar",
+          "delete": "Eliminar"
+        },
+        "deleteConfirm": "¿Está seguro de que desea eliminar esta entrada? Esta acción no se puede deshacer."
+      },
+      "fields": {
+        "title": "Campos",
+        "titleLabel": "Título",
+        "propertyLabel": "Propiedad",
+        "valueLabel": "Valor",
+        "addButton": "Agregar Campo",
+        "titlePlaceholder": "Ingrese el nombre del campo",
+        "propertyPlaceholder": "Ingrese el nombre de la propiedad",
+        "valuePlaceholder": "Ingrese el valor",
+        "hideButton": "Ocultar",
+        "showButton": "Mostrar",
+        "copyButton": "Copiar",
+        "secretLabel": "Secreto",
+        "removeButton": "Eliminar"
+      },
+      "tags": {
+        "title": "Etiquetas",
+        "noTags": "Sin Etiquetas",
+        "addPlaceholder": "Ingrese etiqueta",
+        "addButton": "Agregar Etiqueta"
+      },
+      "entry": {
+        "dataType": "Tipo de Datos",
+        "createdAt": "Creado En",
+        "updatedAt": "Actualizado En",
+        "tags": "Etiquetas",
+        "noTags": "Sin Etiquetas",
+        "fields": "Campos",
+        "type": {
+          "entry": "Entrada",
+          "group": "Grupo"
+        },
+        "name": "Nombre"
+      },
+      "basicInfo": {
+        "title": "Información Básica"
+      },
+      "sidebar": {
+        "empty": {
+          "title": "Ninguna Bóveda Seleccionada",
+          "description": "Seleccione una bóveda de la barra lateral para comenzar"
+        }
+      }
+    },
     "errors": {
-      "missingFields": "Por favor, completa todos los campos",
-      "invalidPassword": "Contraseña inválida"
-    }
-  },
-  "vault": {
-    "unlock": {
-      "title": "Desbloquear Bóveda",
-      "password": "Contraseña",
-      "passwordPlaceholder": "Ingresa la contraseña de la bóveda",
-      "unlockButton": "Desbloquear",
-      "unlocking": "Desbloqueando..."
+      "missingFields": "Por favor complete todos los campos",
+      "invalidPassword": "Contraseña no válida",
+      "unlockFailed": "Error al desbloquear la bóveda"
     },
-    "manager": {
-      "addEntry": "Agregar Entrada",
-      "addGroup": "Agregar Grupo",
-      "importCsv": "Importar CSV",
-      "entries": "Entradas",
-      "groups": "Grupos",
-      "search": "Buscar",
-      "noEntries": "No se encontraron entradas",
-      "noGroups": "No se encontraron grupos",
-      "emptyVault": "Tu bóveda está vacía. Agrega algunas entradas para comenzar.",
-      "noVaultSelected": "No se ha seleccionado bóveda",
-      "selectVaultToStart": "Selecciona una bóveda del panel lateral para comenzar",
-      "noSearchResults": "No hay entradas que coincidan con tu búsqueda"
+    "editEntry": {
+      "title": "Editar Entrada",
+      "save": "Guardar",
+      "cancel": "Cancelar"
     },
-    "tree": {
-      "noEntries": "No hay entradas",
-      "addEntry": "+ Entrada",
-      "addGroup": "+ Grupo",
-      "edit": "Editar",
-      "delete": "Eliminar",
-      "deleting": "Eliminando...",
-      "deleteConfirm": "¿Estás seguro de que quieres eliminar esta entrada? Esta acción no se puede deshacer."
-    },
-    "tree": {
-      "edit": "Editar",
-      "delete": "Eliminar"
+    "editGroup": {
+      "title": "Editar Grupo"
     }
   }
 }

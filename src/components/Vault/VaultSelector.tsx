@@ -5,11 +5,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   setCurrentVault,
   updateLastAccessed,
+  removeVault,
+  deleteVault,
   type Vault,
 } from '../../redux/actions/vault';
 import type { RootState } from '../../redux/store';
+import { useContext } from 'react';
+import { VaultModalContext } from './VaultContext';
 
-const VaultSelector = ({ onAddVault }: { onAddVault: () => void }) => {
+const VaultSelector = ({ onAddVault, onDeleteVault }: { onAddVault: () => void, onDeleteVault: (vault: Vault) => void }) => {
   const { t } = useTranslation('home');
   const dispatch = useDispatch();
   const vaults = useSelector((state: RootState) => state.vault.vaults);
@@ -17,11 +21,30 @@ const VaultSelector = ({ onAddVault }: { onAddVault: () => void }) => {
     (state: RootState) => state.vault.currentVaultId
   );
   const loading = useSelector((state: RootState) => state.vault.loading);
-  const [modalOpen, setModalOpen] = useState(false);
+  const error = useSelector((state: RootState) => state.vault.error);
+  const context = useContext(VaultModalContext);
+  
   const handleVaultSelect = (vault: Vault) => {
     dispatch(setCurrentVault(vault.id));
     dispatch(updateLastAccessed(vault.id));
   };
+
+  const handleEditVault = (vault: Vault) => {
+    if (context) {
+      // Set the current vault as the one being edited
+      dispatch(setCurrentVault(vault.id));
+      context.openEditVaultModal();
+    }
+  };
+
+  const handleDeleteVault = (vault: Vault) => {
+    onDeleteVault(vault);
+  };
+
+  const handleCloseModal = () => {
+    // This function is no longer needed as delete modal is handled in Home.tsx
+  };
+
   const formatLastAccessed = (dateStr?: string) => {
     if (!dateStr) return t('vaultSelector.never');
     const date = new Date(dateStr);
@@ -60,6 +83,11 @@ const VaultSelector = ({ onAddVault }: { onAddVault: () => void }) => {
           </ul>
         </div>
       </div>
+      {error && (
+        <div className="alert alert-error mx-2 mb-2">
+          <span>{error}</span>
+        </div>
+      )}
       {vaults.length === 0 && (
         <div className="text-center p-4">
           <div className="text-base-content opacity-60 mb-2">
@@ -73,66 +101,115 @@ const VaultSelector = ({ onAddVault }: { onAddVault: () => void }) => {
       <ul className="menu rounded-box h-full w-full p-2">
         {vaults.map((vault) => (
           <li key={vault.id} className="w-full">
-            <a
-              className={`w-full flex flex-col items-start p-3 ${
-                currentVaultId === vault.id ? 'menu-active' : ''
-              }`}
-              onClick={() => handleVaultSelect(vault)}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="font-medium">{vault.name}</span>
-                {vault.isLocked ? (
-                  <span
-                    className="flex items-center gap-1"
-                    aria-label={t('vaultSelector.locked', 'Locked')}
-                  >
-                    <svg
-                      className="w-4 h-4 text-warning"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+            <div className="flex items-center justify-between w-full">
+              <a
+                className={`flex-1 flex flex-col items-start p-3 ${
+                  currentVaultId === vault.id ? 'menu-active' : ''
+                }`}
+                onClick={() => handleVaultSelect(vault)}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-medium">{vault.name}</span>
+                  {vault.isLocked ? (
+                    <span
+                      className="flex items-center gap-1"
+                      aria-label={t('vaultSelector.locked', 'Locked')}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                      />
-                    </svg>
-                    <span className="text-warning text-xs">
-                      {t('vaultSelector.locked', 'Locked')}
+                      <svg
+                        className="w-4 h-4 text-warning"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                      <span className="text-warning text-xs">
+                        {t('vaultSelector.locked', 'Locked')}
+                      </span>
                     </span>
-                  </span>
-                ) : (
-                  <span
-                    className="flex items-center gap-1"
-                    aria-label={t('vaultSelector.unlocked', 'Unlocked')}
-                  >
-                    <svg
-                      className="w-4 h-4 text-success"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                  ) : (
+                    <span
+                      className="flex items-center gap-1"
+                      aria-label={t('vaultSelector.unlocked', 'Unlocked')}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span className="text-success text-xs">
-                      {t('vaultSelector.unlocked', 'Unlocked')}
+                      <svg
+                        className="w-4 h-4 text-success"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      <span className="text-success text-xs">
+                        {t('vaultSelector.unlocked', 'Unlocked')}
+                      </span>
                     </span>
-                  </span>
-                )}
+                  )}
+                </div>
+                <div className="text-xs mt-1">
+                  {t('vaultSelector.lastAccessed')}:{' '}
+                  {formatLastAccessed(vault.lastAccessed)}
+                </div>
+                <div className="text-xs truncate w-full">{vault.path}</div>
+              </a>
+              <div className="dropdown dropdown-end">
+                <div
+                  tabIndex={0}
+                  role="button"
+                  className="btn btn-ghost btn-sm min-h-[36px] h-[36px] px-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M5 12h.01M12 12h.01M19 12h.01"
+                    />
+                  </svg>
+                </div>
+                <ul
+                  tabIndex={0}
+                  className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52"
+                >
+                  <li>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditVault(vault);
+                      }}
+                    >
+                      {t('edit', 'Edit')}
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteVault(vault);
+                      }}
+                    >
+                      {t('delete', 'Delete')}
+                    </button>
+                  </li>
+                </ul>
               </div>
-              <div className="text-xs  mt-1">
-                {t('vaultSelector.lastAccessed')}:{' '}
-                {formatLastAccessed(vault.lastAccessed)}
-              </div>
-              <div className="text-xs truncate w-full">{vault.path}</div>
-            </a>
+            </div>
           </li>
         ))}
       </ul>
