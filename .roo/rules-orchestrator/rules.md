@@ -1,0 +1,2 @@
+- Always create a subtask for every coding task
+- Don't switch between modes, use subtasks withe the appropiate mode instead
