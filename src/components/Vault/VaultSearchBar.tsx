@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef } from 'react';
 import { VaultModalContext } from './VaultContext';
 import { useTranslation } from 'react-i18next';
 import { flattenEntries } from '../../utils/vaultSearch';
@@ -15,10 +15,9 @@ const VaultSearchBar = ({
   };
   handleSearchResultSelect: (item: { entry: any; path: string[] }) => void;
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
-  const { setIsSearchModalOpen, isSearchModalOpen } =
+  const { setIsSearchModalOpen, isSearchModalOpen, searchQuery, setSearchQuery } =
     useContext(VaultModalContext)!;
   /**
    * Flattens all entries in the vault for search functionality.
