@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { useTranslation } from 'react-i18next';
 import { Modal } from '../UI/Modal';
 import { VaultTabs } from './VaultTabs';
