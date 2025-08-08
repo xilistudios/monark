@@ -5,10 +5,10 @@ import type {
   DataEntry,
   Field,
   GroupEntry,
-} from '../../interfaces/vault.interface';
-import { Modal } from '../UI/Modal';
+} from '../../../interfaces/vault.interface';
+import { Modal } from '../../UI/Modal';
 import { useContext } from 'react';
-import { VaultModalContext } from './VaultContext';
+import { VaultModalContext } from '../VaultContext';
 
 /**
  * Modal component for viewing details of a vault entry.

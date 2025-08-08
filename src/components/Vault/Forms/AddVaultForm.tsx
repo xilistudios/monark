@@ -3,9 +3,9 @@ import * as path from '@tauri-apps/api/path';
 import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
-import { addVault, updateVault, type Vault } from '../../redux/actions/vault';
-import VaultCommands from '../../services/commands';
-import { isMobile } from '../../utils/platform';
+import { addVault, updateVault, type Vault } from '../../../redux/actions/vault';
+import VaultCommands from '../../../services/commands';
+import { isMobile } from '../../../utils/platform';
 
 interface AddVaultFormProps {
   onSuccess: () => void;

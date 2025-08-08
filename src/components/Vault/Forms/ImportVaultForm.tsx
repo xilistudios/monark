@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
-import { addVault, type Vault } from "../../redux/actions/vault";
+import { addVault, type Vault } from "../../../redux/actions/vault";
 
 interface ImportVaultFormProps {
 	onSuccess: () => void

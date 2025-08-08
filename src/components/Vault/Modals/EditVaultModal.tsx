@@ -1,10 +1,10 @@
 import { useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
-import type { RootState } from '../../redux/store';
-import { Modal } from '../UI/Modal';
-import { VaultModalContext } from './VaultContext';
-import { AddVaultForm } from './AddVaultForm';
+import type { RootState } from '../../../redux/store';
+import { Modal } from '../../UI/Modal';
+import { VaultModalContext } from '../VaultContext';
+import { AddVaultForm } from '../Forms/AddVaultForm';
 
 /**
  * Modal component for editing an existing vault.

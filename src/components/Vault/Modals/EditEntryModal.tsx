@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
-import type { DataEntry, Field } from '../../interfaces/vault.interface';
-import type { RootState } from '../../redux/store';
-import { VaultManager } from '../../services/vault';
-import { Modal } from '../UI/Modal';
+import type { DataEntry, Field, FieldType } from '../../../interfaces/vault.interface';
+import type { RootState } from '../../../redux/store';
+import { VaultManager } from '../../../services/vault';
+import { Modal } from '../../UI/Modal';
 import { useContext } from 'react';
-import { VaultModalContext } from './VaultContext';
-import { parseNavigationPath } from '../../utils/vaultNavigation';
+import { VaultModalContext } from '../VaultContext';
+import { parseNavigationPath } from '../../../utils/vaultNavigation';
 
 /**
  * Modal component for editing an existing vault data entry.
@@ -18,9 +18,9 @@ import { parseNavigationPath } from '../../utils/vaultNavigation';
 /**
  * Form field type extending Field with type safety.
  */
-interface FormField extends Field {
+interface FormField {
   title: string;
-  property: string;
+  property: string; // Will be converted to FieldType when updating
   value: string;
   secret: boolean;
 }
@@ -63,7 +63,12 @@ export const EditEntryModal: React.FC = () => {
     if (entry) {
       setEntryTitle(entry.name);
       setDataType(entry.data_type);
-      setFields(entry.fields.map((f) => ({ ...f })));
+      setFields(entry.fields.map((f) => ({
+        title: f.title,
+        property: f.property, // This will be a FieldType value
+        value: f.value,
+        secret: f.secret
+      })));
       setTags(entry.tags);
     }
   }, [entry]);
@@ -126,10 +131,18 @@ export const EditEntryModal: React.FC = () => {
     setLoading(true);
 
     try {
+      // Convert form fields to vault fields format
+      const vaultFields: Field[] = validFields.map((field) => ({
+        title: field.title.trim(),
+        property: field.property.trim() as FieldType, // Type assertion to convert string to FieldType
+        value: field.value,
+        secret: field.secret,
+      }));
+
       const updates: Partial<DataEntry> = {
         name: entryTitle.trim(),
         data_type: dataType.trim(),
-        fields: validFields,
+        fields: vaultFields,
         tags,
         updated_at: new Date().toISOString(),
       };

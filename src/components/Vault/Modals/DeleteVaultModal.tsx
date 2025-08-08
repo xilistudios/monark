@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '../UI/Modal';
-import type { Vault } from '../../redux/actions/vault';
+import { Modal } from '../../UI/Modal';
+import type { Vault } from '../../../redux/actions/vault';
 
 interface DeleteVaultModalProps {
 	isOpen: boolean;

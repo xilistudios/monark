@@ -1,7 +1,7 @@
 
 import { useTranslation } from 'react-i18next';
-import { Modal } from '../UI/Modal';
-import { VaultTabs } from './VaultTabs';
+import { Modal } from '../../UI/Modal';
+import { VaultTabs } from '../VaultTabs';
 
 interface AddVaultModalProps {
 	isOpen: boolean;
