@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asistente de Autenticación para Google Drive</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .step-card {
+      background-color: white;
+      border-radius: 0.75rem;
+      border: 1px solid #e5e7eb;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid #d1d5db;
+      background-color: #f9fafb;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgb(59 130 246 / 0.2);
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      color: white;
+      transition: background-color 0.2s;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background-color: #3b82f6;
+    }
+
+    .btn-primary:hover {
+      background-color: #2563eb;
+    }
+
+    .btn-secondary {
+      background-color: #6b7280;
+    }
+
+    .btn-secondary:hover {
+      background-color: #4b5563;
+    }
+
+    .code-block {
+      background-color: #1f2937;
+      color: #d1d5db;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      position: relative;
+    }
+
+    .copy-btn-abs {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background-color: #4b5563;
+      color: white;
+      border: none;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .copy-btn-abs:hover {
+      background-color: #6b7280;
+    }
+
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800">
+
+  <div class="container mx-auto max-w-2xl p-4 md:p-8">
+    <header class="text-center mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Asistente de Autenticación de Google Drive</h1>
+      <p class="mt-2 text-lg text-gray-600">Obtén las credenciales para tu aplicación Tauri.</p>
+    </header>
+
+    <!-- Paso 1: Configuración en Google Cloud -->
+    <div class="step-card" id="step1">
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Paso 1: Configura tus Credenciales</h2>
+      <p class="mb-4 text-gray-600">
+        Primero, necesitas un <strong>Client ID</strong> y un <strong>Client Secret</strong> desde la Consola de Google
+        Cloud.
+      </p>
+      <ol class="list-decimal list-inside mb-4 space-y-2 text-gray-600">
+        <li>Ve a la <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
+            class="text-blue-600 hover:underline font-medium">página de credenciales</a>.</li>
+        <li>Crea una nueva credencial de tipo "ID de cliente de OAuth".</li>
+        <li>Selecciona "Aplicación de escritorio" como tipo de aplicación.</li>
+        <li>Copia el <strong>ID de cliente</strong> y el <strong>Secreto del cliente</strong> en los campos de abajo.
+        </li>
+        <li>
+          <strong>Importante:</strong> En la configuración de tu credencial en Google Cloud, añade la siguiente URL a la
+          lista de "URIs de redireccionamiento autorizados":
+          <div class="code-block mt-2">
+            <span id="redirectUriDisplay"></span>
+            <button class="copy-btn-abs"
+              onclick="copyToClipboard(document.getElementById('redirectUriDisplay').innerText, this)">Copiar</button>
+          </div>
+        </li>
+      </ol>
+      <div class="space-y-4">
+        <div>
+          <label for="clientId" class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+          <input type="text" id="clientId" class="input-field" placeholder="Pega tu Client ID aquí">
+        </div>
+        <div>
+          <label for="clientSecret" class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+          <input type="password" id="clientSecret" class="input-field" placeholder="Pega tu Client Secret aquí">
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 2: Iniciar Autenticación -->
+    <div class="step-card" id="step2">
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Paso 2: Autorizar Acceso</h2>
+      <p class="mb-4 text-gray-600">
+        Una vez que hayas ingresado tu ID y Secreto, haz clic en el botón para iniciar el proceso de autenticación con
+        Google. Serás redirigido para dar tu consentimiento.
+      </p>
+      <button id="authButton" class="btn btn-primary w-full">
+        <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48px" height="48px">
+          <path fill="#fbc02d"
+            d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12	s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20	s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z">
+          </path>
+          <path fill="#e53935"
+            d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039	l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z">
+          </path>
+          <path fill="#4caf50"
+            d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36	c-5.222,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z">
+          </path>
+          <path fill="#1565c0"
+            d="M43.611,20.083L43.595,20L42,20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.574	l6.19,5.238C39.99,34.556,44,29.865,44,24C44,22.659,43.862,21.35,43.611,20.083z">
+          </path>
+        </svg>
+        Iniciar Autenticación con Google
+      </button>
+    </div>
+
+    <!-- Paso 3: Intercambiar Código (Automatizado) -->
+    <div class="step-card hidden" id="step3">
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Paso 3: Obteniendo Tokens...</h2>
+      <div id="step3-content">
+        <p class="mb-4 text-gray-600 text-center">
+          Intercambiando el código de autorización por los tokens de acceso. Por favor, espera.
+        </p>
+        <div class="loader"></div>
+      </div>
+    </div>
+
+    <!-- Paso 4: Credenciales Finales -->
+    <div class="step-card hidden" id="step4">
+      <h2 class="text-2xl font-semibold mb-4 text-green-600">¡Credenciales Listas!</h2>
+
+      <h3 class="text-xl font-semibold mt-6 mb-2 text-gray-800">Credenciales en formato JSON</h3>
+      <p class="mb-2 text-gray-600">Copia este objeto JSON para usarlo donde necesites.</p>
+      <div class="code-block mb-4">
+        <pre><code id="jsonCode"></code></pre>
+        <button class="copy-btn-abs"
+          onclick="copyToClipboard(document.getElementById('jsonCode').innerText, this)">Copiar</button>
+      </div>
+
+      <h3 class="text-xl font-semibold mt-6 mb-2 text-gray-800">Código para Rust</h3>
+      <p class="mb-2 text-gray-600">Usa este fragmento para inicializar el cliente en tu aplicación Tauri.</p>
+      <div class="code-block mb-4">
+        <pre><code id="rustCode"></code></pre>
+        <button class="copy-btn-abs"
+          onclick="copyToClipboard(document.getElementById('rustCode').innerText, this)">Copiar</button>
+      </div>
+
+      <h3 class="text-xl font-semibold mt-6 mb-2 text-gray-800">Lanzar Aplicación</h3>
+      <p class="mb-2 text-gray-600">
+        O puedes lanzar tu aplicación Monark directamente con las credenciales.
+      </p>
+      <button id="launchAppButton" class="btn btn-secondary w-full">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+        </svg>
+        Lanzar Monark con Credenciales
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- UI Elements ---
+    const clientIdInput = document.getElementById('clientId');
+    const clientSecretInput = document.getElementById('clientSecret');
+    const step1Div = document.getElementById('step1');
+    const step2Div = document.getElementById('step2');
+    const step3Div = document.getElementById('step3');
+    const step4Div = document.getElementById('step4');
+    const redirectUriDisplay = document.getElementById('redirectUriDisplay');
+
+    // --- Configuration ---
+    const redirectUri = window.location.origin + window.location.pathname;
+    redirectUriDisplay.innerText = redirectUri;
+    const tokenUrl = 'https://oauth2.googleapis.com/token';
+
+    // --- Helper Functions ---
+    function copyToClipboard(text, button) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        const originalText = button.innerText;
+        button.innerText = '¡Copiado!';
+        setTimeout(() => { button.innerText = 'Copiar'; }, 2000);
+      } catch (err) {
+        console.error('Fallback: Oops, unable to copy', err);
+      }
+      document.body.removeChild(textArea);
+    }
+
+    async function exchangeCodeForTokens(code) {
+      step1Div.classList.add('hidden');
+      step2Div.classList.add('hidden');
+      step3Div.classList.remove('hidden');
+
+      const clientId = localStorage.getItem('gdrive_clientId');
+      const clientSecret = localStorage.getItem('gdrive_clientSecret');
+
+      if (!clientId || !clientSecret) {
+        document.getElementById('step3-content').innerHTML = `
+                    <p class="text-red-600 font-semibold text-center">Error: No se encontraron el Client ID y Client Secret.</p>
+                    <p class="text-gray-600 text-center mt-2">Por favor, <a href="${redirectUri}" class="text-blue-600 hover:underline">empieza de nuevo</a>.</p>`;
+        return;
+      }
+
+      const body = new URLSearchParams();
+      body.append('client_id', clientId);
+      body.append('client_secret', clientSecret);
+      body.append('code', code);
+      body.append('grant_type', 'authorization_code');
+      body.append('redirect_uri', redirectUri);
+
+      try {
+        const response = await fetch(tokenUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error_description || 'Ocurrió un error desconocido.');
+        }
+
+        localStorage.setItem('gdrive_accessToken', data.access_token);
+        // Not all flows return a new refresh token, only store if present
+        if (data.refresh_token) {
+          localStorage.setItem('gdrive_refreshToken', data.refresh_token);
+        }
+
+        showFinalCredentials();
+
+      } catch (error) {
+        document.getElementById('step3-content').innerHTML = `
+                    <p class="text-red-600 font-semibold text-center">Error al obtener los tokens:</p>
+                    <p class="text-gray-600 text-center mt-2 bg-red-50 p-2 rounded">${error.message}</p>
+                    <p class="text-gray-600 text-center mt-4">Por favor, <a href="${redirectUri}" class="text-blue-600 hover:underline">inténtalo de nuevo</a>.</p>`;
+      }
+    }
+
+    function showFinalCredentials() {
+      const creds = {
+        clientId: localStorage.getItem('gdrive_clientId'),
+        clientSecret: localStorage.getItem('gdrive_clientSecret'),
+        accessToken: localStorage.getItem('gdrive_accessToken'),
+        refreshToken: localStorage.getItem('gdrive_refreshToken'),
+        redirectUri: redirectUri,
+      };
+
+      if (!creds.refreshToken) {
+        document.getElementById('step3-content').innerHTML = `
+                    <p class="text-yellow-600 font-semibold text-center">Advertencia: No se recibió un Refresh Token.</p>
+                    <p class="text-gray-600 text-center mt-2">Esto puede suceder si ya has autorizado la aplicación previamente. Para forzar la obtención de un nuevo refresh token, puedes <a href="https://myaccount.google.com/permissions" target="_blank" class="text-blue-600 hover:underline">revocar el acceso</a> de la aplicación y <a href="${redirectUri}" class="text-blue-600 hover:underline">empezar de nuevo</a>.</p>`;
+        return;
+      }
+
+      // Populate JSON view
+      const jsonCreds = {
+        "client-id": creds.clientId,
+        "client-secret": creds.clientSecret,
+        "redirect-uri": creds.redirectUri,
+        "token": creds.accessToken,
+        "refresh-token": creds.refreshToken,
+      };
+      document.getElementById('jsonCode').innerText = JSON.stringify(jsonCreds, null, 2);
+
+      // Populate Rust code view
+      const rustCodeText = `use google_drive::Client;
+
+let google_drive = Client::new(
+    String::from("${creds.clientId}"),
+    String::from("${creds.clientSecret}"),
+    String::from("${creds.redirectUri}"),
+    String::from("${creds.accessToken}"),
+    String::from("${creds.refreshToken}")
+);`;
+      document.getElementById('rustCode').innerText = rustCodeText;
+
+      // Show final step
+      step3Div.classList.add('hidden');
+      step4Div.classList.remove('hidden');
+    }
+
+    // --- Main Logic on Page Load ---
+    window.onload = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+
+      if (code) {
+        // If we have a code, exchange it for tokens automatically
+        history.replaceState({}, document.title, window.location.pathname); // Clean URL
+        exchangeCodeForTokens(code);
+      } else {
+        // Otherwise, show the initial setup screen
+        clientIdInput.value = localStorage.getItem('gdrive_clientId') || '';
+        clientSecretInput.value = localStorage.getItem('gdrive_clientSecret') || '';
+      }
+    };
+
+    // --- Event Listeners ---
+    document.getElementById('authButton').addEventListener('click', () => {
+      const clientId = clientIdInput.value;
+      const clientSecret = clientSecretInput.value;
+
+      if (!clientId || !clientSecret) {
+        alert('Por favor, ingresa tu Client ID y Client Secret.');
+        return;
+      }
+
+      localStorage.setItem('gdrive_clientId', clientId);
+      localStorage.setItem('gdrive_clientSecret', clientSecret);
+
+      const scope = 'https://www.googleapis.com/auth/drive';
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&access_type=offline` +
+        `&prompt=consent`;
+
+      window.location.href = authUrl;
+    });
+
+    document.getElementById('launchAppButton').addEventListener('click', () => {
+      const creds = {
+        clientId: localStorage.getItem('gdrive_clientId'),
+        clientSecret: localStorage.getItem('gdrive_clientSecret'),
+        accessToken: localStorage.getItem('gdrive_accessToken'),
+        refreshToken: localStorage.getItem('gdrive_refreshToken'),
+      };
+
+      if (!creds.clientId || !creds.clientSecret || !creds.accessToken || !creds.refreshToken) {
+        alert('Faltan algunas credenciales. Asegúrate de completar todos los pasos.');
+        return;
+      }
+
+      const launchUrl = `monark://auth?` +
+        `clientId=${encodeURIComponent(creds.clientId)}` +
+        `&clientSecret=${encodeURIComponent(creds.clientSecret)}` +
+        `&redirectUri=${encodeURIComponent(redirectUri)}` +
+        `&token=${encodeURIComponent(creds.accessToken)}` +
+        `&refreshToken=${encodeURIComponent(creds.refreshToken)}`;
+
+      window.location.href = launchUrl;
+    });
+
+  </script>
+</body>
+
+</html>
