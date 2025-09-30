@@ -26,7 +26,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password, vault);
+        let _ = lifecycle::write_vault(file_path.clone(), password, vault);
 
         assert!(std::path::Path::new(&file_path).exists());
 
@@ -288,7 +288,6 @@ mod tests {
             .to_str()
             .unwrap()
             .to_string();
-        let password = "test_password".to_string();
 
         // Create the vault file
         std::fs::File::create(&file_path).expect("Failed to create dummy .monark file");

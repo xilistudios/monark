@@ -1,7 +1,6 @@
-
 #[test]
 fn test_display_read_error() {
-    let io_err = io::Error::new(io::ErrorKind::Other, "test read error");
+    let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test read error");
     let io_error = crate::io::error::IoError::ReadError(io_err);
     assert_eq!(
         format!("{}", io_error),
@@ -11,7 +10,7 @@ fn test_display_read_error() {
 
 #[test]
 fn test_display_write_error() {
-    let io_err = io::Error::new(io::ErrorKind::Other, "test write error");
+    let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test write error");
     let io_error = crate::io::error::IoError::WriteError(io_err);
     assert_eq!(
         format!("{}", io_error),
@@ -33,7 +32,7 @@ fn test_error_trait() {
 
 #[test]
 fn test_enum_variants() {
-    let _read_error = crate::io::error::IoError::ReadError(io::Error::new(io::ErrorKind::Other, ""));
-    let _write_error = crate::io::error::IoError::WriteError(io::Error::new(io::ErrorKind::Other, ""));
+    let _read_error = crate::io::error::IoError::ReadError(std::io::Error::new(std::io::ErrorKind::Other, ""));
+    let _write_error = crate::io::error::IoError::WriteError(std::io::Error::new(std::io::ErrorKind::Other, ""));
     let _not_found = crate::io::error::IoError::NotFound;
 }
