@@ -52,7 +52,12 @@ function HomeScreen() {
     throw new Error(
       'VaultModalContext must be used within a VaultModalProvider'
     );
-  const { selectedEntry, isAddVaultModalOpen, openAddVaultModal, closeAddVaultModal } = context;
+  const {
+    selectedEntry,
+    isAddVaultModalOpen,
+    openAddVaultModal,
+    closeAddVaultModal,
+  } = context;
 
   const currentPath = parseNavigationPath(navigationPath);
 
@@ -121,7 +126,7 @@ function HomeScreen() {
 
   const handleConfirmDelete = async (deleteFile: boolean) => {
     if (!vaultToDelete) return;
-    
+
     setDeleting(true);
     try {
       await dispatch(deleteVault(vaultToDelete.id, deleteFile) as any);
@@ -188,7 +193,7 @@ function HomeScreen() {
   }
 
   return (
-    <div className="flex h-screen w-screen">
+    <div className="flex h-[100vh] w-screen overflow-hidden">
       <div className="drawer lg:drawer-open">
         <input id="vault-drawer" type="checkbox" className="drawer-toggle" />
         <div className="drawer-content flex flex-col">
@@ -213,7 +218,9 @@ function HomeScreen() {
               </svg>
             </label>
           </div>
-          <div className="vault-content flex-1">{vaultContent}</div>
+          <div className="vault-content flex-1 overflow-hidden">
+            {vaultContent}
+          </div>
         </div>
         <div className="drawer-side">
           <label
@@ -221,8 +228,11 @@ function HomeScreen() {
             aria-label="close sidebar"
             className="drawer-overlay"
           ></label>
-          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
-            <VaultSelector onAddVault={() => openAddVaultModal()} onDeleteVault={handleDeleteVault} />
+          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300 lg:w-80 md:w-64 sm:w-56 max-w-[80vw] overflow-y-auto">
+            <VaultSelector
+              onAddVault={() => openAddVaultModal()}
+              onDeleteVault={handleDeleteVault}
+            />
           </div>
         </div>
       </div>

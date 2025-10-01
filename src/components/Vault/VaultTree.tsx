@@ -323,7 +323,7 @@ const VaultTree = ({
   });
 
   return (
-    <div className="w-full">
+    <div className="w-full h-screen max-h-screen overflow-y-auto">
       {processedEntries.length === 0 ? (
         renderEmptyState()
       ) : (
