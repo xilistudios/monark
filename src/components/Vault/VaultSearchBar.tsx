@@ -16,9 +16,13 @@ const VaultSearchBar = ({
   handleSearchResultSelect: (item: { entry: any; path: string[] }) => void;
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { t } = useTranslation();
-  const { setIsSearchModalOpen, isSearchModalOpen, searchQuery, setSearchQuery } =
-    useContext(VaultModalContext)!;
+  const { t } = useTranslation('home');
+  const {
+    setIsSearchModalOpen,
+    isSearchModalOpen,
+    searchQuery,
+    setSearchQuery,
+  } = useContext(VaultModalContext)!;
   /**
    * Flattens all entries in the vault for search functionality.
    * This includes entries from all groups and subgroups.

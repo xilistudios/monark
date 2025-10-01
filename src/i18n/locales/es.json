@@ -229,6 +229,7 @@
         "selectVaultToStart": "Seleccione una bóveda de la barra lateral para comenzar",
         "copied": "¡Copiado al portapapeles!",
         "copyFailed": "Error al copiar al portapapeles.",
+        "noDescription": "Sin descripción",
         "noSearchResults": "Ninguna entrada coincide con su búsqueda"
       },
       "tree": {

@@ -229,6 +229,7 @@
         "selectVaultToStart": "Select a vault from the sidebar to get started",
         "copied": "Copied to clipboard!",
         "copyFailed": "Failed to copy to clipboard.",
+        "noDescription": "No description",
         "noSearchResults": "No entries match your search"
       },
       "tree": {
