@@ -1,7 +1,12 @@
-import { useContext, useEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { VaultModalContext } from './VaultContext';
 import { useTranslation } from 'react-i18next';
 import { flattenEntries } from '../../utils/vaultSearch';
+
+// Constants for height calculations
+const MIN_RESULT_ITEM_HEIGHT = 80;
+const MAX_RESULTS_HEIGHT = 400;
+const NO_RESULTS_HEIGHT = 80;
 
 const VaultSearchBar = ({
   currentVault,
@@ -16,6 +21,8 @@ const VaultSearchBar = ({
   handleSearchResultSelect: (item: { entry: any; path: string[] }) => void;
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const resultsContainerRef = useRef<HTMLDivElement>(null);
+  const [resultsHeight, setResultsHeight] = useState<number>(0);
   const { t } = useTranslation('home');
   const {
     setIsSearchModalOpen,
@@ -43,6 +50,59 @@ const VaultSearchBar = ({
       )
       .slice(0, 10);
   }, [allEntries, searchQuery, isSearchModalOpen]);
+
+  /**
+   * Calculate the actual height of search results
+   */
+  const calculateResultsHeight = useMemo(() => {
+    if (filteredEntries.length === 0) {
+      return searchQuery.trim() && isSearchModalOpen ? NO_RESULTS_HEIGHT : 0;
+    }
+
+    // If we have a mounted container, try to measure actual content
+    if (resultsContainerRef.current) {
+      // Create a temporary measurement approach
+      // Since we can't easily measure each item individually in React without DOM refs,
+      // we'll estimate based on content length
+      let totalHeight = 0;
+      filteredEntries.forEach((item) => {
+        const nameLength = item.entry.name?.length || 0;
+        const descriptionLength = item.entry.fields[0]?.value?.length || 0;
+
+        // Estimate height based on content
+        // Base height + potential extra height for long descriptions
+        let itemHeight = MIN_RESULT_ITEM_HEIGHT;
+
+        // Add extra height for longer descriptions (rough estimate)
+        if (descriptionLength > 50) {
+          itemHeight += Math.ceil(descriptionLength / 50) * 20;
+        }
+
+        // Add extra height for very long names
+        if (nameLength > 30) {
+          itemHeight += 20;
+        }
+
+        totalHeight += itemHeight;
+      });
+
+      return Math.min(totalHeight, MAX_RESULTS_HEIGHT);
+    }
+
+    // Fallback to simple calculation
+    return Math.min(
+      filteredEntries.length * MIN_RESULT_ITEM_HEIGHT,
+      MAX_RESULTS_HEIGHT
+    );
+  }, [filteredEntries, searchQuery, isSearchModalOpen]);
+
+  /**
+   * Update height when calculated height changes
+   */
+  useEffect(() => {
+    setResultsHeight(calculateResultsHeight);
+  }, [calculateResultsHeight]);
+
   /**
    * Handles global keyboard shortcuts for focusing the search input.
    * Platform-aware shortcut detection (Ctrl+F or Cmd+F)
@@ -81,7 +141,7 @@ const VaultSearchBar = ({
 
       {/* Modal content */}
       <div
-        className="relative bg-base-100 w-full max-w-md h-[80vh] md:h-auto"
+        className="relative bg-base-100 w-full max-w-md md:h-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input header */}
@@ -100,27 +160,33 @@ const VaultSearchBar = ({
           />
         </div>
 
-        {/* Results list */}
-        <div className="flex-1 overflow-auto p-4">
-          {filteredEntries.length > 0 ? (
-            filteredEntries.map((item) => (
-              <div
-                key={item.entry.id}
-                onClick={() => handleSearchResultSelect(item)}
-                className="p-2 hover:bg-base-200 cursor-pointer border-b border-base-300 last:border-b-0"
-              >
-                <div className="font-medium">{item.entry.name}</div>
-                <div className="text-sm text-base-content/60">
-                  {item.entry.fields[0]?.value ||
-                    t('vault.manager.noDescription')}
+        {/* Results list with animated height */}
+        <div
+          className="overflow-hidden transition-all duration-300 ease-in-out"
+          style={{ height: `${resultsHeight}px` }}
+          aria-live="polite"
+        >
+          <div ref={resultsContainerRef} className="overflow-auto p-4">
+            {filteredEntries.length > 0 ? (
+              filteredEntries.map((item) => (
+                <div
+                  key={item.entry.id}
+                  onClick={() => handleSearchResultSelect(item)}
+                  className="p-2 hover:bg-base-200 cursor-pointer border-b border-base-300 last:border-b-0"
+                >
+                  <div className="font-medium truncate">{item.entry.name}</div>
+                  <div className="text-sm text-base-content/60 break-words">
+                    {item.entry.fields[0]?.value ||
+                      t('vault.manager.noDescription')}
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="text-center py-4">
+                {t('vault.manager.noSearchResults')}
               </div>
-            ))
-          ) : (
-            <div className="text-center py-4">
-              {t('vault.manager.noSearchResults')}
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Close button for mobile */}
