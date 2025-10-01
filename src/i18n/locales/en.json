@@ -20,6 +20,9 @@
     "title": "Settings",
     "language": "Language",
     "theme": "Theme",
+    "general": "General",
+    "appearance": "Appearance",
+    "navigation": "Settings navigation",
     "resetButton": "Reset to Defaults",
     "backButton": "Back to Home",
     "clearDataButton": "Clear All App Data",
@@ -226,6 +229,7 @@
         "selectVaultToStart": "Select a vault from the sidebar to get started",
         "copied": "Copied to clipboard!",
         "copyFailed": "Failed to copy to clipboard.",
+        "noDescription": "No description",
         "noSearchResults": "No entries match your search"
       },
       "tree": {

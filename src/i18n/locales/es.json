@@ -20,6 +20,9 @@
     "title": "Configuración",
     "language": "Idioma",
     "theme": "Tema",
+    "general": "General",
+    "appearance": "Apariencia",
+    "navigation": "Navegación de configuración",
     "resetButton": "Restablecer valores predeterminados",
     "backButton": "Volver al inicio",
     "clearDataButton": "Borrar todos los datos de la aplicación",
@@ -226,6 +229,7 @@
         "selectVaultToStart": "Seleccione una bóveda de la barra lateral para comenzar",
         "copied": "¡Copiado al portapapeles!",
         "copyFailed": "Error al copiar al portapapeles.",
+        "noDescription": "Sin descripción",
         "noSearchResults": "Ninguna entrada coincide con su búsqueda"
       },
       "tree": {
