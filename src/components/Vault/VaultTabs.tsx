@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
-import { AddVaultForm } from './AddVaultForm'
-import { ImportVaultForm } from './ImportVaultForm'
+import { AddVaultForm } from './Forms/AddVaultForm'
+import { ImportVaultForm } from './Forms/ImportVaultForm'
 import { selectCurrentVaultId } from '../../redux/selectors/vaultSelectors'
 
 interface VaultTabsProps {

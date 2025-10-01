@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
-import { AddEntryModal } from './AddEntryModal';
-import { AddGroupModal } from './AddGroupModal';
-import { ImportCsvModal } from './ImportCsvModal';
+import { AddEntryModal } from './Modals/AddEntryModal';
+import { AddGroupModal } from './Modals/AddGroupModal';
+import { ImportCsvModal } from './Modals/ImportCsvModal';
 import { EntryDetailsSidebar } from './EntryDetailsSidebar';
 import { VaultManager } from '../../services/vault';
 import { flattenEntries } from '../../utils/vaultSearch';

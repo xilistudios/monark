@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
-import type { GroupEntry } from '../../interfaces/vault.interface';
-import type { RootState } from '../../redux/store';
-import { VaultManager } from '../../services/vault';
-import { Modal } from '../UI/Modal';
+import type { GroupEntry } from '../../../interfaces/vault.interface';
+import type { RootState } from '../../../redux/store';
+import { VaultManager } from '../../../services/vault';
+import { Modal } from '../../UI/Modal';
 import { useContext } from 'react';
-import { VaultModalContext } from './VaultContext';
+import { VaultModalContext } from '../VaultContext';
 
 /**
  * Modal component for adding a new group to the vault

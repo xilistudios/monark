@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import VaultSelector from '../components/Vault/VaultSelector';
-import { AddEntryModal } from '../components/Vault/AddEntryModal';
-import { AddGroupModal } from '../components/Vault/AddGroupModal';
-import { EditEntryModal } from '../components/Vault/EditEntryModal';
-import { EditGroupModal } from '../components/Vault/EditGroupModal';
-import { EntryDetailsModal } from '../components/Vault/EntryDetailsModal';
-import { ImportCsvModal } from '../components/Vault/ImportCsvModal';
+import { AddEntryModal } from '../components/Vault/Modals/AddEntryModal';
+import { AddGroupModal } from '../components/Vault/Modals/AddGroupModal';
+import { EditEntryModal } from '../components/Vault/Modals/EditEntryModal';
+import { EditGroupModal } from '../components/Vault/Modals/EditGroupModal';
+import { EntryDetailsModal } from '../components/Vault/Modals/EntryDetailsModal';
+import { ImportCsvModal } from '../components/Vault/Modals/ImportCsvModal';
+import { AddVaultModal } from '../components/Vault/Modals/AddVaultModal';
+import { EditVaultModal } from '../components/Vault/Modals/EditVaultModal';
+import { DeleteVaultModal } from '../components/Vault/Modals/DeleteVaultModal';
+import { deleteVault, type Vault } from '../redux/actions/vault';
 import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
 import {
   lockVault,
@@ -39,13 +43,21 @@ function HomeScreen() {
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const context = useContext(VaultModalContext);
   if (!context)
     throw new Error(
       'VaultModalContext must be used within a VaultModalProvider'
     );
-  const { selectedEntry } = context;
+  const {
+    selectedEntry,
+    isAddVaultModalOpen,
+    openAddVaultModal,
+    closeAddVaultModal,
+  } = context;
 
   const currentPath = parseNavigationPath(navigationPath);
 
@@ -107,6 +119,32 @@ function HomeScreen() {
     }
   };
 
+  const handleDeleteVault = (vault: Vault) => {
+    setVaultToDelete(vault);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (deleteFile: boolean) => {
+    if (!vaultToDelete) return;
+
+    setDeleting(true);
+    try {
+      await dispatch(deleteVault(vaultToDelete.id, deleteFile) as any);
+      setDeleteModalOpen(false);
+    } catch (error) {
+      console.error('Failed to delete vault:', error);
+      alert(t('vault.delete.error', 'Failed to delete vault'));
+    } finally {
+      setDeleting(false);
+      setVaultToDelete(null);
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setVaultToDelete(null);
+  };
+
   const entries = getCurrentEntries(
     currentVault?.volatile?.entries ?? [],
     currentPath
@@ -155,7 +193,7 @@ function HomeScreen() {
   }
 
   return (
-    <div className="flex h-screen w-screen">
+    <div className="flex h-[100vh] w-screen overflow-hidden">
       <div className="drawer lg:drawer-open">
         <input id="vault-drawer" type="checkbox" className="drawer-toggle" />
         <div className="drawer-content flex flex-col">
@@ -180,7 +218,9 @@ function HomeScreen() {
               </svg>
             </label>
           </div>
-          <div className="vault-content flex-1">{vaultContent}</div>
+          <div className="vault-content flex-1 overflow-hidden">
+            {vaultContent}
+          </div>
         </div>
         <div className="drawer-side">
           <label
@@ -188,8 +228,11 @@ function HomeScreen() {
             aria-label="close sidebar"
             className="drawer-overlay"
           ></label>
-          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
-            <VaultSelector />
+          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300 lg:w-80 md:w-64 sm:w-56 max-w-[80vw] overflow-y-auto">
+            <VaultSelector
+              onAddVault={() => openAddVaultModal()}
+              onDeleteVault={handleDeleteVault}
+            />
           </div>
         </div>
       </div>
@@ -199,6 +242,18 @@ function HomeScreen() {
       {selectedEntry && isDataEntry(selectedEntry) && <EntryDetailsModal />}
       {selectedEntry && isDataEntry(selectedEntry) && <EditEntryModal />}
       {selectedEntry && isGroupEntry(selectedEntry) && <EditGroupModal />}
+      <AddVaultModal
+        isOpen={isAddVaultModalOpen}
+        onClose={() => closeAddVaultModal()}
+      />
+      <EditVaultModal />
+      <DeleteVaultModal
+        isOpen={deleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        vault={vaultToDelete}
+        onConfirm={handleConfirmDelete}
+        deleting={deleting}
+      />
     </div>
   );
 }

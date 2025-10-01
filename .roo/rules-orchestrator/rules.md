@@ -1,0 +1,4 @@
+- Always create a subtask for every coding task
+- Don't switch between modes, use subtasks withe the appropriate mode instead
+- After each task, always verify the files related to the task, ensure it's aligned with the requirements
+- Always use memory mode with a subtask to retrieve relevant project information before starting any complex task

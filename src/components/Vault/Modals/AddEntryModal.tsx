@@ -2,20 +2,20 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import { z } from 'zod';
-import type { DataEntry, Field } from '../../interfaces/vault.interface';
-import type { RootState } from '../../redux/store';
-import { VaultManager } from '../../services/vault';
-import { Modal } from '../UI/Modal';
+import type { DataEntry, Field, FieldType } from '../../../interfaces/vault.interface';
+import type { RootState } from '../../../redux/store';
+import { VaultManager } from '../../../services/vault';
+import { Modal } from '../../UI/Modal';
 import {
   addEntryFormSchema,
   tagSchema,
-} from '../../utils/validation/vaultSchemas';
+} from '../../../utils/validation/vaultSchemas';
 import { useContext } from 'react';
-import { VaultModalContext } from './VaultContext';
+import { VaultModalContext } from '../VaultContext';
 
 interface FormField {
   title: string;
-  property: string;
+  property: string; // This will be converted to FieldType when creating vault fields
   value: string;
   secret: boolean;
 }
@@ -109,7 +109,7 @@ export const AddEntryModal = () => {
       // Convert form fields to vault fields format
       const vaultFields: Field[] = validatedData.fields.map((field) => ({
         title: field.title.trim(),
-        property: field.property.trim(),
+        property: field.property.trim() as FieldType, // Type assertion to convert string to FieldType
         value: field.value,
         secret: field.secret,
       }));

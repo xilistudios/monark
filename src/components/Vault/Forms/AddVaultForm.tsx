@@ -1,12 +1,11 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { BaseDirectory } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'react-redux';
-import { addVault, type Vault } from '../../redux/actions/vault';
-import VaultCommands from '../../services/commands';
-import { isMobile } from '../../utils/platform';
+import { addVault, updateVault, type Vault } from '../../../redux/actions/vault';
+import VaultCommands from '../../../services/commands';
+import { isMobile } from '../../../utils/platform';
 
 interface AddVaultFormProps {
   onSuccess: () => void;
@@ -14,7 +13,7 @@ interface AddVaultFormProps {
   vault?: Vault;
 }
 
-export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
+export const AddVaultForm = ({ onSuccess, onCancel, vault }: AddVaultFormProps) => {
   const dispatch = useDispatch();
   const { t } = useTranslation('home');
   const [filePath, setFilePath] = useState('');
@@ -23,6 +22,15 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const mobile = useMemo(() => isMobile(), []);
+  const isEditMode = !!vault;
+
+  // Prefill form when editing
+  useEffect(() => {
+    if (vault) {
+      setVaultName(vault.name);
+      setFilePath(vault.path);
+    }
+  }, [vault]);
 
   const generateVaultId = () => {
     return crypto.randomUUID();
@@ -78,6 +86,67 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
     }
   };
 
+  const handleUpdateVault = async () => {
+    if (!vault || !vaultName) {
+      setError(t('errors.missingFields'));
+      return;
+    }
+
+    // Prevent password updates when vault is locked
+    if (vault.isLocked && password) {
+      setError(t('editVault.errors.vaultLocked'));
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      // Only update password if new value is provided
+      if (password) {
+        try {
+          const credential = vault.volatile?.credential || '';
+          if (!credential) {
+            throw new Error('Vault credential is missing');
+          }
+          const vaultContent = await VaultCommands.read(vault.path, credential);
+          await VaultCommands.write(vault.path, password, vaultContent);
+        } catch (err) {
+          console.error('Error accessing vault credentials:', err);
+          setError(t('errors.unlockFailed') || 'Failed to access vault credentials');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const updatedVault: Vault = {
+        ...vault,
+        name: vaultName,
+        path: filePath || vault.path, // Preserve existing path if not changed
+        volatile: {
+          ...vault.volatile,
+          credential: password || vault.volatile.credential, // Use new password or keep existing
+        },
+      };
+
+      dispatch(updateVault(updatedVault));
+      onSuccess();
+    } catch (err) {
+      console.error('Error updating vault:', err);
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (isEditMode) {
+      await handleUpdateVault();
+    } else {
+      await handleCreateVault();
+    }
+  };
+
   const handleSelectFile = async () => {
     try {
       const result = await open({
@@ -89,7 +158,7 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
       if (result) {
         setFilePath(result);
         // Auto-generate vault name from file path if not already set
-        if (!vaultName) {
+        if (!vaultName && !isEditMode) {
           setVaultName(extractVaultNameFromPath(result));
         }
       }
@@ -100,8 +169,8 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="font-bold text-lg">{t('addVault.title')}</h3>
+    <div className="space-y-4 p-4">
+      <h3 className="font-bold text-lg">{isEditMode ? t('editVault.title') : t('addVault.title')}</h3>
 
       <div className="form-control">
         <label className="label">
@@ -127,29 +196,54 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
               className="input input-bordered join-item flex-1"
               value={filePath}
               onChange={(e) => setFilePath(e.target.value)}
+              disabled={isEditMode} // Disable file path editing in edit mode
             />
-            <button
-              className="btn join-item"
-              onClick={handleSelectFile}
-              type="button"
-            >
-              {t('addVault.browse')}
-            </button>
+            {!isEditMode && (
+              <button
+                className="btn join-item"
+                onClick={handleSelectFile}
+                type="button"
+              >
+                {t('addVault.browse')}
+              </button>
+            )}
           </div>
+          {isEditMode && (
+            <div className="text-xs text-base-content opacity-60 mt-1">
+              {t('editVault.filePathHelp')}
+            </div>
+          )}
         </div>
       )}
 
+      {isEditMode && vault?.isLocked && (
+        <div className="alert alert-warning mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>{t('editVault.errors.vaultLocked')}</span>
+        </div>
+      )}
       <div className="form-control">
         <label className="label">
-          <span className="label-text">{t('addVault.password')}</span>
+          <span className="label-text">
+            {isEditMode ? t('editVault.newPassword') : t('addVault.password')}
+            {!isEditMode && ' *'}
+          </span>
         </label>
         <input
           type="password"
-          placeholder={t('addVault.passwordPlaceholder')}
+          placeholder={isEditMode ? t('editVault.newPasswordPlaceholder') : t('addVault.passwordPlaceholder')}
           className="input input-bordered"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          disabled={isEditMode && vault?.isLocked}
         />
+        {isEditMode && (
+          <div className="text-xs text-base-content opacity-60 mt-1">
+            {t('editVault.passwordHelp')}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -161,16 +255,16 @@ export const AddVaultForm = ({ onSuccess, onCancel }: AddVaultFormProps) => {
       <div className="modal-action">
         <button
           className="btn btn-primary"
-          onClick={handleCreateVault}
+          onClick={handleSubmit}
           disabled={loading}
         >
           {loading ? (
             <>
               <span className="loading loading-spinner loading-sm"></span>
-              {t('addVault.creating')}
+              {isEditMode ? t('editVault.saving') : t('addVault.creating')}
             </>
           ) : (
-            t('addVault.createVault')
+            isEditMode ? t('editVault.save') : t('addVault.createVault')
           )}
         </button>
         <button className="btn" onClick={onCancel} disabled={loading}>

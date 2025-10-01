@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
-import type { DataEntry, GroupEntry } from '../../interfaces/vault.interface';
-import type { RootState } from '../../redux/store';
-import { VaultManager } from '../../services/vault';
-import { Modal } from '../UI/Modal';
+import type { DataEntry, GroupEntry } from '../../../interfaces/vault.interface';
+import type { RootState } from '../../../redux/store';
+import { VaultManager } from '../../../services/vault';
+import { Modal } from '../../UI/Modal';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/plugin-fs';
-import { csvParsers } from '../../parsers/csvParsersRegistry';
-import type { ICsvParser } from '../../interfaces/csv.interface';
-import { parseCSV } from '../../utils/csv';
-import type { ParsedEntry } from '../../interfaces/parsers.interface';
+import { csvParsers } from '../../../parsers/csvParsersRegistry';
+import type { ICsvParser } from '../../../interfaces/csv.interface';
+import { parseCSV } from '../../../utils/csv';
+import type { ParsedEntry } from '../../../interfaces/parsers.interface';
 import { useContext } from 'react';
-import { VaultModalContext } from './VaultContext';
+import { VaultModalContext } from '../VaultContext';
 
 /**
  * ImportCsvModal component for importing CSV vault data with manual format selection.

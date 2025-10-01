@@ -5,6 +5,7 @@ import {
 import type { Entry } from "../../interfaces/vault.interface"
 import { settingsStore } from "../../store/settings"
 import { VaultManager } from "../../services/vault"
+import VaultCommands from "../../services/commands"
 
 export interface Vault {
 	id: string
@@ -65,6 +66,12 @@ export const loadVaultStateFromSettings = async (): Promise<
 					...vault,
 					lastAccessed: vault.lastAccessed || undefined,
 					isLocked: true,
+					volatile: {
+						entries: [],
+						credential: "",
+						navigationPath: "/",
+						encryptedData: undefined,
+					},
 				})),
 				currentVaultId: null,
 			}
@@ -218,15 +225,23 @@ export const vaultSlice = createSlice({
 			}
 		},
 		lockVault: (state, action: PayloadAction<string>) => {
-			const vault = state.vaults.find((v) => v.id === action.payload)
-			if (vault && vault.volatile) {
-				vault.volatile.entries = []
-				vault.volatile.encryptedData = undefined
-				vault.isLocked = true
-				vault.volatile.credential = "" // Clear credential on lock
-				vault.volatile.navigationPath = "/"
-			}
-		},
+					const vault = state.vaults.find((v) => v.id === action.payload)
+					if (vault) {
+						if (!vault.volatile) {
+							vault.volatile = {
+								entries: [],
+								credential: "",
+								navigationPath: "/",
+								encryptedData: undefined,
+							}
+						}
+						vault.volatile.entries = []
+						vault.volatile.encryptedData = undefined
+						vault.isLocked = true
+						vault.volatile.credential = "" // Clear credential on lock
+						vault.volatile.navigationPath = "/"
+					}
+				},
 		// New reducer for setting vault locked state
 		setVaultLocked: (state, action: PayloadAction<{ vaultId: string; isLocked: boolean }>) => {
 			const vault = state.vaults.find((v) => v.id === action.payload.vaultId)
@@ -240,6 +255,36 @@ export const vaultSlice = createSlice({
 		// All async thunk cases have been removed as they are now handled by VaultManager
 	},
 })
+
+// Async thunk for deleting a vault with optional file deletion
+export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
+	return async (dispatch: any, getState: any) => {
+		try {
+			// First, get the vault to access its path
+			const state = getState();
+			const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
+			
+			if (!vault) {
+				throw new Error("Vault not found");
+			}
+
+			// If deleteFile is true, attempt to delete the file from the file system
+			if (deleteFile) {
+				try {
+					await VaultCommands.delete(vault.path);
+				} catch (error) {
+					console.error("Failed to delete vault file:", error);
+					throw new Error(`Failed to delete vault file: ${error}`);
+				}
+			}
+
+			// Remove the vault from Redux state (this will also clean up VaultManager)
+			dispatch(removeVault(vaultId));
+		} catch (error) {
+			throw error;
+		}
+	};
+};
 
 export const {
 	addVault,
