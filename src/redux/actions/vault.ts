@@ -3,6 +3,7 @@ import {
 	type PayloadAction,
 } from "@reduxjs/toolkit"
 import type { Entry } from "../../interfaces/vault.interface"
+import type { StorageProvider, StorageProviderType } from "../../interfaces/cloud-storage.interface"
 import { settingsStore } from "../../store/settings"
 import { VaultManager } from "../../services/vault"
 import VaultCommands from "../../services/commands"
@@ -13,6 +14,14 @@ export interface Vault {
 	path: string
 	lastAccessed?: string
 	isLocked: boolean
+	// New: Cloud storage support
+	storageType: 'local' | 'cloud'
+	providerId?: string
+	cloudMetadata?: {
+		fileId: string
+		provider: string
+		lastSync?: string
+	}
 	// Multi-vault: volatile in-memory state, not persisted
 	volatile: {
 		credential: string
@@ -29,6 +38,10 @@ export interface VaultState {
 	currentVaultId: string | null
 	loading: boolean
 	error: string | null
+	// New: Storage provider state
+	providers: StorageProvider[]
+	defaultProvider: string | null
+	providerStatus: Record<string, 'idle' | 'authenticating' | 'authenticated' | 'error'>
 }
 
 /**
@@ -43,10 +56,25 @@ const saveVaultStateToSettings = async (vaults: Vault[]) => {
 			path: v.path,
 			lastAccessed: v.lastAccessed,
 			isLocked: v.isLocked,
+			storageType: v.storageType,
+			providerId: v.providerId,
+			cloudMetadata: v.cloudMetadata,
 		}))
 		await settingsStore.set("vaults", persistentVaults)
 	} catch (error) {
 		console.error("Error saving vaults to settings:", error)
+	}
+}
+
+/**
+ * Save storage providers to settings store.
+ */
+const saveStorageProvidersToSettings = async (providers: StorageProvider[], defaultProvider: string | null) => {
+	try {
+		await settingsStore.set("storageProviders", providers)
+		await settingsStore.set("defaultStorageProvider", defaultProvider)
+	} catch (error) {
+		console.error("Error saving storage providers to settings:", error)
 	}
 }
 
@@ -59,32 +87,43 @@ export const loadVaultStateFromSettings = async (): Promise<
 > => {
 	try {
 		const vaults = await settingsStore.get("vaults")
-		await settingsStore.get("savedVaults")
+		const providers = await settingsStore.get("storageProviders")
+		const defaultProvider = await settingsStore.get("defaultStorageProvider")
+		
+		let loadedVaults: Vault[] = []
 		if (vaults && Array.isArray(vaults)) {
-			return {
-				vaults: vaults.map((vault: any) => ({
-					...vault,
-					lastAccessed: vault.lastAccessed || undefined,
-					isLocked: true,
-					volatile: {
-						entries: [],
-						credential: "",
-						navigationPath: "/",
-						encryptedData: undefined,
-					},
-				})),
-				currentVaultId: null,
-			}
-		} else {
-			return {
-				vaults: [],
-				currentVaultId: null,
-			}
+			loadedVaults = vaults.map((vault: any) => ({
+				...vault,
+				// Migrate existing vaults to local storage type
+				storageType: vault.storageType || 'local',
+				lastAccessed: vault.lastAccessed || undefined,
+				isLocked: true,
+				volatile: {
+					entries: [],
+					credential: "",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			}))
+		}
+		
+		return {
+			vaults: loadedVaults,
+			currentVaultId: null,
+			providers: providers || [],
+			defaultProvider: defaultProvider || null,
+			providerStatus: {},
 		}
 	} catch (error) {
 		console.error("Error loading vaults from settings:", error)
 	}
-	return { vaults: [], currentVaultId: null }
+	return {
+		vaults: [],
+		currentVaultId: null,
+		providers: [],
+		defaultProvider: null,
+		providerStatus: {},
+	}
 }
 
 // Action Types
@@ -95,15 +134,23 @@ const initialState: VaultState = {
 	currentVaultId: null,
 	loading: false,
 	error: null,
+	providers: [],
+	defaultProvider: null,
+	providerStatus: {},
 }
 
 export const vaultSlice = createSlice({
 	name: "vault",
 	initialState,
 	reducers: {
+		/**
+		 * Add a new vault to the state
+		 * Supports both local and cloud vaults
+		 */
 		addVault: (state, action: PayloadAction<Vault>) => {
 			const vault = {
 				...action.payload,
+				storageType: action.payload.storageType || 'local',
 				volatile: {
 					entries: action.payload.volatile?.entries || [],
 					credential: action.payload.volatile?.credential || "",
@@ -164,6 +211,21 @@ export const vaultSlice = createSlice({
 				state.vaults = action.payload.vaults
 			} else {
 				state.vaults = []
+			}
+			if (action.payload.providers && Array.isArray(action.payload.providers)) {
+				state.providers = action.payload.providers
+			} else {
+				state.providers = []
+			}
+			if (action.payload.defaultProvider) {
+				state.defaultProvider = action.payload.defaultProvider
+			} else {
+				state.defaultProvider = null
+			}
+			if (action.payload.providerStatus) {
+				state.providerStatus = action.payload.providerStatus
+			} else {
+				state.providerStatus = {}
 			}
 			state.currentVaultId = null
 		},
@@ -249,6 +311,88 @@ export const vaultSlice = createSlice({
 				vault.isLocked = action.payload.isLocked
 			}
 		},
+		// Storage Provider Actions
+		/**
+		 * Set the list of storage providers
+		 */
+		setStorageProviders: (state, action: PayloadAction<StorageProvider[]>) => {
+			state.providers = action.payload
+			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+		},
+		/**
+		 * Add a new storage provider
+		 */
+		addStorageProvider: (state, action: PayloadAction<StorageProvider>) => {
+			state.providers.push(action.payload)
+			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+		},
+		/**
+		 * Remove a storage provider by ID
+		 */
+		removeStorageProvider: (state, action: PayloadAction<string>) => {
+			state.providers = state.providers.filter(p => p.name !== action.payload)
+			// Update vaults that use this provider
+			state.vaults.forEach(vault => {
+				if (vault.providerId === action.payload) {
+					vault.providerId = undefined
+					vault.storageType = 'local'
+					vault.cloudMetadata = undefined
+				}
+			})
+			// Clear provider status
+			delete state.providerStatus[action.payload]
+			// Update default provider if necessary
+			if (state.defaultProvider === action.payload) {
+				state.defaultProvider = state.providers.length > 0 ? state.providers[0].name : null
+			}
+			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+			void saveVaultStateToSettings(state.vaults)
+		},
+		/**
+		 * Set the default storage provider
+		 */
+		setDefaultStorageProvider: (state, action: PayloadAction<string>) => {
+			state.defaultProvider = action.payload
+			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+		},
+		/**
+		 * Set the authentication status for a provider
+		 */
+		setProviderStatus: (state, action: PayloadAction<{ providerId: string; status: 'idle' | 'authenticating' | 'authenticated' | 'error' }>) => {
+			state.providerStatus[action.payload.providerId] = action.payload.status
+		},
+		/**
+		 * Set cloud vaults list
+		 */
+		setCloudVaults: (state, action: PayloadAction<Vault[]>) => {
+			// This action is used to update the vaults list with cloud vaults
+			// It merges with existing vaults, updating cloud vault information
+			const cloudVaults = action.payload
+			cloudVaults.forEach(cloudVault => {
+				const existingIndex = state.vaults.findIndex(v => v.id === cloudVault.id)
+				if (existingIndex !== -1) {
+					// Update existing vault with cloud information
+					state.vaults[existingIndex] = {
+						...state.vaults[existingIndex],
+						...cloudVault,
+					}
+				} else {
+					// Add new cloud vault
+					state.vaults.push(cloudVault)
+				}
+			})
+			void saveVaultStateToSettings(state.vaults)
+		},
+		/**
+		 * Trigger cloud sync for a vault
+		 */
+		syncCloudVault: (state, action: PayloadAction<string>) => {
+			const vault = state.vaults.find(v => v.id === action.payload)
+			if (vault && vault.cloudMetadata) {
+				vault.cloudMetadata.lastSync = new Date().toISOString()
+				void saveVaultStateToSettings(state.vaults)
+			}
+		},
 	},
 	extraReducers: (builder) => {
 		builder
@@ -274,7 +418,8 @@ export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
 					await VaultCommands.delete(vault.path);
 				} catch (error) {
 					console.error("Failed to delete vault file:", error);
-					throw new Error(`Failed to delete vault file: ${error}`);
+					const errorMessage = (error as any)?.message || (error instanceof Error ? error.message : String(error))
+					throw new Error(`Failed to delete vault file: ${errorMessage}`);
 				}
 			}
 
@@ -301,6 +446,101 @@ export const {
 	setNavigationPath,
 	setVaultEntries,
 	setVaultLocked,
+	setStorageProviders,
+	addStorageProvider,
+	removeStorageProvider,
+	setDefaultStorageProvider,
+	setProviderStatus,
+	setCloudVaults,
+	syncCloudVault,
 } = vaultSlice.actions
+
+/**
+ * Helper function to check if a vault is cloud-based
+ */
+export const isCloudVault = (vault: Vault): boolean => {
+	return vault.storageType === 'cloud' && !!vault.providerId
+}
+
+/**
+ * Helper function to get the storage provider for a vault
+ */
+export const getVaultProvider = (
+	vault: Vault,
+	providers: StorageProvider[]
+): StorageProvider | undefined => {
+	if (!isCloudVault(vault) || !vault.providerId) {
+		return undefined
+	}
+	return providers.find(provider => provider.name === vault.providerId)
+}
+
+/**
+ * Helper function to create a cloud vault object
+ */
+export const createCloudVault = (
+	id: string,
+	name: string,
+	providerId: string,
+	fileId: string,
+	password?: string
+): Vault => {
+	return {
+		id,
+		name,
+		path: fileId, // Use cloud file ID as path
+		storageType: 'cloud',
+		providerId,
+		cloudMetadata: {
+			fileId,
+			provider: providerId,
+			lastSync: new Date().toISOString(),
+		},
+		isLocked: true,
+		volatile: {
+			credential: password || "",
+			entries: [],
+			navigationPath: "/",
+			encryptedData: undefined,
+		},
+	}
+}
+
+/**
+ * Helper function to migrate a local vault to cloud storage
+ */
+export const migrateVaultToCloud = (
+	vault: Vault,
+	providerId: string,
+	fileId: string
+): Vault => {
+	return {
+		...vault,
+		storageType: 'cloud' as const,
+		providerId,
+		cloudMetadata: {
+			fileId,
+			provider: providerId,
+			lastSync: new Date().toISOString(),
+		},
+		path: fileId, // Update path to use cloud file ID
+	}
+}
+
+/**
+ * Helper function to migrate a cloud vault to local storage
+ */
+export const migrateVaultToLocal = (
+	vault: Vault,
+	localPath: string
+): Vault => {
+	return {
+		...vault,
+		storageType: 'local' as const,
+		providerId: undefined,
+		cloudMetadata: undefined,
+		path: localPath,
+	}
+}
 
 export default vaultSlice.reducer

@@ -2,10 +2,12 @@ import { open } from "@tauri-apps/plugin-dialog";
 import * as path from '@tauri-apps/api/path';
 import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { addVault, updateVault, type Vault } from '../../../redux/actions/vault';
 import VaultCommands from '../../../services/commands';
+import { VaultManager } from '../../../services/vault';
 import { isMobile } from '../../../utils/platform';
+import type { RootState } from '../../../redux/store';
 
 interface AddVaultFormProps {
   onSuccess: () => void;
@@ -21,16 +23,38 @@ export const AddVaultForm = ({ onSuccess, onCancel, vault }: AddVaultFormProps) 
   const [vaultName, setVaultName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [storageType, setStorageType] = useState<'local' | 'cloud'>('local');
+  const [providerId, setProviderId] = useState<string>('');
   const mobile = useMemo(() => isMobile(), []);
   const isEditMode = !!vault;
+
+  // Get providers and their status from Redux
+  const { providers, providerStatus } = useSelector((state: RootState) => ({
+    providers: state.vault.providers,
+    providerStatus: state.vault.providerStatus
+  }));
+  
+  // Filter to only show authenticated providers
+  const authenticatedProviders = providers.filter(provider =>
+    providerStatus[provider.name] === 'authenticated'
+  );
 
   // Prefill form when editing
   useEffect(() => {
     if (vault) {
       setVaultName(vault.name);
       setFilePath(vault.path);
+      setStorageType(vault.storageType || 'local');
+      setProviderId(vault.providerId || '');
     }
   }, [vault]);
+
+  // Reset provider when switching storage type
+  useEffect(() => {
+    if (storageType === 'local') {
+      setProviderId('');
+    }
+  }, [storageType]);
 
   const generateVaultId = () => {
     return crypto.randomUUID();
@@ -47,36 +71,41 @@ export const AddVaultForm = ({ onSuccess, onCancel, vault }: AddVaultFormProps) 
       return;
     }
 
+    // Additional validation for cloud storage
+    if (storageType === 'cloud' && !providerId) {
+      setError(t('vaultSelector.missingProvider'));
+      return;
+    }
+
     setError('');
     setLoading(true);
 
     try {
-      const filepath = await path.join(
-        filePath || (await path.appDataDir()),
-        `${vaultName}.monark`
-      );
-      const initialContent = {
-        updated_at: new Date().toISOString(),
-        hmac: '',
-        entries: [],
-      };
-      await VaultCommands.write(filepath, password, initialContent);
+      let vaultId: string;
 
-      const newVault: Vault = {
-        id: generateVaultId(),
-        name: vaultName,
-        path: filepath,
-        lastAccessed: new Date().toISOString(),
-        isLocked: false,
-        volatile: {
-          credential: password,
-          entries: [],
-          navigationPath: '/',
-          encryptedData: undefined,
-        },
-      };
+      if (storageType === 'cloud') {
+        // Create cloud vault using VaultManager
+        vaultId = await VaultManager.getInstance().createVault(
+          vaultName,
+          password,
+          'cloud',
+          providerId
+        );
+      } else {
+        // Create local vault using VaultManager
+        const filepath = await path.join(
+          filePath || (await path.appDataDir()),
+          `${vaultName}.monark`
+        );
+        vaultId = await VaultManager.getInstance().createVault(
+          vaultName,
+          password,
+          'local',
+          undefined,
+          filepath
+        );
+      }
 
-      dispatch(addVault(newVault));
       onSuccess();
     } catch (err) {
       console.error('Error creating vault:', err);
@@ -184,7 +213,73 @@ export const AddVaultForm = ({ onSuccess, onCancel, vault }: AddVaultFormProps) 
           onChange={(e) => setVaultName(e.target.value)}
         />
       </div>
-      {!mobile && (
+
+      {/* Storage Location Selector - Only show in create mode */}
+      {!isEditMode && (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">{t('vaultSelector.storageLocation')}</span>
+          </label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="storageType"
+                className="radio radio-primary"
+                checked={storageType === 'local'}
+                onChange={() => setStorageType('local')}
+              />
+              <span>{t('vaultSelector.local')}</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="storageType"
+                className="radio radio-primary"
+                checked={storageType === 'cloud'}
+                onChange={() => setStorageType('cloud')}
+              />
+              <span>{t('vaultSelector.cloud')}</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud Provider Selector - Only show for cloud storage */}
+      {!isEditMode && storageType === 'cloud' && (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">{t('vaultSelector.selectProvider')}</span>
+          </label>
+          {authenticatedProviders.length > 0 ? (
+            <select
+              className="select select-bordered"
+              value={providerId}
+              onChange={(e) => setProviderId(e.target.value)}
+            >
+              <option value="">{t('vaultSelector.selectProvider')}</option>
+              {authenticatedProviders.map((provider) => (
+                <option key={provider.name} value={provider.name}>
+                  {provider.name} ({provider.providerType})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="alert alert-warning">
+              <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p>{t('vaultSelector.noProvidersConfigured')}</p>
+                <p className="text-sm opacity-80">{t('vaultSelector.goToSettings')}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* File Path - Only show for local storage and not on mobile */}
+      {!isEditMode && !mobile && storageType === 'local' && (
         <div className="form-control">
           <label className="label">
             <span className="label-text">{t('addVault.filePath')}</span>
@@ -196,23 +291,33 @@ export const AddVaultForm = ({ onSuccess, onCancel, vault }: AddVaultFormProps) 
               className="input input-bordered join-item flex-1"
               value={filePath}
               onChange={(e) => setFilePath(e.target.value)}
-              disabled={isEditMode} // Disable file path editing in edit mode
             />
-            {!isEditMode && (
-              <button
-                className="btn join-item"
-                onClick={handleSelectFile}
-                type="button"
-              >
-                {t('addVault.browse')}
-              </button>
-            )}
+            <button
+              className="btn join-item"
+              onClick={handleSelectFile}
+              type="button"
+            >
+              {t('addVault.browse')}
+            </button>
           </div>
-          {isEditMode && (
-            <div className="text-xs text-base-content opacity-60 mt-1">
-              {t('editVault.filePathHelp')}
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* Edit mode file path display */}
+      {isEditMode && (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">{t('addVault.filePath')}</span>
+          </label>
+          <input
+            type="text"
+            className="input input-bordered"
+            value={vault?.path || ''}
+            disabled
+          />
+          <div className="text-xs text-base-content opacity-60 mt-1">
+            {t('editVault.filePathHelp')}
+          </div>
         </div>
       )}
 

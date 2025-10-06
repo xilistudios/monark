@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import VaultSelector from '../components/Vault/VaultSelector';
@@ -11,7 +11,8 @@ import { ImportCsvModal } from '../components/Vault/Modals/ImportCsvModal';
 import { AddVaultModal } from '../components/Vault/Modals/AddVaultModal';
 import { EditVaultModal } from '../components/Vault/Modals/EditVaultModal';
 import { DeleteVaultModal } from '../components/Vault/Modals/DeleteVaultModal';
-import { deleteVault, type Vault } from '../redux/actions/vault';
+import { AddProviderModal } from '../components/Vault/Modals/AddProviderModal';
+import { deleteVault, type Vault, isCloudVault } from '../redux/actions/vault';
 import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
 import {
   lockVault,
@@ -19,6 +20,7 @@ import {
   setVaultLocked,
 } from '../redux/actions/vault';
 import { VaultManager } from '../services/vault';
+import { store } from '../redux/store';
 import type { AppDispatch, RootState } from '../redux/store';
 import { useContext } from 'react';
 import { VaultModalContext } from '../components/Vault/VaultContext';
@@ -46,6 +48,7 @@ function HomeScreen() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [cloudUnlockMessage, setCloudUnlockMessage] = useState('');
 
   const context = useContext(VaultModalContext);
   if (!context)
@@ -57,7 +60,45 @@ function HomeScreen() {
     isAddVaultModalOpen,
     openAddVaultModal,
     closeAddVaultModal,
+    isAddProviderModalOpen,
+    closeAddProviderModal,
   } = context;
+
+  // Initialize VaultManager and load providers on app start
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        const vaultManager = VaultManager.getInstance();
+        
+        // Initialize VaultManager with Redux dispatch and getState
+        vaultManager.initialize(dispatch, () => store.getState());
+        
+        // Load storage providers
+        await vaultManager.loadProviders();
+        
+        // Refresh cloud vaults
+        await vaultManager.refreshCloudVaults();
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+      }
+    };
+
+    initializeApp();
+  }, [dispatch]);
+
+  // Set up periodic cloud vault refresh (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const vaultManager = VaultManager.getInstance();
+        await vaultManager.refreshCloudVaults();
+      } catch (error) {
+        console.error('Failed to refresh cloud vaults:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, []);
 
   const currentPath = parseNavigationPath(navigationPath);
 
@@ -77,6 +118,12 @@ function HomeScreen() {
     }
     setLoading(true);
     setUnlockError('');
+    
+    // Show cloud-specific message if it's a cloud vault
+    if (isCloudVault(currentVault)) {
+      setCloudUnlockMessage(t('vaultSelector.downloadingFromCloud'));
+    }
+    
     try {
       const vaultInstance = VaultManager.getInstance().getInstance(
         currentVault.id
@@ -89,8 +136,10 @@ function HomeScreen() {
         );
       }
       setPassword('');
+      setCloudUnlockMessage('');
     } catch (err) {
       setUnlockError(t('errors.unlockFailed'));
+      setCloudUnlockMessage('');
     } finally {
       setLoading(false);
     }
@@ -170,12 +219,14 @@ function HomeScreen() {
         currentVault={{
           id: currentVault.id,
           name: currentVault.name,
+          isCloudVault: isCloudVault(currentVault),
         }}
         password={password}
         setPassword={setPassword}
         handleUnlockVault={handleUnlockVault}
         unlockError={unlockError || (typeof error === 'string' ? error : '')}
         loading={loading}
+        cloudUnlockMessage={cloudUnlockMessage}
         t={t}
       />
     );
@@ -253,6 +304,10 @@ function HomeScreen() {
         vault={vaultToDelete}
         onConfirm={handleConfirmDelete}
         deleting={deleting}
+      />
+      <AddProviderModal
+        isOpen={isAddProviderModalOpen}
+        onClose={() => closeAddProviderModal()}
       />
     </div>
   );

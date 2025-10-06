@@ -36,11 +36,15 @@ export const selectVaultStatus = createSelector(
 	})
 )
 
-// Type-safe accessors for vault properties
-export const selectVaultProperty = <K extends keyof Vault>(
-	state: RootState,
-	key: K
-): Vault[K] | undefined => {
-	const vault = selectCurrentVault(state)
-	return vault ? vault[key] : undefined
-}
+// Cloud storage selectors
+export const selectProviders = (state: RootState) =>
+	state.vault.providers
+
+export const selectDefaultProvider = (state: RootState) =>
+	state.vault.defaultProvider
+
+export const selectProviderStatus = (state: RootState) =>
+	state.vault.providerStatus
+
+export const selectVaultLoading = (state: RootState) =>
+	state.vault.loading

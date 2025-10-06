@@ -236,3 +236,4 @@ This comprehensive guide outlines best practices, conventions, and standards for
 * After you finished some code functionality, create a subtask with tester mode to write unit test
 * Always use memory mode with a subtask to retrieve relevant project information before starting any coding task
 * When implementing features or fixing bugs, create a subtask using memory mode to understand the existing codebase context and architectural decisions
+* When you mark the task as finished you must include all files you modified

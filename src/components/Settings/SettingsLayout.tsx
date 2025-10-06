@@ -9,8 +9,9 @@ import { useTranslation } from 'react-i18next';
 import AppearanceSettings from './AppearanceSettings';
 import GeneralSettings from './GeneralSettings';
 import ResetSection from './ResetSection';
+import { CloudStorageSettings } from './CloudStorageSettings';
 
-type SettingsTab = 'general' | 'appearance' | 'reset';
+type SettingsTab = 'general' | 'appearance' | 'cloudStorage' | 'reset';
 
 interface TabConfig {
   id: SettingsTab;
@@ -35,6 +36,12 @@ function SettingsLayout() {
       label: t('appearance', 'Appearance'),
       icon: '🎨',
       component: AppearanceSettings,
+    },
+    {
+      id: 'cloudStorage',
+      label: t('cloudStorage.title', 'Cloud Storage'),
+      icon: '☁️',
+      component: CloudStorageSettings,
     },
     {
       id: 'reset',

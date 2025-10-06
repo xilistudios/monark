@@ -67,6 +67,78 @@
       "night": "Night",
       "coffee": "Coffee",
       "winter": "Winter"
+    },
+    "cloudStorage": {
+      "title": "Cloud Storage",
+      "description": "Manage your cloud storage providers",
+      "addProvider": "Add Provider",
+      "noProviders": "No cloud storage providers configured",
+      "googleDrive": "Google Drive",
+      "authenticated": "Authenticated",
+      "notAuthenticated": "Not Authenticated",
+      "authenticating": "Authenticating...",
+      "setAsDefault": "Set as Default",
+      "remove": "Remove",
+      "authenticate": "Authenticate",
+      "defaultProvider": "Default Provider",
+      "confirmRemove": "Are you sure you want to remove this provider?",
+      "addProviderHint": "Add a provider to start using cloud storage for your vaults",
+      "error": "Error",
+      "oauth": {
+        "title": "Authenticate {{provider}}",
+        "description": "Follow these steps to authenticate your cloud storage provider:",
+        "stepsTitle": "Authentication Steps:",
+        "step1": "Click the button below to open the authentication page in your browser",
+        "step2": "Sign in with your {{provider}} account",
+        "step3": "Grant permission to access your files",
+        "step4": "You will be redirected back to the application automatically",
+        "openBrowser": "Open Authentication Page",
+        "opening": "Opening browser...",
+        "copyUrl": "Copy URL",
+        "cancel": "Cancel",
+        "browserOpened": "Browser opened",
+        "waitForRedirect": "Complete the authentication in your browser. You will be redirected back automatically.",
+        "browserError": "Failed to open browser",
+        "troubleshooting": "Troubleshooting",
+        "troubleshooting1": "If the browser doesn't open automatically, copy the URL and paste it manually.",
+        "troubleshooting2": "Make sure pop-ups are allowed for this application.",
+        "troubleshooting3": "If authentication fails, try again or contact support."
+      },
+      "help": {
+        "title": "Help & Documentation",
+        "gettingStarted": "Getting Started",
+        "gettingStartedText": "To use cloud storage, you need to configure OAuth credentials for your cloud provider.",
+        "googleDrive": "Google Drive Setup",
+        "googleStep1": "Go to Google Cloud Console",
+        "googleStep2": "Create a new project or select an existing one",
+        "googleStep3": "Enable the Google Drive API",
+        "googleStep4": "Create OAuth 2.0 credentials",
+        "googleStep5": "Add the redirect URI to your OAuth consent screen",
+        "security": "Security Notes",
+        "securityText": "Your credentials are stored locally and encrypted. Never share your client secrets with others."
+      }
+    },
+    "addProvider": {
+      "title": "Add Storage Provider",
+      "providerName": "Provider Name",
+      "providerNamePlaceholder": "My Google Drive",
+      "providerType": "Provider Type",
+      "clientId": "Client ID",
+      "clientIdPlaceholder": "Your Google OAuth Client ID",
+      "clientSecret": "Client Secret",
+      "clientSecretPlaceholder": "Your Google OAuth Client Secret",
+      "redirectUri": "Redirect URI",
+      "redirectUriHelp": "This URI must be configured in your Google Cloud Console",
+      "add": "Add Provider",
+      "adding": "Adding...",
+      "cancel": "Cancel",
+      "errors": {
+        "providerNameRequired": "Provider name is required",
+        "clientIdRequired": "Client ID is required",
+        "clientSecretRequired": "Client Secret is required",
+        "redirectUriRequired": "Redirect URI is required",
+        "addFailed": "Failed to add provider. Please check your credentials."
+      }
     }
   },
   "home": {
@@ -81,7 +153,33 @@
       "lastAccessed": "Last accessed",
       "never": "Never",
       "locked": "Locked",
-      "unlocked": "Unlocked"
+      "unlocked": "Unlocked",
+      "storageLocation": "Storage Location",
+      "local": "Local Storage",
+      "cloud": "Cloud Storage",
+      "selectProvider": "Select Provider",
+      "noProvidersConfigured": "No cloud storage providers configured",
+      "goToSettings": "Go to Settings",
+      "cloudVaultName": "Cloud Vault Name",
+      "importSource": "Import Source",
+      "selectCloudVault": "Select Cloud Vault",
+      "loadingVaults": "Loading cloud vaults...",
+      "noCloudVaults": "No vaults found in cloud storage",
+      "localFile": "Local File",
+      "cloudStorage": "Cloud Storage",
+      "missingProvider": "Please select a cloud storage provider",
+      "cloudVault": "Cloud Vault",
+      "localVault": "Local Vault",
+      "provider": "Provider",
+      "lastSync": "Last Synced",
+      "syncNow": "Sync Now",
+      "syncing": "Syncing...",
+      "syncFailed": "Sync Failed",
+      "migrateToCloud": "Migrate to Cloud",
+      "migrateToLocal": "Migrate to Local",
+      "loadingCloudVaults": "Loading cloud vaults...",
+      "refreshVaults": "Refresh Vaults",
+      "downloadingFromCloud": "Downloading from cloud..."
     },
     "addVault": {
       "title": "Create New Vault",
@@ -144,7 +242,8 @@
       "cancel": "Cancel",
       "errors": {
         "fileDialog": "Error opening file dialog",
-        "importVault": "Error importing vault"
+        "importVault": "Error importing vault",
+        "invalidPassword": "Invalid password or failed to access cloud vault"
       }
     },
     "addEntry": {
@@ -211,7 +310,8 @@
         "password": "Password",
         "passwordPlaceholder": "Enter vault password",
         "unlockButton": "Unlock",
-        "unlocking": "Unlocking..."
+        "unlocking": "Unlocking...",
+        "cloudVaultNotice": "This vault is stored in the cloud. It will be downloaded when unlocked."
       },
       "manager": {
         "addEntry": "Add Entry",
