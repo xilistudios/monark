@@ -50,13 +50,12 @@ export class VaultInstance {
       if (this.vault.storageType === 'cloud' && this.vault.providerId) {
         // Use cloud storage commands for cloud vaults
         const cloudFileId = this.vault.cloudMetadata?.fileId || this.vault.path;
-        // Integration tests (and some callers) mock/read CloudStorageCommands using a positional
-        // signature (vaultId, providerName). Call the positional form so mocked implementations
-        // receive the expected parameters.
-        vaultContent = await CloudStorageCommands.readCloudVault(
-          cloudFileId,
-          this.vault.providerId
-        );
+        // Call with the object form to include the password for decryption
+        vaultContent = await CloudStorageCommands.readCloudVault({
+          vaultId: cloudFileId,
+          password: password,
+          providerName: this.vault.providerId,
+        });
       } else {
         // Use local vault commands for local vaults
         vaultContent = await VaultCommands.read(this.vault.path, password);
@@ -294,8 +293,10 @@ export class VaultInstance {
     // Check if this is a cloud vault
     if (vault.storageType === 'cloud' && vault.providerId) {
       // Use cloud storage commands for cloud vaults
-      // Use write_cloud_vault which handles both create and update
+      // Pass the vault ID (stored in vault.path) to update the existing vault
+      const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
       await CloudStorageCommands.writeCloudVault({
+        vaultId: cloudFileId,
         vaultName: vault.name,
         password: password,
         vaultContent: vaultContent, // Already in snake_case format

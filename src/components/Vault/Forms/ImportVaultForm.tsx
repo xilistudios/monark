@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { addVault, type Vault } from "../../../redux/actions/vault";
 import { VaultManager } from "../../../services/vault";
+import { CloudStorageCommands } from '../../../services/cloudStorage';
 import type { RootState } from "../../../redux/store";
 
 interface ImportVaultFormProps {
@@ -108,21 +109,24 @@ export const ImportVaultForm = ({
     try {
       let vaultPath: string;
       let finalVaultName: string;
+      let cloudVault: Vault | null = null;
 
       if (importSource === 'cloud') {
         // Import cloud vault
-        vaultPath = selectedCloudVault.path; // Use cloud file ID as path
-        finalVaultName = vaultName || selectedCloudVault.name;
+        cloudVault = selectedCloudVault;
+        if (!cloudVault) {
+          throw new Error('No cloud vault selected');
+        }
+        vaultPath = cloudVault.path; // Use cloud file ID as path
+        finalVaultName = vaultName || cloudVault.name;
 
         // Verify the vault can be accessed with the password
         try {
-          const vaultInstance = VaultManager.getInstance().getInstance(
-            selectedCloudVault.id
-          );
-          if (!vaultInstance) {
-            throw new Error('Failed to access cloud vault');
-          }
-          await vaultInstance.unlock(password);
+          await CloudStorageCommands.readCloudVault({
+            vaultId: cloudVault.id,
+            password,
+            providerName: providerId,
+          });
         } catch (unlockError) {
           console.error('Error unlocking cloud vault:', unlockError);
           setError(
@@ -149,9 +153,7 @@ export const ImportVaultForm = ({
         storageType: importSource,
         providerId: importSource === 'cloud' ? providerId : undefined,
         cloudMetadata:
-          importSource === 'cloud'
-            ? selectedCloudVault.cloudMetadata
-            : undefined,
+          importSource === 'cloud' ? cloudVault?.cloudMetadata : undefined,
         volatile: {
           credential: password,
           entries: [],

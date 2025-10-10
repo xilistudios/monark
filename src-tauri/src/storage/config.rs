@@ -1,8 +1,8 @@
+use super::providers::google_drive::GoogleDriveConfig;
+use super::{StorageProviderType, StorageResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use super::{StorageProviderType, StorageResult};
-use super::providers::google_drive::GoogleDriveConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
@@ -14,12 +14,8 @@ pub struct StorageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProviderConfig {
-    Local {
-        base_path: String,
-    },
-    GoogleDrive {
-        config: GoogleDriveConfig,
-    },
+    Local { base_path: String },
+    GoogleDrive { config: GoogleDriveConfig },
 }
 
 impl StorageConfig {
@@ -30,12 +26,15 @@ impl StorageConfig {
         Self {
             providers,
             default_provider: "local".to_string(),
-            vault_folder: "vaults".to_string(),
+            vault_folder: "Monark".to_string(), // Use "Monark" to match existing Google Drive folder structure
         }
     }
 
     pub fn with_google_drive(mut self, config: GoogleDriveConfig) -> Self {
-        self.providers.insert("google_drive".to_string(), ProviderConfig::GoogleDrive { config });
+        self.providers.insert(
+            "google_drive".to_string(),
+            ProviderConfig::GoogleDrive { config },
+        );
         self
     }
 

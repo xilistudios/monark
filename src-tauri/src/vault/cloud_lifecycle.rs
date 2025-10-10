@@ -2,8 +2,8 @@ use crate::commands::errors::CommandError;
 use crate::commands::storage::StorageState;
 use crate::crypto;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
+use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
 use crate::storage::StorageManager;
-use crate::storage::providers::{CreateFileRequest, UpdateFileRequest, StorageFile};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::sync::Arc;
@@ -23,26 +23,69 @@ pub async fn write_cloud_vault(
     vault_content: Vault,
     provider_name: Option<String>,
     parent_id: Option<String>,
+    vault_id: Option<String>,
     state: tauri::State<'_, StorageState>,
 ) -> Result<String, CommandError> {
     let storage_manager = &state.manager;
+
+    // If vault_id is provided, directly update the existing vault
+    if let Some(id) = vault_id {
+        update_existing_cloud_vault(
+            &id,
+            &password,
+            vault_content,
+            provider_name,
+            storage_manager,
+        )
+        .await?;
+        return Ok(id);
+    }
 
     // Use provided parent_id or ensure default vault folder exists
     let vault_folder_id = if let Some(pid) = parent_id {
         pid
     } else {
-        storage_manager.ensure_vault_folder(provider_name.clone()).await
+        storage_manager
+            .ensure_vault_folder(provider_name.clone())
+            .await
             .map_err(|e| CommandError::Io(format!("Failed to ensure vault folder: {}", e)))?
     };
 
     let vault_file_name = format!("{}.{}", vault_name, VAULT_EXTENSION);
-    let vault_path = format!("/vaults/{}", vault_file_name);
 
-    // Check if vault already exists
-    let existing_vaults = storage_manager.list_vaults(provider_name.clone()).await
+    // Get the vault folder name from config for the path
+    let vault_folder_name = {
+        let config = storage_manager.get_config().await;
+        config.vault_folder.clone()
+    };
+    let vault_path = format!("/{}/{}", vault_folder_name, vault_file_name);
+
+    // Check if vault already exists by filename (for backwards compatibility)
+    println!(
+        "[write_cloud_vault] Checking for existing vaults with name: '{}'",
+        vault_file_name
+    );
+    let existing_vaults = storage_manager
+        .list_vaults(provider_name.clone())
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))?;
 
+    println!(
+        "[write_cloud_vault] Found {} existing vaults",
+        existing_vaults.len()
+    );
+    for (i, vault) in existing_vaults.iter().enumerate() {
+        println!(
+            "[write_cloud_vault]   [{}] name='{}', id='{}'",
+            i, vault.name, vault.id
+        );
+    }
+
     if let Some(existing_vault) = existing_vaults.iter().find(|v| v.name == vault_file_name) {
+        println!(
+            "[write_cloud_vault] Found existing vault with matching name, updating: id='{}'",
+            existing_vault.id
+        );
         // Update existing vault
         update_existing_cloud_vault(
             &existing_vault.id,
@@ -50,9 +93,14 @@ pub async fn write_cloud_vault(
             vault_content,
             provider_name,
             storage_manager,
-        ).await?;
+        )
+        .await?;
         Ok(existing_vault.id.clone())
     } else {
+        println!(
+            "[write_cloud_vault] No existing vault found with name '{}', creating new vault",
+            vault_file_name
+        );
         // Create new vault
         create_new_cloud_vault(
             &vault_file_name,
@@ -62,7 +110,8 @@ pub async fn write_cloud_vault(
             Some(vault_folder_id),
             provider_name,
             storage_manager,
-        ).await
+        )
+        .await
     }
 }
 
@@ -75,7 +124,9 @@ pub async fn read_cloud_vault(
 ) -> Result<Vault, CommandError> {
     let storage_manager = &state.manager;
 
-    let vault_data = storage_manager.read_file(vault_id.clone(), provider_name).await
+    let vault_data = storage_manager
+        .read_file(vault_id.clone(), provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to read vault file: {}", e)))?;
 
     let vault_file = parse_vault_from_bytes(&vault_data)?;
@@ -105,7 +156,9 @@ pub async fn delete_cloud_vault(
 ) -> Result<(), CommandError> {
     let storage_manager = &state.manager;
 
-    storage_manager.delete_file(vault_id, provider_name).await
+    storage_manager
+        .delete_file(vault_id, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to delete vault: {}", e)))?;
     Ok(())
 }
@@ -117,7 +170,9 @@ pub async fn list_cloud_vaults(
 ) -> Result<Vec<StorageFile>, CommandError> {
     let storage_manager = &state.manager;
 
-    storage_manager.list_vaults(provider_name).await
+    storage_manager
+        .list_vaults(provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))
 }
 
@@ -188,7 +243,9 @@ async fn create_new_cloud_vault(
         metadata: None,
     };
 
-    let created_file = storage_manager.create_file(create_request, provider_name).await
+    let created_file = storage_manager
+        .create_file(create_request, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to create vault file: {}", e)))?;
 
     Ok(created_file.id)
@@ -201,7 +258,9 @@ async fn update_existing_cloud_vault(
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<(), CommandError> {
-    let vault_data = storage_manager.read_file(vault_id.to_string(), provider_name.clone()).await
+    let vault_data = storage_manager
+        .read_file(vault_id.to_string(), provider_name.clone())
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to read existing vault: {}", e)))?;
 
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
@@ -225,7 +284,9 @@ async fn update_existing_cloud_vault(
         metadata: None,
     };
 
-    storage_manager.update_file(update_request, provider_name).await
+    storage_manager
+        .update_file(update_request, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to update vault file: {}", e)))?;
 
     Ok(())
@@ -242,7 +303,9 @@ fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> 
     // Base64 decode the content
     let decoded_content = URL_SAFE_NO_PAD
         .decode(&parsed_content.content)
-        .map_err(|e| CommandError::Crypto(format!("Failed to base64 decode vault content: {}", e)))?;
+        .map_err(|e| {
+            CommandError::Crypto(format!("Failed to base64 decode vault content: {}", e))
+        })?;
 
     // Deserialize into VaultFile
     serde_json::from_slice(&decoded_content)

@@ -236,19 +236,19 @@ describe('Cloud Storage Interfaces', () => {
 	describe('CloudVaultMetadata', () => {
 		it('should create valid cloud vault metadata', () => {
 			const metadata: CloudVaultMetadata = {
-				id: 'vault-1',
-				name: 'test-vault.monark',
-				providerName: 'google-drive',
-				providerType: StorageProviderType.GOOGLE_DRIVE,
-				size: 1024,
-				createdAt: '2023-01-01T00:00:00Z',
-				modifiedAt: '2023-01-01T00:00:00Z',
-				path: '/vaults/test-vault.monark',
-				isFolder: false,
-				mimeType: 'application/octet-stream',
-				parentId: 'folder-1',
-				metadata: { key: 'value' }
-			};
+        id: 'vault-1',
+        name: 'test-vault.monark',
+        providerName: 'google-drive',
+        providerType: StorageProviderType.GOOGLE_DRIVE,
+        size: 1024,
+        createdAt: '2023-01-01T00:00:00Z',
+        modifiedAt: '2023-01-01T00:00:00Z',
+        path: '/Monark/test-vault.monark',
+        isFolder: false,
+        mimeType: 'application/octet-stream',
+        parentId: 'folder-1',
+        metadata: { key: 'value' },
+      };
 
 			expect(metadata.id).toBe('vault-1');
 			expect(metadata.name).toBe('test-vault.monark');

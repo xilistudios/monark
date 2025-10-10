@@ -1,15 +1,15 @@
-pub mod providers;
-pub mod manager;
-pub mod error;
 pub mod config;
+pub mod error;
+pub mod manager;
+pub mod providers;
 
 #[cfg(test)]
 mod tests;
 
-pub use providers::{StorageProvider, StorageProviderType};
-pub use manager::StorageManager;
+pub use config::{ProviderConfig, StorageConfig};
 pub use error::{StorageError, StorageResult};
-pub use config::{StorageConfig, ProviderConfig};
+pub use manager::StorageManager;
+pub use providers::{StorageProvider, StorageProviderType};
 
 use std::sync::Arc;
 
@@ -17,5 +17,9 @@ use std::sync::Arc;
 pub async fn init_storage_manager() -> Arc<StorageManager> {
     // Try to load config from disk, fallback to default if not found
     let config = StorageConfig::load().unwrap_or_default();
-    Arc::new(StorageManager::new(config).await.expect("Failed to initialize storage manager"))
+    Arc::new(
+        StorageManager::new(config)
+            .await
+            .expect("Failed to initialize storage manager"),
+    )
 }

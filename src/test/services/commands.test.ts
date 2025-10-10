@@ -165,21 +165,21 @@ describe('VaultCommands', () => {
 
 		it('should list cloud vaults successfully', async () => {
 			const mockVaults: CloudVaultMetadata[] = [
-				{
-					id: 'vault-1',
-					name: 'test-vault.monark',
-					providerName: 'google-drive',
-					providerType: 'google_drive' as any,
-					size: 1024,
-					createdAt: '2023-01-01T00:00:00Z',
-					modifiedAt: '2023-01-01T00:00:00Z',
-					path: '/vaults/test-vault.monark',
-					isFolder: false,
-					mimeType: 'application/octet-stream',
-					parentId: 'folder-1',
-					metadata: {}
-				}
-			];
+        {
+          id: 'vault-1',
+          name: 'test-vault.monark',
+          providerName: 'google-drive',
+          providerType: 'google_drive' as any,
+          size: 1024,
+          createdAt: '2023-01-01T00:00:00Z',
+          modifiedAt: '2023-01-01T00:00:00Z',
+          path: '/Monark/test-vault.monark',
+          isFolder: false,
+          mimeType: 'application/octet-stream',
+          parentId: 'folder-1',
+          metadata: {},
+        },
+      ];
 
 			mockInvoke.mockResolvedValue(mockVaults);
 

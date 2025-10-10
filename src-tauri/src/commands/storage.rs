@@ -1,11 +1,13 @@
 use crate::commands::errors::CommandError;
-use crate::storage::{StorageManager, StorageConfig, ProviderConfig};
-use crate::storage::providers::{CreateFileRequest, UpdateFileRequest, CreateFolderRequest, StorageFile};
 use crate::storage::providers::google_drive::GoogleDriveConfig;
+use crate::storage::providers::{
+    CreateFileRequest, CreateFolderRequest, StorageFile, UpdateFileRequest,
+};
+use crate::storage::{ProviderConfig, StorageConfig, StorageManager};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
-use chrono::Utc;
 
 // Global state for storage manager
 pub struct StorageState {
@@ -87,11 +89,17 @@ impl From<CreateFolderRequestDto> for CreateFolderRequest {
 // Initialize storage manager
 pub async fn init_storage_manager() -> Arc<StorageManager> {
     let config = StorageConfig::default();
-    Arc::new(StorageManager::new(config).await.expect("Failed to initialize storage manager"))
+    Arc::new(
+        StorageManager::new(config)
+            .await
+            .expect("Failed to initialize storage manager"),
+    )
 }
 
 #[tauri::command]
-pub async fn list_providers(state: State<'_, StorageState>) -> Result<Vec<ProviderInfo>, CommandError> {
+pub async fn list_providers(
+    state: State<'_, StorageState>,
+) -> Result<Vec<ProviderInfo>, CommandError> {
     let providers = state.manager.list_providers().await;
     let default_provider = state.manager.get_default_provider().await;
 
@@ -120,7 +128,10 @@ pub async fn add_provider(
     request: AddProviderRequest,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    state.manager.add_provider(request.name, request.config).await
+    state
+        .manager
+        .add_provider(request.name, request.config)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to add provider: {}", e)))?;
     Ok(())
 }
@@ -130,7 +141,10 @@ pub async fn remove_provider(
     name: String,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    state.manager.remove_provider(&name).await
+    state
+        .manager
+        .remove_provider(&name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to remove provider: {}", e)))?;
     Ok(())
 }
@@ -140,7 +154,10 @@ pub async fn set_default_provider(
     name: String,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    state.manager.set_default_provider(name).await
+    state
+        .manager
+        .set_default_provider(name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to set default provider: {}", e)))?;
     Ok(())
 }
@@ -150,7 +167,10 @@ pub async fn authenticate_provider(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    state.manager.authenticate(provider_name).await
+    state
+        .manager
+        .authenticate(provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to authenticate provider: {}", e)))?;
     Ok(())
 }
@@ -184,7 +204,10 @@ pub async fn list_files(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<Vec<StorageFile>, CommandError> {
-    state.manager.list_files(folder_id, provider_name).await
+    state
+        .manager
+        .list_files(folder_id, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to list files: {}", e)))
 }
 
@@ -195,7 +218,10 @@ pub async fn create_file(
     state: State<'_, StorageState>,
 ) -> Result<StorageFile, CommandError> {
     let create_request = CreateFileRequest::from(request);
-    state.manager.create_file(create_request, provider_name).await
+    state
+        .manager
+        .create_file(create_request, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to create file: {}", e)))
 }
 
@@ -205,7 +231,10 @@ pub async fn read_file(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<Vec<u8>, CommandError> {
-    state.manager.read_file(file_id, provider_name).await
+    state
+        .manager
+        .read_file(file_id, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to read file: {}", e)))
 }
 
@@ -215,7 +244,10 @@ pub async fn delete_file(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    state.manager.delete_file(file_id, provider_name).await
+    state
+        .manager
+        .delete_file(file_id, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to delete file: {}", e)))?;
     Ok(())
 }
@@ -227,7 +259,10 @@ pub async fn update_file(
     state: State<'_, StorageState>,
 ) -> Result<StorageFile, CommandError> {
     let update_request = UpdateFileRequest::from(request);
-    state.manager.update_file(update_request, provider_name).await
+    state
+        .manager
+        .update_file(update_request, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to update file: {}", e)))
 }
 
@@ -238,7 +273,10 @@ pub async fn create_folder(
     state: State<'_, StorageState>,
 ) -> Result<StorageFile, CommandError> {
     let create_request = CreateFolderRequest::from(request);
-    state.manager.create_folder(create_request, provider_name).await
+    state
+        .manager
+        .create_folder(create_request, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to create folder: {}", e)))
 }
 
@@ -248,7 +286,10 @@ pub async fn delete_folder(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    state.manager.delete_folder(folder_id, provider_name).await
+    state
+        .manager
+        .delete_folder(folder_id, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to delete folder: {}", e)))?;
     Ok(())
 }
@@ -259,7 +300,10 @@ pub async fn get_file_info(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<StorageFile, CommandError> {
-    state.manager.get_file_info(file_id, provider_name).await
+    state
+        .manager
+        .get_file_info(file_id, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to get file info: {}", e)))
 }
 
@@ -269,7 +313,10 @@ pub async fn search_files(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<Vec<StorageFile>, CommandError> {
-    state.manager.search_files(query, provider_name).await
+    state
+        .manager
+        .search_files(query, provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to search files: {}", e)))
 }
 
@@ -278,7 +325,10 @@ pub async fn list_vaults(
     provider_name: Option<String>,
     state: State<'_, StorageState>,
 ) -> Result<Vec<StorageFile>, CommandError> {
-    state.manager.list_vaults(provider_name).await
+    state
+        .manager
+        .list_vaults(provider_name)
+        .await
         .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))
 }
 
@@ -295,7 +345,8 @@ pub async fn get_google_drive_oauth_url(
 ) -> Result<OAuthUrlResponse, CommandError> {
     // Get the provider config
     let config = state.manager.get_config().await;
-    let provider_config = config.get_provider_config(&provider_name)
+    let provider_config = config
+        .get_provider_config(&provider_name)
         .ok_or_else(|| CommandError::Io("Provider not found".to_string()))?;
 
     match provider_config {
@@ -334,12 +385,17 @@ pub async fn handle_google_drive_oauth_callback(
     request: OAuthCallbackRequest,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
-    println!("OAuth callback received: provider={}, code={}, state={}",
-        request.provider_name, &request.code[..10.min(request.code.len())], request.state);
+    println!(
+        "OAuth callback received: provider={}, code={}, state={}",
+        request.provider_name,
+        &request.code[..10.min(request.code.len())],
+        request.state
+    );
 
     // Get the provider config
     let config = state.manager.get_config().await;
-    let provider_config = config.get_provider_config(&request.provider_name)
+    let provider_config = config
+        .get_provider_config(&request.provider_name)
         .ok_or_else(|| {
             println!("Provider not found: {}", request.provider_name);
             CommandError::Io("Provider not found".to_string())
@@ -353,7 +409,10 @@ pub async fn handle_google_drive_oauth_callback(
         }
     };
 
-    println!("Exchanging code for tokens with redirect_uri: {}", gd_config.redirect_uri);
+    println!(
+        "Exchanging code for tokens with redirect_uri: {}",
+        gd_config.redirect_uri
+    );
 
     // Exchange authorization code for tokens
     let client = reqwest::Client::new();
@@ -379,10 +438,15 @@ pub async fn handle_google_drive_oauth_callback(
     println!("Token exchange response status: {}", status);
 
     if !status.is_success() {
-        let error_text = response.text().await
+        let error_text = response
+            .text()
+            .await
             .unwrap_or_else(|_| "Unknown error".to_string());
         println!("Token exchange failed: {}", error_text);
-        return Err(CommandError::Io(format!("Token exchange failed: {}", error_text)));
+        return Err(CommandError::Io(format!(
+            "Token exchange failed: {}",
+            error_text
+        )));
     }
 
     #[derive(Deserialize)]
@@ -392,13 +456,15 @@ pub async fn handle_google_drive_oauth_callback(
         expires_in: u64,
     }
 
-    let token_response: TokenResponse = response.json().await
-        .map_err(|e| {
-            println!("Failed to parse token response: {}", e);
-            CommandError::Io(format!("Failed to parse token response: {}", e))
-        })?;
+    let token_response: TokenResponse = response.json().await.map_err(|e| {
+        println!("Failed to parse token response: {}", e);
+        CommandError::Io(format!("Failed to parse token response: {}", e))
+    })?;
 
-    println!("Tokens received successfully, expires_in: {}", token_response.expires_in);
+    println!(
+        "Tokens received successfully, expires_in: {}",
+        token_response.expires_in
+    );
 
     // Update the provider config with the new tokens
     let new_config = GoogleDriveConfig {
@@ -407,11 +473,16 @@ pub async fn handle_google_drive_oauth_callback(
         redirect_uri: gd_config.redirect_uri,
         access_token: Some(token_response.access_token),
         refresh_token: token_response.refresh_token,
-        token_expires_at: Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64)),
+        token_expires_at: Some(
+            Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64),
+        ),
     };
 
     // Update the configuration
-    state.manager.update_google_drive_config(&request.provider_name, new_config).await
+    state
+        .manager
+        .update_google_drive_config(&request.provider_name, new_config)
+        .await
         .map_err(|e| {
             println!("Failed to update provider config: {}", e);
             CommandError::Io(format!("Failed to update provider config: {}", e))

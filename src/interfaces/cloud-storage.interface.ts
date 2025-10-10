@@ -136,12 +136,13 @@ export interface CloudVaultOperation {
  * Request to create a new cloud vault
  */
 export interface CreateCloudVaultRequest extends CloudVaultOperation {
-	vaultName: string;
-	vaultContent: {
-		updatedAt: string;
-		hmac: string;
-		entries: any[];
-	};
+  vaultName: string;
+  vaultContent: {
+    updatedAt: string;
+    hmac: string;
+    entries: any[];
+  };
+  parentId?: string;
 }
 
 /**

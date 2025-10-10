@@ -1,9 +1,12 @@
-use super::{StorageProvider, StorageProviderType, StorageFile, CreateFileRequest, UpdateFileRequest, CreateFolderRequest};
+use super::{
+    CreateFileRequest, CreateFolderRequest, StorageFile, StorageProvider, StorageProviderType,
+    UpdateFileRequest,
+};
 use crate::storage::{StorageError, StorageResult};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 
 const GOOGLE_DRIVE_API_BASE: &str = "https://www.googleapis.com/drive/v3";
 const GOOGLE_DRIVE_UPLOAD_API_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
@@ -33,6 +36,7 @@ struct OAuthTokenResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct GoogleDriveFile {
     id: String,
     name: String,
@@ -45,6 +49,7 @@ struct GoogleDriveFile {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct GoogleDriveFileList {
     files: Vec<GoogleDriveFile>,
     next_page_token: Option<String>,
@@ -78,7 +83,9 @@ impl GoogleDriveProvider {
     }
 
     pub fn is_token_expired(&self) -> bool {
-        if let (Some(_token), Some(expires_at)) = (&self.config.access_token, &self.config.token_expires_at) {
+        if let (Some(_token), Some(expires_at)) =
+            (&self.config.access_token, &self.config.token_expires_at)
+        {
             Utc::now() >= *expires_at - chrono::Duration::minutes(5)
         } else {
             true
@@ -94,7 +101,10 @@ impl GoogleDriveProvider {
     }
 
     pub async fn refresh_access_token(&mut self) -> StorageResult<()> {
-        let refresh_token = self.config.refresh_token.as_ref()
+        let refresh_token = self
+            .config
+            .refresh_token
+            .as_ref()
             .ok_or_else(|| StorageError::authentication("No refresh token available"))?;
 
         let params = [
@@ -104,7 +114,8 @@ impl GoogleDriveProvider {
             ("grant_type", "refresh_token"),
         ];
 
-        let response = self.client
+        let response = self
+            .client
             .post("https://oauth2.googleapis.com/token")
             .form(&params)
             .send()
@@ -113,18 +124,24 @@ impl GoogleDriveProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let error_text = response.text().await
+            let error_text = response
+                .text()
+                .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(StorageError::authentication(
-                format!("Failed to refresh access token ({}): {}", status, error_text)
-            ));
+            return Err(StorageError::authentication(format!(
+                "Failed to refresh access token ({}): {}",
+                status, error_text
+            )));
         }
 
-        let token_response: OAuthTokenResponse = response.json().await
+        let token_response: OAuthTokenResponse = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse token response: {}", e)))?;
 
         self.config.access_token = Some(token_response.access_token.clone());
-        self.config.token_expires_at = Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
+        self.config.token_expires_at =
+            Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
 
         if let Some(refresh_token) = token_response.refresh_token {
             self.config.refresh_token = Some(refresh_token);
@@ -134,16 +151,24 @@ impl GoogleDriveProvider {
     }
 
     fn get_auth_headers(&self) -> StorageResult<HashMap<String, String>> {
-        let access_token = self.config.access_token.as_ref()
+        let access_token = self
+            .config
+            .access_token
+            .as_ref()
             .ok_or_else(|| StorageError::authentication("No access token available"))?;
 
         let mut headers = HashMap::new();
-        headers.insert("Authorization".to_string(), format!("Bearer {}", access_token));
+        headers.insert(
+            "Authorization".to_string(),
+            format!("Bearer {}", access_token),
+        );
         Ok(headers)
     }
 
     fn google_file_to_storage_file(&self, google_file: GoogleDriveFile) -> StorageFile {
-        let is_folder = google_file.mime_type.as_ref()
+        let is_folder = google_file
+            .mime_type
+            .as_ref()
             .map_or(false, |mime| mime == "application/vnd.google-apps.folder");
 
         let path = if let Some(parents) = &google_file.parents {
@@ -182,19 +207,24 @@ impl StorageProvider for GoogleDriveProvider {
 
     async fn authenticate(&mut self) -> StorageResult<()> {
         if self.config.access_token.is_none() {
-            return Err(StorageError::authentication("No access token - OAuth flow required"));
+            return Err(StorageError::authentication(
+                "No access token - OAuth flow required",
+            ));
         }
 
         self.ensure_valid_token().await?;
 
         let headers = self.get_auth_headers()?;
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/about", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[("fields", "user")])
             .send()
             .await
-            .map_err(|e| StorageError::network(format!("Failed to verify authentication: {}", e)))?;
+            .map_err(|e| {
+                StorageError::network(format!("Failed to verify authentication: {}", e))
+            })?;
 
         if response.status().is_success() {
             Ok(())
@@ -207,7 +237,10 @@ impl StorageProvider for GoogleDriveProvider {
         self.config.access_token.is_some() && !self.is_token_expired()
     }
 
-    async fn list_files(&self, folder_id: Option<String>) -> StorageResult<Vec<StorageFile>> {
+    async fn list_files(&mut self, folder_id: Option<String>) -> StorageResult<Vec<StorageFile>> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
         let query = if let Some(folder_id) = folder_id {
@@ -216,12 +249,16 @@ impl StorageProvider for GoogleDriveProvider {
             "'root' in parents and trashed=false".to_string()
         };
 
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[
                 ("q", query.as_str()),
-                ("fields", "files(id,name,parents,size,createdTime,modifiedTime,mimeType,kind)")
+                (
+                    "fields",
+                    "files(id,name,parents,size,createdTime,modifiedTime,mimeType,kind)",
+                ),
             ])
             .send()
             .await
@@ -229,45 +266,75 @@ impl StorageProvider for GoogleDriveProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let error_text = response.text().await
+            let error_text = response
+                .text()
+                .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(StorageError::operation_failed(
-                format!("Failed to list files ({}): {}", status, error_text)
-            ));
+            return Err(StorageError::operation_failed(format!(
+                "Failed to list files ({}): {}",
+                status, error_text
+            )));
         }
 
-        let file_list: GoogleDriveFileList = response.json().await
+        let file_list: GoogleDriveFileList = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse file list: {}", e)))?;
 
-        Ok(file_list.files.into_iter()
+        Ok(file_list
+            .files
+            .into_iter()
             .map(|f| self.google_file_to_storage_file(f))
             .collect())
     }
 
-    async fn create_file(&self, request: CreateFileRequest) -> StorageResult<StorageFile> {
+    async fn create_file(&mut self, request: CreateFileRequest) -> StorageResult<StorageFile> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
         let mut metadata = serde_json::Map::new();
-        metadata.insert("name".to_string(), serde_json::Value::String(request.name.clone()));
+        metadata.insert(
+            "name".to_string(),
+            serde_json::Value::String(request.name.clone()),
+        );
         if let Some(parent_id) = &request.parent_id {
-            metadata.insert("parents".to_string(), serde_json::Value::Array(vec![
-                serde_json::Value::String(parent_id.clone())
-            ]));
+            metadata.insert(
+                "parents".to_string(),
+                serde_json::Value::Array(vec![serde_json::Value::String(parent_id.clone())]),
+            );
         }
 
         let metadata_str = serde_json::to_string(&metadata)?;
         let file_name = request.name.clone(); // Clone the name to avoid lifetime issues
         let form = reqwest::multipart::Form::new()
-            .part("metadata", reqwest::multipart::Part::text(metadata_str)
-                .file_name("metadata.json")
-                .mime_str("application/json")
-                .map_err(|e| StorageError::network(format!("Failed to create multipart part: {}", e)))?)
-            .part("file", reqwest::multipart::Part::bytes(request.content)
-                .file_name(file_name) // Use the cloned value
-                .mime_str(request.mime_type.as_deref().unwrap_or("application/octet-stream"))
-                .map_err(|e| StorageError::network(format!("Failed to create multipart part: {}", e)))?);
+            .part(
+                "metadata",
+                reqwest::multipart::Part::text(metadata_str)
+                    .file_name("metadata.json")
+                    .mime_str("application/json")
+                    .map_err(|e| {
+                        StorageError::network(format!("Failed to create multipart part: {}", e))
+                    })?,
+            )
+            .part(
+                "file",
+                reqwest::multipart::Part::bytes(request.content)
+                    .file_name(file_name) // Use the cloned value
+                    .mime_str(
+                        request
+                            .mime_type
+                            .as_deref()
+                            .unwrap_or("application/octet-stream"),
+                    )
+                    .map_err(|e| {
+                        StorageError::network(format!("Failed to create multipart part: {}", e))
+                    })?,
+            );
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/files", GOOGLE_DRIVE_UPLOAD_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[("uploadType", "multipart")])
@@ -280,16 +347,22 @@ impl StorageProvider for GoogleDriveProvider {
             return Err(StorageError::operation_failed("Failed to create file"));
         }
 
-        let google_file: GoogleDriveFile = response.json().await
+        let google_file: GoogleDriveFile = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse created file: {}", e)))?;
 
         Ok(self.google_file_to_storage_file(google_file))
     }
 
-    async fn read_file(&self, file_id: String) -> StorageResult<Vec<u8>> {
+    async fn read_file(&mut self, file_id: String) -> StorageResult<Vec<u8>> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/files/{}", GOOGLE_DRIVE_API_BASE, file_id))
             .header("Authorization", &headers["Authorization"])
             .query(&[("alt", "media")])
@@ -301,15 +374,21 @@ impl StorageProvider for GoogleDriveProvider {
             return Err(StorageError::file_not_found(file_id));
         }
 
-        Ok(response.bytes().await
+        Ok(response
+            .bytes()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to read file content: {}", e)))?
             .to_vec())
     }
 
-    async fn delete_file(&self, file_id: String) -> StorageResult<()> {
+    async fn delete_file(&mut self, file_id: String) -> StorageResult<()> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
-        let response = self.client
+        let response = self
+            .client
             .delete(&format!("{}/files/{}", GOOGLE_DRIVE_API_BASE, file_id))
             .header("Authorization", &headers["Authorization"])
             .send()
@@ -323,47 +402,71 @@ impl StorageProvider for GoogleDriveProvider {
         }
     }
 
-    async fn update_file(&self, request: UpdateFileRequest) -> StorageResult<StorageFile> {
+    async fn update_file(&mut self, request: UpdateFileRequest) -> StorageResult<StorageFile> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
-        let form = reqwest::multipart::Form::new()
-            .part("file", reqwest::multipart::Part::bytes(request.content)
-                .file_name("update")
-                .mime_str("application/octet-stream")
-                .map_err(|e| StorageError::network(format!("Failed to create multipart part: {}", e)))?);
-
-        let response = self.client
-            .patch(&format!("{}/files/{}", GOOGLE_DRIVE_UPLOAD_API_BASE, request.id))
+        // For media upload, send raw bytes without multipart
+        // See: https://developers.google.com/drive/api/guides/manage-uploads#simple
+        let response = self
+            .client
+            .patch(&format!(
+                "{}/files/{}",
+                GOOGLE_DRIVE_UPLOAD_API_BASE, request.id
+            ))
             .header("Authorization", &headers["Authorization"])
+            .header("Content-Type", "application/octet-stream")
             .query(&[("uploadType", "media")])
-            .multipart(form)
+            .body(request.content)
             .send()
             .await
             .map_err(|e| StorageError::network(format!("Failed to update file: {}", e)))?;
 
         if !response.status().is_success() {
-            return Err(StorageError::operation_failed("Failed to update file"));
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(StorageError::operation_failed(format!(
+                "Failed to update file: {}",
+                error_text
+            )));
         }
 
-        let google_file: GoogleDriveFile = response.json().await
+        let google_file: GoogleDriveFile = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse updated file: {}", e)))?;
 
         Ok(self.google_file_to_storage_file(google_file))
     }
 
-    async fn create_folder(&self, request: CreateFolderRequest) -> StorageResult<StorageFile> {
+    async fn create_folder(&mut self, request: CreateFolderRequest) -> StorageResult<StorageFile> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
         let mut metadata = serde_json::Map::new();
-        metadata.insert("name".to_string(), serde_json::Value::String(request.name.clone()));
-        metadata.insert("mimeType".to_string(), serde_json::Value::String("application/vnd.google-apps.folder".to_string()));
+        metadata.insert(
+            "name".to_string(),
+            serde_json::Value::String(request.name.clone()),
+        );
+        metadata.insert(
+            "mimeType".to_string(),
+            serde_json::Value::String("application/vnd.google-apps.folder".to_string()),
+        );
         if let Some(parent_id) = &request.parent_id {
-            metadata.insert("parents".to_string(), serde_json::Value::Array(vec![
-                serde_json::Value::String(parent_id.clone())
-            ]));
+            metadata.insert(
+                "parents".to_string(),
+                serde_json::Value::Array(vec![serde_json::Value::String(parent_id.clone())]),
+            );
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .json(&metadata)
@@ -375,23 +478,32 @@ impl StorageProvider for GoogleDriveProvider {
             return Err(StorageError::operation_failed("Failed to create folder"));
         }
 
-        let google_file: GoogleDriveFile = response.json().await
+        let google_file: GoogleDriveFile = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse created folder: {}", e)))?;
 
         Ok(self.google_file_to_storage_file(google_file))
     }
 
-    async fn delete_folder(&self, folder_id: String) -> StorageResult<()> {
+    async fn delete_folder(&mut self, folder_id: String) -> StorageResult<()> {
         self.delete_file(folder_id).await
     }
 
-    async fn get_file_info(&self, file_id: String) -> StorageResult<StorageFile> {
+    async fn get_file_info(&mut self, file_id: String) -> StorageResult<StorageFile> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/files/{}", GOOGLE_DRIVE_API_BASE, file_id))
             .header("Authorization", &headers["Authorization"])
-            .query(&[("fields", "id,name,parents,size,createdTime,modifiedTime,mimeType,kind")])
+            .query(&[(
+                "fields",
+                "id,name,parents,size,createdTime,modifiedTime,mimeType,kind",
+            )])
             .send()
             .await
             .map_err(|e| StorageError::network(format!("Failed to get file info: {}", e)))?;
@@ -400,23 +512,34 @@ impl StorageProvider for GoogleDriveProvider {
             return Err(StorageError::file_not_found(file_id));
         }
 
-        let google_file: GoogleDriveFile = response.json().await
+        let google_file: GoogleDriveFile = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse file info: {}", e)))?;
 
         Ok(self.google_file_to_storage_file(google_file))
     }
 
-    async fn search_files(&self, query: String) -> StorageResult<Vec<StorageFile>> {
+    async fn search_files(&mut self, query: String) -> StorageResult<Vec<StorageFile>> {
+        // Ensure token is valid before making API call
+        self.ensure_valid_token().await?;
+
         let headers = self.get_auth_headers()?;
 
-        let search_query = format!("name contains '{}' and trashed=false", query);
+        // Use exact name match with "name = 'query'" for more precise results
+        // This prevents returning "vaults_backup" when searching for "vaults"
+        let search_query = format!("name = '{}' and trashed=false", query);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[
                 ("q", search_query.as_str()),
-                ("fields", "files(id,name,parents,size,createdTime,modifiedTime,mimeType,kind)")
+                (
+                    "fields",
+                    "files(id,name,parents,size,createdTime,modifiedTime,mimeType,kind)",
+                ),
             ])
             .send()
             .await
@@ -426,10 +549,14 @@ impl StorageProvider for GoogleDriveProvider {
             return Err(StorageError::operation_failed("Failed to search files"));
         }
 
-        let file_list: GoogleDriveFileList = response.json().await
+        let file_list: GoogleDriveFileList = response
+            .json()
+            .await
             .map_err(|e| StorageError::network(format!("Failed to parse search results: {}", e)))?;
 
-        Ok(file_list.files.into_iter()
+        Ok(file_list
+            .files
+            .into_iter()
             .map(|f| self.google_file_to_storage_file(f))
             .collect())
     }

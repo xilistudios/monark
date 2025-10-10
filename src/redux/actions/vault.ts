@@ -3,7 +3,7 @@ import {
 	type PayloadAction,
 } from "@reduxjs/toolkit"
 import type { Entry } from "../../interfaces/vault.interface"
-import type { StorageProvider, StorageProviderType } from "../../interfaces/cloud-storage.interface"
+import type { StorageProvider } from '../../interfaces/cloud-storage.interface';
 import { settingsStore } from "../../store/settings"
 import { VaultManager } from "../../services/vault"
 import VaultCommands from "../../services/commands"
@@ -89,24 +89,24 @@ export const loadVaultStateFromSettings = async (): Promise<
 		const vaults = await settingsStore.get("vaults")
 		const providers = await settingsStore.get("storageProviders")
 		const defaultProvider = await settingsStore.get("defaultStorageProvider")
-		
-		let loadedVaults: Vault[] = []
-		if (vaults && Array.isArray(vaults)) {
-			loadedVaults = vaults.map((vault: any) => ({
-				...vault,
-				// Migrate existing vaults to local storage type
-				storageType: vault.storageType || 'local',
-				lastAccessed: vault.lastAccessed || undefined,
-				isLocked: true,
-				volatile: {
-					entries: [],
-					credential: "",
-					navigationPath: "/",
-					encryptedData: undefined,
-				},
-			}))
-		}
-		
+
+		let loadedVaults: Vault[] = [];
+    if (vaults && Array.isArray(vaults)) {
+      loadedVaults = vaults.map((vault: any) => ({
+        ...vault,
+        // Migrate existing vaults to local storage type
+        storageType: vault.storageType || 'local',
+        lastAccessed: vault.lastAccessed || undefined,
+        isLocked: true,
+        volatile: {
+          entries: [],
+          credential: '',
+          navigationPath: '/',
+          encryptedData: undefined,
+        },
+      }));
+    }
+
 		return {
 			vaults: loadedVaults,
 			currentVaultId: null,
@@ -404,28 +404,31 @@ export const vaultSlice = createSlice({
 export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
 	return async (dispatch: any, getState: any) => {
 		try {
-			// First, get the vault to access its path
-			const state = getState();
-			const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
-			
-			if (!vault) {
-				throw new Error("Vault not found");
-			}
+      // First, get the vault to access its path
+      const state = getState();
+      const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
 
-			// If deleteFile is true, attempt to delete the file from the file system
-			if (deleteFile) {
-				try {
-					await VaultCommands.delete(vault.path);
-				} catch (error) {
-					console.error("Failed to delete vault file:", error);
-					const errorMessage = (error as any)?.message || (error instanceof Error ? error.message : String(error))
-					throw new Error(`Failed to delete vault file: ${errorMessage}`);
-				}
-			}
+      if (!vault) {
+        throw new Error('Vault not found');
+      }
 
-			// Remove the vault from Redux state (this will also clean up VaultManager)
-			dispatch(removeVault(vaultId));
-		} catch (error) {
+      // If deleteFile is true, attempt to delete the file from storage
+      if (deleteFile) {
+        try {
+          // Use the unified deleteVault command that handles both local and cloud vaults
+          await VaultCommands.deleteVault(vault.path, vault.providerId);
+        } catch (error) {
+          console.error('Failed to delete vault file:', error);
+          const errorMessage =
+            (error as any)?.message ||
+            (error instanceof Error ? error.message : String(error));
+          throw new Error(`Failed to delete vault file: ${errorMessage}`);
+        }
+      }
+
+      // Remove the vault from Redux state (this will also clean up VaultManager)
+      dispatch(removeVault(vaultId));
+    } catch (error) {
 			throw error;
 		}
 	};

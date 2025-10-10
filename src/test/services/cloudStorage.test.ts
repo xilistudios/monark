@@ -112,19 +112,19 @@ describe('CloudStorageCommands', () => {
 	describe('Cloud Vault Operations', () => {
 		it('should list cloud vaults successfully', async () => {
 			const mockFiles: StorageFile[] = [
-				{
-					id: 'vault-1',
-					name: 'test-vault.monark',
-					path: '/vaults/test-vault.monark',
-					size: 1024,
-					createdAt: '2023-01-01T00:00:00Z',
-					modifiedAt: '2023-01-01T00:00:00Z',
-					isFolder: false,
-					mimeType: 'application/octet-stream',
-					parentId: 'folder-1',
-					metadata: {}
-				}
-			];
+        {
+          id: 'vault-1',
+          name: 'test-vault.monark',
+          path: '/Monark/test-vault.monark',
+          size: 1024,
+          createdAt: '2023-01-01T00:00:00Z',
+          modifiedAt: '2023-01-01T00:00:00Z',
+          isFolder: false,
+          mimeType: 'application/octet-stream',
+          parentId: 'folder-1',
+          metadata: {},
+        },
+      ];
 
 			mockInvoke.mockResolvedValue(mockFiles);
 

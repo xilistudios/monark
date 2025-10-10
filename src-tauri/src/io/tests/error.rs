@@ -32,7 +32,9 @@ fn test_error_trait() {
 
 #[test]
 fn test_enum_variants() {
-    let _read_error = crate::io::error::IoError::ReadError(std::io::Error::new(std::io::ErrorKind::Other, ""));
-    let _write_error = crate::io::error::IoError::WriteError(std::io::Error::new(std::io::ErrorKind::Other, ""));
+    let _read_error =
+        crate::io::error::IoError::ReadError(std::io::Error::new(std::io::ErrorKind::Other, ""));
+    let _write_error =
+        crate::io::error::IoError::WriteError(std::io::Error::new(std::io::ErrorKind::Other, ""));
     let _not_found = crate::io::error::IoError::NotFound;
 }

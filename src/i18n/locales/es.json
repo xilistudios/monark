@@ -187,7 +187,20 @@
       "migrateToLocal": "Migrar a Local",
       "loadingCloudVaults": "Cargando bóvedas en la nube...",
       "refreshVaults": "Actualizar Bóvedas",
-      "downloadingFromCloud": "Descargando de la nube..."
+      "downloadingFromCloud": "Descargando de la nube...",
+      "destinationFolder": "Carpeta de Destino",
+      "selectFolder": "Seleccionar una carpeta",
+      "failedToLoadFolders": "Error al cargar carpetas",
+      "rootFolder": "Carpeta Raíz",
+      "selectedFolder": "Carpeta Seleccionada",
+      "selectButton": "Seleccionar",
+      "noFolders": "No se encontraron carpetas",
+      "selectCurrentFolder": "Usar Esta Carpeta",
+      "providerNotAuthenticated": "El proveedor no está autenticado. Por favor autentíquese en Configuración.",
+      "authCheckFailed": "Error al verificar el estado de autenticación.",
+      "authenticationExpired": "La autenticación ha expirado. Por favor vuelva a autenticarse en Configuración.",
+      "insufficientPermissions": "Permisos insuficientes. Por favor verifique los permisos de su almacenamiento en la nube.",
+      "storageQuotaExceeded": "Cuota de almacenamiento excedida. Por favor libere espacio."
     },
     "addVault": {
       "title": "Crear Nueva Bóveda",

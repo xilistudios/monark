@@ -187,7 +187,20 @@
       "migrateToLocal": "Migrate to Local",
       "loadingCloudVaults": "Loading cloud vaults...",
       "refreshVaults": "Refresh Vaults",
-      "downloadingFromCloud": "Downloading from cloud..."
+      "downloadingFromCloud": "Downloading from cloud...",
+      "destinationFolder": "Destination Folder",
+      "selectFolder": "Select a folder",
+      "failedToLoadFolders": "Failed to load folders",
+      "rootFolder": "Root Folder",
+      "selectedFolder": "Selected Folder",
+      "selectButton": "Select",
+      "noFolders": "No folders found",
+      "selectCurrentFolder": "Use This Folder",
+      "providerNotAuthenticated": "Provider is not authenticated. Please authenticate in Settings.",
+      "authCheckFailed": "Failed to verify authentication status.",
+      "authenticationExpired": "Authentication has expired. Please re-authenticate in Settings.",
+      "insufficientPermissions": "Insufficient permissions. Please check your cloud storage permissions.",
+      "storageQuotaExceeded": "Storage quota exceeded. Please free up space."
     },
     "addVault": {
       "title": "Create New Vault",

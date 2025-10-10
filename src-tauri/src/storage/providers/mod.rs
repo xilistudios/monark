@@ -1,10 +1,10 @@
-pub mod local;
 pub mod google_drive;
+pub mod local;
 
+use crate::storage::StorageResult;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::storage::StorageResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -60,24 +60,24 @@ pub trait StorageProvider: Send + Sync {
 
     async fn is_authenticated(&self) -> bool;
 
-    async fn list_files(&self, folder_id: Option<String>) -> StorageResult<Vec<StorageFile>>;
+    async fn list_files(&mut self, folder_id: Option<String>) -> StorageResult<Vec<StorageFile>>;
 
-    async fn create_file(&self, request: CreateFileRequest) -> StorageResult<StorageFile>;
+    async fn create_file(&mut self, request: CreateFileRequest) -> StorageResult<StorageFile>;
 
-    async fn read_file(&self, file_id: String) -> StorageResult<Vec<u8>>;
+    async fn read_file(&mut self, file_id: String) -> StorageResult<Vec<u8>>;
 
-    async fn delete_file(&self, file_id: String) -> StorageResult<()>;
+    async fn delete_file(&mut self, file_id: String) -> StorageResult<()>;
 
-    async fn update_file(&self, request: UpdateFileRequest) -> StorageResult<StorageFile>;
+    async fn update_file(&mut self, request: UpdateFileRequest) -> StorageResult<StorageFile>;
 
-    async fn create_folder(&self, request: CreateFolderRequest) -> StorageResult<StorageFile>;
+    async fn create_folder(&mut self, request: CreateFolderRequest) -> StorageResult<StorageFile>;
 
-    async fn delete_folder(&self, folder_id: String) -> StorageResult<()>;
+    async fn delete_folder(&mut self, folder_id: String) -> StorageResult<()>;
 
-    async fn get_file_info(&self, file_id: String) -> StorageResult<StorageFile>;
+    async fn get_file_info(&mut self, file_id: String) -> StorageResult<StorageFile>;
 
-    async fn search_files(&self, query: String) -> StorageResult<Vec<StorageFile>>;
+    async fn search_files(&mut self, query: String) -> StorageResult<Vec<StorageFile>>;
 }
 
-pub use local::LocalStorageProvider;
 pub use google_drive::GoogleDriveProvider;
+pub use local::LocalStorageProvider;

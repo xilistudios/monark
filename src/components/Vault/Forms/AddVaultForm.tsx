@@ -9,7 +9,6 @@ import { VaultManager } from '../../../services/vault';
 import { CloudStorageCommands } from '../../../services/cloudStorage';
 import { isMobile } from '../../../utils/platform';
 import type { RootState } from '../../../redux/store';
-import type { StorageFile } from '../../../interfaces/cloud-storage.interface';
 
 interface AddVaultFormProps {
   onSuccess: () => void;
@@ -31,16 +30,6 @@ export const AddVaultForm = ({
   const [loading, setLoading] = useState(false);
   const [storageType, setStorageType] = useState<'local' | 'cloud'>('local');
   const [providerId, setProviderId] = useState<string>('');
-  const [cloudFolderId, setCloudFolderId] = useState<string>(''); // Selected folder ID for cloud storage
-  const [cloudFolders, setCloudFolders] = useState<StorageFile[]>([]); // Available folders
-  const [loadingFolders, setLoadingFolders] = useState(false);
-  const [currentFolderId, setCurrentFolderId] = useState<string | undefined>(
-    undefined
-  ); // For folder navigation
-  const [folderBreadcrumbs, setFolderBreadcrumbs] = useState<
-    Array<{ id: string; name: string }>
-  >([{ id: '', name: 'Root' }]);
-  const [showFolderSelector, setShowFolderSelector] = useState(false);
   const mobile = useMemo(() => isMobile(), []);
   const isEditMode = !!vault;
 
@@ -69,78 +58,8 @@ export const AddVaultForm = ({
   useEffect(() => {
     if (storageType === 'local') {
       setProviderId('');
-      setCloudFolderId('');
-      setCloudFolders([]);
-      setCurrentFolderId(undefined);
-      setFolderBreadcrumbs([{ id: '', name: 'Root' }]);
-      setShowFolderSelector(false);
     }
   }, [storageType]);
-
-  // Load folders when provider changes
-  useEffect(() => {
-    if (storageType === 'cloud' && providerId) {
-      loadCloudFolders(undefined);
-    }
-  }, [providerId, storageType]);
-
-  const loadCloudFolders = async (folderId: string | undefined) => {
-    if (!providerId) return;
-
-    setLoadingFolders(true);
-    try {
-      const response = await CloudStorageCommands.listFiles({
-        folderId: folderId || undefined,
-        providerName: providerId,
-      });
-
-      // Filter to only show folders
-      const folders = response.files.filter((file) => file.isFolder);
-      setCloudFolders(folders);
-      setCurrentFolderId(folderId);
-    } catch (error) {
-      console.error('Failed to load cloud folders:', error);
-      setError(
-        t('vaultSelector.failedToLoadFolders', 'Failed to load folders')
-      );
-    } finally {
-      setLoadingFolders(false);
-    }
-  };
-
-  const navigateToFolder = async (folderId: string, folderName: string) => {
-    await loadCloudFolders(folderId);
-
-    // Update breadcrumbs
-    const breadcrumbIndex = folderBreadcrumbs.findIndex(
-      (b) => b.id === folderId
-    );
-    if (breadcrumbIndex >= 0) {
-      // Navigate back to a parent folder
-      setFolderBreadcrumbs(folderBreadcrumbs.slice(0, breadcrumbIndex + 1));
-    } else {
-      // Navigate to a child folder
-      setFolderBreadcrumbs([
-        ...folderBreadcrumbs,
-        { id: folderId, name: folderName },
-      ]);
-    }
-  };
-
-  const selectFolder = (folderId: string) => {
-    setCloudFolderId(folderId);
-    setShowFolderSelector(false);
-  };
-
-  const getCurrentFolderName = (): string => {
-    if (!cloudFolderId) return t('vaultSelector.rootFolder', 'Root Folder');
-    const folder = cloudFolders.find((f) => f.id === cloudFolderId);
-    return (
-      folder?.name ||
-      folderBreadcrumbs[folderBreadcrumbs.length - 1]?.name ||
-      t('vaultSelector.selectedFolder', 'Selected Folder')
-    );
-  };
 
   const generateVaultId = () => {
     return crypto.randomUUID();
@@ -170,14 +89,41 @@ export const AddVaultForm = ({
       let vaultId: string;
 
       if (storageType === 'cloud') {
+        // Check authentication status before creating vault
+        try {
+          const isAuthenticated =
+            await CloudStorageCommands.checkProviderAuthStatus(providerId);
+          if (!isAuthenticated) {
+            setError(
+              t(
+                'vaultSelector.providerNotAuthenticated',
+                'Provider is not authenticated. Please authenticate in Settings.'
+              )
+            );
+            setLoading(false);
+            return;
+          }
+        } catch (authCheckError) {
+          console.error('Error checking auth status:', authCheckError);
+          setError(
+            t(
+              'vaultSelector.authCheckFailed',
+              'Failed to verify authentication status.'
+            )
+          );
+          setLoading(false);
+          return;
+        }
+
         // Create cloud vault using VaultManager
+        // parentFolderId is undefined - the backend will automatically use the "Monark" folder
         vaultId = await VaultManager.getInstance().createVault(
           vaultName,
           password,
           'cloud',
           providerId,
           undefined,
-          cloudFolderId || undefined
+          undefined
         );
       } else {
         // Create local vault using VaultManager
@@ -197,7 +143,43 @@ export const AddVaultForm = ({
       onSuccess();
     } catch (err) {
       console.error('Error creating vault:', err);
-      setError(String(err));
+
+      // Parse error message for better user feedback
+      const errorMessage = String(err);
+      if (
+        errorMessage.includes('401') ||
+        errorMessage.includes('Invalid Credentials') ||
+        errorMessage.includes('UNAUTHENTICATED')
+      ) {
+        setError(
+          t(
+            'vaultSelector.authenticationExpired',
+            'Authentication has expired. Please re-authenticate in Settings.'
+          )
+        );
+      } else if (
+        errorMessage.includes('403') ||
+        errorMessage.includes('insufficient permission')
+      ) {
+        setError(
+          t(
+            'vaultSelector.insufficientPermissions',
+            'Insufficient permissions. Please check your cloud storage permissions.'
+          )
+        );
+      } else if (
+        errorMessage.includes('quota') ||
+        errorMessage.includes('storage full')
+      ) {
+        setError(
+          t(
+            'vaultSelector.storageQuotaExceeded',
+            'Storage quota exceeded. Please free up space.'
+          )
+        );
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -363,148 +345,30 @@ export const AddVaultForm = ({
                   ))}
                 </select>
 
-                {/* Cloud Folder Selector */}
+                {/* Storage location info */}
                 {providerId && (
                   <div className="mt-4">
-                    <label className="label">
-                      <span className="label-text">
+                    <div className="alert alert-info">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        className="stroke-current shrink-0 w-6 h-6"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        ></path>
+                      </svg>
+                      <span>
                         {t(
-                          'vaultSelector.destinationFolder',
-                          'Destination Folder'
+                          'vaultSelector.autoStorageNote',
+                          'Vaults will be automatically stored in the "Monark" folder in your cloud storage.'
                         )}
                       </span>
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        className="input input-bordered flex-1"
-                        value={getCurrentFolderName()}
-                        readOnly
-                        placeholder={t(
-                          'vaultSelector.selectFolder',
-                          'Select a folder'
-                        )}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        onClick={() =>
-                          setShowFolderSelector(!showFolderSelector)
-                        }
-                        disabled={loadingFolders}
-                      >
-                        {loadingFolders ? (
-                          <span className="loading loading-spinner loading-xs"></span>
-                        ) : (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                            className="w-5 h-5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
-                            />
-                          </svg>
-                        )}
-                      </button>
                     </div>
-
-                    {/* Folder Browser */}
-                    {showFolderSelector && (
-                      <div className="mt-2 border border-base-300 rounded-lg p-4 bg-base-100">
-                        {/* Breadcrumbs */}
-                        <div className="breadcrumbs text-sm mb-3">
-                          <ul>
-                            {folderBreadcrumbs.map((crumb, index) => (
-                              <li key={crumb.id}>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    navigateToFolder(crumb.id, crumb.name)
-                                  }
-                                  className="hover:text-primary"
-                                  disabled={
-                                    index === folderBreadcrumbs.length - 1
-                                  }
-                                >
-                                  {crumb.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* Folder List */}
-                        <div className="max-h-60 overflow-y-auto space-y-1">
-                          {loadingFolders ? (
-                            <div className="flex justify-center py-8">
-                              <span className="loading loading-spinner loading-md"></span>
-                            </div>
-                          ) : cloudFolders.length > 0 ? (
-                            cloudFolders.map((folder) => (
-                              <div
-                                key={folder.id}
-                                className="flex items-center justify-between p-2 hover:bg-base-200 rounded cursor-pointer"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    navigateToFolder(folder.id, folder.name)
-                                  }
-                                  className="flex items-center gap-2 flex-1 text-left"
-                                >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    strokeWidth={1.5}
-                                    stroke="currentColor"
-                                    className="w-5 h-5 text-warning"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
-                                    />
-                                  </svg>
-                                  <span>{folder.name}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => selectFolder(folder.id)}
-                                  className="btn btn-xs btn-primary"
-                                >
-                                  {t('vaultSelector.selectButton', 'Select')}
-                                </button>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="text-center py-8 text-base-content/60">
-                              {t('vaultSelector.noFolders', 'No folders found')}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Select Current Folder Button */}
-                        <div className="mt-3 pt-3 border-t border-base-300">
-                          <button
-                            type="button"
-                            onClick={() => selectFolder(currentFolderId || '')}
-                            className="btn btn-sm btn-block btn-outline"
-                          >
-                            {t(
-                              'vaultSelector.selectCurrentFolder',
-                              'Use This Folder'
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </>
