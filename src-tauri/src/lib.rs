@@ -42,6 +42,7 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
             commands::storage::search_files,
             commands::storage::list_vaults,
             commands::storage::authenticate_provider,
+            commands::storage::check_provider_auth_status,
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
         ])

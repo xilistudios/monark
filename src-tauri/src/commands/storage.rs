@@ -156,6 +156,29 @@ pub async fn authenticate_provider(
 }
 
 #[tauri::command]
+pub async fn check_provider_auth_status(
+    provider_name: String,
+    state: State<'_, StorageState>,
+) -> Result<bool, CommandError> {
+    let config = state.manager.get_config().await;
+
+    if let Some(provider_config) = config.get_provider_config(&provider_name) {
+        match provider_config {
+            ProviderConfig::GoogleDrive { config } => {
+                // Provider is authenticated if it has an access token
+                Ok(config.access_token.is_some())
+            }
+            ProviderConfig::Local { .. } => {
+                // Local provider doesn't need authentication
+                Ok(true)
+            }
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
 pub async fn list_files(
     folder_id: Option<String>,
     provider_name: Option<String>,
@@ -311,15 +334,26 @@ pub async fn handle_google_drive_oauth_callback(
     request: OAuthCallbackRequest,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
+    println!("OAuth callback received: provider={}, code={}, state={}",
+        request.provider_name, &request.code[..10.min(request.code.len())], request.state);
+
     // Get the provider config
     let config = state.manager.get_config().await;
     let provider_config = config.get_provider_config(&request.provider_name)
-        .ok_or_else(|| CommandError::Io("Provider not found".to_string()))?;
+        .ok_or_else(|| {
+            println!("Provider not found: {}", request.provider_name);
+            CommandError::Io("Provider not found".to_string())
+        })?;
 
     let gd_config = match provider_config {
         ProviderConfig::GoogleDrive { config } => config.clone(),
-        _ => return Err(CommandError::Io("Provider is not Google Drive".to_string())),
+        _ => {
+            println!("Provider is not Google Drive: {}", request.provider_name);
+            return Err(CommandError::Io("Provider is not Google Drive".to_string()));
+        }
     };
+
+    println!("Exchanging code for tokens with redirect_uri: {}", gd_config.redirect_uri);
 
     // Exchange authorization code for tokens
     let client = reqwest::Client::new();
@@ -336,11 +370,18 @@ pub async fn handle_google_drive_oauth_callback(
         .form(&params)
         .send()
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to exchange code for tokens: {}", e)))?;
+        .map_err(|e| {
+            println!("Failed to exchange code for tokens: {}", e);
+            CommandError::Io(format!("Failed to exchange code for tokens: {}", e))
+        })?;
 
-    if !response.status().is_success() {
+    let status = response.status();
+    println!("Token exchange response status: {}", status);
+
+    if !status.is_success() {
         let error_text = response.text().await
             .unwrap_or_else(|_| "Unknown error".to_string());
+        println!("Token exchange failed: {}", error_text);
         return Err(CommandError::Io(format!("Token exchange failed: {}", error_text)));
     }
 
@@ -352,7 +393,12 @@ pub async fn handle_google_drive_oauth_callback(
     }
 
     let token_response: TokenResponse = response.json().await
-        .map_err(|e| CommandError::Io(format!("Failed to parse token response: {}", e)))?;
+        .map_err(|e| {
+            println!("Failed to parse token response: {}", e);
+            CommandError::Io(format!("Failed to parse token response: {}", e))
+        })?;
+
+    println!("Tokens received successfully, expires_in: {}", token_response.expires_in);
 
     // Update the provider config with the new tokens
     let new_config = GoogleDriveConfig {
@@ -366,7 +412,11 @@ pub async fn handle_google_drive_oauth_callback(
 
     // Update the configuration
     state.manager.update_google_drive_config(&request.provider_name, new_config).await
-        .map_err(|e| CommandError::Io(format!("Failed to update provider config: {}", e)))?;
+        .map_err(|e| {
+            println!("Failed to update provider config: {}", e);
+            CommandError::Io(format!("Failed to update provider config: {}", e))
+        })?;
 
+    println!("OAuth callback completed successfully");
     Ok(())
 }

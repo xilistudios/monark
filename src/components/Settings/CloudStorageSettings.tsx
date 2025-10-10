@@ -57,7 +57,7 @@ export const CloudStorageSettings = () => {
 
     try {
       // Check if this is a Google Drive provider
-      if (provider.providerType === StorageProviderType.GOOGLE_DRIVE) {
+      if (provider.provider_type === StorageProviderType.GOOGLE_DRIVE) {
         // Get OAuth URL from backend
         const { url, state } =
           await CloudStorageCommands.getGoogleDriveOAuthUrl(provider.name);
@@ -81,6 +81,13 @@ export const CloudStorageSettings = () => {
       }
     } catch (error) {
       console.error('Authentication failed:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error(
+        'Error message:',
+        error instanceof Error ? error.message : String(error)
+      );
+      console.error('Error keys:', error ? Object.keys(error as any) : 'null');
+      console.error('Error type:', typeof error);
       dispatch(
         setProviderStatus({ providerId: provider.name, status: 'error' })
       );
@@ -304,7 +311,7 @@ export const CloudStorageSettings = () => {
 
                       <div className="flex items-center gap-4 mb-4">
                         <span className="text-sm text-base-content/70">
-                          {getProviderTypeLabel(provider.providerType)}
+                          {getProviderTypeLabel(provider.provider_type)}
                         </span>
                         <ProviderStatusBadge status={status} />
                       </div>
@@ -424,9 +431,22 @@ export const CloudStorageSettings = () => {
           <OAuthFlow
             providerName={oauthState.providerName}
             authUrl={oauthState.authUrl}
+            state={oauthState.state}
             onSuccess={handleOAuthSuccess}
             onError={handleOAuthError}
             onCancel={handleOAuthCancel}
+            onCredentialsImported={async (code, state) => {
+              try {
+                await CloudStorageCommands.handleGoogleDriveOAuthCallback(
+                  oauthState.providerName,
+                  code,
+                  state
+                );
+              } catch (error) {
+                console.error('Failed to process imported credentials:', error);
+                throw error;
+              }
+            }}
           />
         </Modal>
       )}

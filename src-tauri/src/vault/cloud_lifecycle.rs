@@ -1,4 +1,5 @@
 use crate::commands::errors::CommandError;
+use crate::commands::storage::StorageState;
 use crate::crypto;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
 use crate::storage::StorageManager;
@@ -21,11 +22,18 @@ pub async fn write_cloud_vault(
     password: String,
     vault_content: Vault,
     provider_name: Option<String>,
-    storage_manager: tauri::State<'_, Arc<StorageManager>>,
+    parent_id: Option<String>,
+    state: tauri::State<'_, StorageState>,
 ) -> Result<String, CommandError> {
-    // Ensure vault folder exists
-    let vault_folder_id = storage_manager.ensure_vault_folder(provider_name.clone()).await
-        .map_err(|e| CommandError::Io(format!("Failed to ensure vault folder: {}", e)))?;
+    let storage_manager = &state.manager;
+
+    // Use provided parent_id or ensure default vault folder exists
+    let vault_folder_id = if let Some(pid) = parent_id {
+        pid
+    } else {
+        storage_manager.ensure_vault_folder(provider_name.clone()).await
+            .map_err(|e| CommandError::Io(format!("Failed to ensure vault folder: {}", e)))?
+    };
 
     let vault_file_name = format!("{}.{}", vault_name, VAULT_EXTENSION);
     let vault_path = format!("/vaults/{}", vault_file_name);
@@ -41,7 +49,7 @@ pub async fn write_cloud_vault(
             &password,
             vault_content,
             provider_name,
-            storage_manager.inner(),
+            storage_manager,
         ).await?;
         Ok(existing_vault.id.clone())
     } else {
@@ -53,7 +61,7 @@ pub async fn write_cloud_vault(
             vault_content,
             Some(vault_folder_id),
             provider_name,
-            storage_manager.inner(),
+            storage_manager,
         ).await
     }
 }
@@ -63,8 +71,10 @@ pub async fn read_cloud_vault(
     vault_id: String,
     password: String,
     provider_name: Option<String>,
-    storage_manager: tauri::State<'_, Arc<StorageManager>>,
+    state: tauri::State<'_, StorageState>,
 ) -> Result<Vault, CommandError> {
+    let storage_manager = &state.manager;
+
     let vault_data = storage_manager.read_file(vault_id.clone(), provider_name).await
         .map_err(|e| CommandError::Io(format!("Failed to read vault file: {}", e)))?;
 
@@ -91,8 +101,10 @@ pub async fn read_cloud_vault(
 pub async fn delete_cloud_vault(
     vault_id: String,
     provider_name: Option<String>,
-    storage_manager: tauri::State<'_, Arc<StorageManager>>,
+    state: tauri::State<'_, StorageState>,
 ) -> Result<(), CommandError> {
+    let storage_manager = &state.manager;
+
     storage_manager.delete_file(vault_id, provider_name).await
         .map_err(|e| CommandError::Io(format!("Failed to delete vault: {}", e)))?;
     Ok(())
@@ -101,8 +113,10 @@ pub async fn delete_cloud_vault(
 #[tauri::command(async)]
 pub async fn list_cloud_vaults(
     provider_name: Option<String>,
-    storage_manager: tauri::State<'_, Arc<StorageManager>>,
+    state: tauri::State<'_, StorageState>,
 ) -> Result<Vec<StorageFile>, CommandError> {
+    let storage_manager = &state.manager;
+
     storage_manager.list_vaults(provider_name).await
         .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))
 }

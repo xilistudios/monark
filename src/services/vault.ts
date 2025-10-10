@@ -294,17 +294,13 @@ export class VaultInstance {
     // Check if this is a cloud vault
     if (vault.storageType === 'cloud' && vault.providerId) {
       // Use cloud storage commands for cloud vaults
-      const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
-      // Call positional update form (vaultId, vaultContent, providerName) so test mocks match
-      await CloudStorageCommands.updateCloudVault(
-        cloudFileId,
-        {
-          updatedAt: vaultContent.updated_at,
-          hmac: vaultContent.hmac,
-          entries: vaultContent.entries,
-        },
-        vault.providerId
-      );
+      // Use write_cloud_vault which handles both create and update
+      await CloudStorageCommands.writeCloudVault({
+        vaultName: vault.name,
+        password: password,
+        vaultContent: vaultContent, // Already in snake_case format
+        providerName: vault.providerId,
+      } as any);
 
       // Update sync timestamp
       this.dispatch(syncCloudVault(this.id));
@@ -369,7 +365,7 @@ export class VaultInstance {
       (p) => p.name === this.vault.cloudMetadata?.provider
     );
     const providerType =
-      provider?.providerType || StorageProviderType.GOOGLE_DRIVE;
+      provider?.provider_type || StorageProviderType.GOOGLE_DRIVE;
 
     return {
       id: this.vault.cloudMetadata.fileId,
@@ -477,6 +473,34 @@ export class VaultManager {
     try {
       const providers = await CloudStorageCommands.listProviders();
       this._dispatch(setStorageProviders(providers));
+
+      // Check authentication status for each provider
+      for (const provider of providers) {
+        try {
+          const isAuthenticated =
+            await CloudStorageCommands.checkProviderAuthStatus(provider.name);
+
+          // Update provider status based on authentication state
+          this._dispatch(
+            setProviderStatus({
+              providerId: provider.name,
+              status: isAuthenticated ? 'authenticated' : 'idle',
+            })
+          );
+        } catch (error) {
+          console.error(
+            `Failed to check auth status for provider ${provider.name}:`,
+            error
+          );
+          // Set to idle if we can't determine the status
+          this._dispatch(
+            setProviderStatus({
+              providerId: provider.name,
+              status: 'idle',
+            })
+          );
+        }
+      }
     } catch (error) {
       const errorMessage =
         (error as any)?.message ||
@@ -664,12 +688,13 @@ export class VaultManager {
   }
 
   /**
-   * Creates a new vault (local or cloud)
+   * Creates a new vault
    * @param name - Vault name
    * @param password - Vault password
-   * @param storageType - Storage type ('local' | 'cloud')
-   * @param providerId - Optional provider ID for cloud vaults
+   * @param storageType - Storage type (local or cloud)
+   * @param providerId - Cloud provider ID (required for cloud vaults)
    * @param path - Optional path for local vaults
+   * @param parentId - Optional parent folder ID for cloud vaults
    * @returns Created vault ID
    */
   async createVault(
@@ -677,7 +702,8 @@ export class VaultManager {
     password: string,
     storageType: 'local' | 'cloud',
     providerId?: string,
-    path?: string
+    path?: string,
+    parentId?: string
   ): Promise<string> {
     if (!this._dispatch) {
       throw new Error('VaultManager not initialized. Call initialize() first.');
@@ -707,17 +733,14 @@ export class VaultManager {
           entries: [],
         };
 
-        // Use positional write form (vaultId, vaultContent, providerName) so mocked commands
-        // used in integration tests return the expected string file ID.
-        const cloudVaultId = await CloudStorageCommands.writeCloudVault(
-          vaultId,
-          {
-            updatedAt: vaultContent.updated_at,
-            hmac: vaultContent.hmac,
-            entries: vaultContent.entries,
-          },
-          providerId!
-        );
+        // Use request object form to create a new vault with vaultName and password
+        const cloudVaultId = await CloudStorageCommands.writeCloudVault({
+          vaultName: name,
+          password: password,
+          vaultContent: vaultContent, // Use snake_case format directly
+          providerName: providerId!,
+          parentId: parentId,
+        } as any);
 
         vaultPath = cloudVaultId;
         cloudMetadata = {

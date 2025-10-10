@@ -349,10 +349,17 @@ describe('VaultManager', () => {
 
 	describe('addProvider', () => {
 		it('should add provider successfully', async () => {
-			const config: { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig } = { 
-				type: StorageProviderType.GOOGLE_DRIVE, 
-				config: { client_id: 'test', client_secret: 'test', redirect_uri: 'test' } 
-			}
+			const config: {
+        type: StorageProviderType.GOOGLE_DRIVE;
+        config: GoogleDriveConfig;
+      } = {
+        type: StorageProviderType.GOOGLE_DRIVE,
+        config: {
+          client_id: 'test',
+          client_secret: 'test',
+          redirect_uri: 'test',
+        },
+      };
 			vi.mocked(CloudStorageCommands.addProvider).mockResolvedValue(undefined)
 			vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue([])
 
@@ -432,15 +439,16 @@ describe('VaultManager', () => {
 			const vaultId = await vaultManager.createVault('Test Vault', 'password', 'cloud', 'google-drive')
 
 			expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledWith({
-				vaultName: 'Test Vault',
-				password: 'password',
-				vaultContent: {
-					updated_at: expect.any(String),
-					hmac: '',
-					entries: [],
-				},
-				providerName: 'google-drive',
-			})
+        vaultName: 'Test Vault',
+        password: 'password',
+        vaultContent: {
+          updated_at: expect.any(String),
+          hmac: '',
+          entries: [],
+        },
+        providerName: 'google-drive',
+        parentId: undefined,
+      });
 			expect(mockDispatch).toHaveBeenCalledWith(
 				vaultActions.addVault(
 					expect.objectContaining({
@@ -537,10 +545,17 @@ describe('VaultManager', () => {
 
 		describe('Cloud Storage Integration', () => {
 			it('should handle cloud vault creation with proper error handling', async () => {
-				const config: { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig } = { 
-					type: StorageProviderType.GOOGLE_DRIVE, 
-					config: { client_id: 'test', client_secret: 'test', redirect_uri: 'test' } 
-				}
+				const config: {
+          type: StorageProviderType.GOOGLE_DRIVE;
+          config: GoogleDriveConfig;
+        } = {
+          type: StorageProviderType.GOOGLE_DRIVE,
+          config: {
+            client_id: 'test',
+            client_secret: 'test',
+            redirect_uri: 'test',
+          },
+        };
 				vi.mocked(CloudStorageCommands.addProvider).mockResolvedValue(undefined)
 				vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue([])
 				vi.mocked(CloudStorageCommands.writeCloudVault).mockResolvedValue('cloud-vault-id')
@@ -596,102 +611,114 @@ describe('VaultManager', () => {
 			})
 
 			it('should handle cloud vault sync with network errors', async () => {
-				const cloudVault = {
-					id: 'sync-test-vault',
-					name: 'Sync Test Vault',
-					path: 'cloud-file-id',
-					storageType: 'cloud' as const,
-					providerId: 'google-drive',
-					cloudMetadata: {
-						fileId: 'cloud-file-id',
-						provider: 'google-drive',
-						lastSync: new Date().toISOString(),
-					},
-					isLocked: false,
-					volatile: {
-						entries: [],
-						credential: 'test-password',
-						navigationPath: '/',
-						encryptedData: undefined,
-					},
-				}
+        const cloudVault = {
+          id: 'sync-test-vault',
+          name: 'Sync Test Vault',
+          path: 'cloud-file-id',
+          storageType: 'cloud' as const,
+          providerId: 'google-drive',
+          cloudMetadata: {
+            fileId: 'cloud-file-id',
+            provider: 'google-drive',
+            lastSync: new Date().toISOString(),
+          },
+          isLocked: false,
+          volatile: {
+            entries: [],
+            credential: 'test-password',
+            navigationPath: '/',
+            encryptedData: undefined,
+          },
+        };
 
-				mockState.vault.vaults = [cloudVault]
-				mockGetState.mockReturnValue(mockState)
+        mockState.vault.vaults = [cloudVault];
+        mockGetState.mockReturnValue(mockState);
 
-				const vaultInstance = vaultManager.getInstance('sync-test-vault')
-				
-				// Mock network error
-				vi.mocked(CloudStorageCommands.readCloudVault).mockRejectedValue(
-					new Error('Network connection failed')
-				)
+        const vaultInstance = vaultManager.getInstance('sync-test-vault');
 
-				await expect(vaultInstance!.syncWithCloud()).rejects.toThrow('Failed to sync with cloud')
-			})
+        // Mock network error
+        vi.mocked(CloudStorageCommands.readCloudVault).mockRejectedValue(
+          new Error('Network connection failed')
+        );
 
-			it('should handle provider management with proper state updates', async () => {
-				const providers: StorageProvider[] = [
-					{ name: 'google-drive', providerType: 'google_drive' as StorageProviderType, isDefault: true }
-				]
+        await expect(vaultInstance!.syncWithCloud()).rejects.toThrow(
+          'Failed to sync with cloud'
+        );
+      });
 
-				vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue(providers)
+      it('should handle provider management with proper state updates', async () => {
+        const providers: StorageProvider[] = [
+          {
+            name: 'google-drive',
+            providerType: 'google_drive' as StorageProviderType,
+            isDefault: true,
+          },
+        ];
 
-				await vaultManager.loadProviders()
+        vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue(
+          providers
+        );
 
-				expect(mockDispatch).toHaveBeenCalledWith(vaultActions.setStorageProviders(providers))
-			})
+        await vaultManager.loadProviders();
 
-			it('should handle cloud vault listing with empty results', async () => {
-				vi.mocked(CloudStorageCommands.listCloudVaults).mockResolvedValue([])
+        expect(mockDispatch).toHaveBeenCalledWith(
+          vaultActions.setStorageProviders(providers)
+        );
+      });
 
-				const vaults = await vaultManager.listCloudVaults()
+      it('should handle cloud vault listing with empty results', async () => {
+        vi.mocked(CloudStorageCommands.listCloudVaults).mockResolvedValue([]);
 
-				expect(vaults).toEqual([])
-				expect(CloudStorageCommands.listCloudVaults).toHaveBeenCalledWith(undefined)
-			})
+        const vaults = await vaultManager.listCloudVaults();
 
-			it('should handle cloud vault operations with token expiration', async () => {
-				const cloudVault = {
-					id: 'token-expire-vault',
-					name: 'Token Expire Vault',
-					path: 'cloud-file-id',
-					storageType: 'cloud' as const,
-					providerId: 'google-drive',
-					cloudMetadata: {
-						fileId: 'cloud-file-id',
-						provider: 'google-drive',
-						lastSync: new Date().toISOString(),
-					},
-					isLocked: false,
-					volatile: {
-						entries: [],
-						credential: 'test-password',
-						navigationPath: '/',
-						encryptedData: undefined,
-					},
-				}
+        expect(vaults).toEqual([]);
+        expect(CloudStorageCommands.listCloudVaults).toHaveBeenCalledWith(
+          undefined
+        );
+      });
 
-				mockState.vault.vaults = [cloudVault]
-				mockGetState.mockReturnValue(mockState)
+      it('should handle cloud vault operations with token expiration', async () => {
+        const cloudVault = {
+          id: 'token-expire-vault',
+          name: 'Token Expire Vault',
+          path: 'cloud-file-id',
+          storageType: 'cloud' as const,
+          providerId: 'google-drive',
+          cloudMetadata: {
+            fileId: 'cloud-file-id',
+            provider: 'google-drive',
+            lastSync: new Date().toISOString(),
+          },
+          isLocked: false,
+          volatile: {
+            entries: [],
+            credential: 'test-password',
+            navigationPath: '/',
+            encryptedData: undefined,
+          },
+        };
 
-				const vaultInstance = vaultManager.getInstance('token-expire-vault')
-				
-				// Mock token expiration during update
-				vi.mocked(CloudStorageCommands.updateCloudVault).mockRejectedValue(
-					new Error('Token expired')
-				)
+        mockState.vault.vaults = [cloudVault];
+        mockGetState.mockReturnValue(mockState);
 
-				const newEntry: Entry = {
-					id: 'new-entry',
-					type: 'note',
-					title: 'New Entry',
-					created_at: new Date().toISOString(),
-					updated_at: new Date().toISOString(),
-					tags: []
-				}
+        const vaultInstance = vaultManager.getInstance('token-expire-vault');
 
-				await expect(vaultInstance!.addEntry([], newEntry)).rejects.toThrow()
-			})
+        // Mock token expiration during update
+        vi.mocked(CloudStorageCommands.updateCloudVault).mockRejectedValue(
+          new Error('Token expired')
+        );
+
+        const newEntry: Entry = {
+          id: 'new-entry',
+          type: 'note',
+          title: 'New Entry',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          tags: [],
+        };
+
+        await expect(vaultInstance!.addEntry([], newEntry)).rejects.toThrow();
+      });
 
 			it('should handle cloud vault migration scenarios', async () => {
 				const localVault: Vault = {

@@ -37,14 +37,14 @@ describe('Cloud Storage Interfaces', () => {
 	describe('StorageProvider', () => {
 		it('should create valid storage provider', () => {
 			const provider: StorageProvider = {
-				name: 'test-provider',
-				providerType: StorageProviderType.GOOGLE_DRIVE,
-				isDefault: true
-			};
+        name: 'test-provider',
+        provider_type: StorageProviderType.GOOGLE_DRIVE,
+        is_default: true,
+      };
 
 			expect(provider.name).toBe('test-provider');
-			expect(provider.providerType).toBe(StorageProviderType.GOOGLE_DRIVE);
-			expect(provider.isDefault).toBe(true);
+			expect(provider.provider_type).toBe(StorageProviderType.GOOGLE_DRIVE);
+      expect(provider.is_default).toBe(true);
 		});
 	});
 

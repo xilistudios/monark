@@ -11,17 +11,21 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 interface OAuthFlowProps {
   providerName: string;
   authUrl: string;
+  state: string;
   onSuccess: () => void;
   onError: (error: string) => void;
   onCancel: () => void;
+  onCredentialsImported?: (code: string, state: string) => Promise<void>;
 }
 
 export const OAuthFlow = ({
   providerName,
   authUrl,
+  state,
   onSuccess,
   onError,
   onCancel,
+  onCredentialsImported,
 }: OAuthFlowProps) => {
   const { t } = useTranslation('settings');
   const [isOpening, setIsOpening] = useState(false);
@@ -76,20 +80,30 @@ export const OAuthFlow = ({
         throw new Error('Invalid credentials structure');
       }
 
-      // TODO: Complete authentication with the provided code and state
-      // This would need to be passed back to the parent component
-      console.log('Imported credentials:', credentials);
+      // Validate that the state matches
+      if (credentials.state !== state) {
+        throw new Error(
+          'State mismatch - credentials may be from a different authentication attempt'
+        );
+      }
+
+      // Process the credentials
+      if (onCredentialsImported) {
+        await onCredentialsImported(credentials.code, credentials.state);
+      }
 
       setBase64Input('');
       setShowBase64Import(false);
       onSuccess();
     } catch (error) {
-      console.error('Failed to decode base64 credentials:', error);
+      console.error('Failed to process credentials:', error);
       setBase64Error(
-        t(
-          'cloudStorage.oauth.invalidBase64',
-          'Invalid base64 credentials format'
-        )
+        error instanceof Error
+          ? error.message
+          : t(
+              'cloudStorage.oauth.invalidBase64',
+              'Invalid base64 credentials format'
+            )
       );
     }
   };

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use super::{StorageProviderType};
+use std::path::PathBuf;
+use super::{StorageProviderType, StorageResult};
 use super::providers::google_drive::GoogleDriveConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +64,46 @@ impl StorageConfig {
 
     pub fn list_providers(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
+    }
+
+    /// Get the path to the config file
+    fn config_file_path() -> PathBuf {
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("monark")
+            .join("storage_config.json")
+    }
+
+    /// Load configuration from disk
+    pub fn load() -> StorageResult<Self> {
+        let config_path = Self::config_file_path();
+
+        if !config_path.exists() {
+            // Return default config if file doesn't exist
+            return Ok(Self::default());
+        }
+
+        let config_str = std::fs::read_to_string(&config_path)?;
+
+        let config: StorageConfig = serde_json::from_str(&config_str)?;
+
+        Ok(config)
+    }
+
+    /// Save configuration to disk
+    pub fn save(&self) -> StorageResult<()> {
+        let config_path = Self::config_file_path();
+
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let config_str = serde_json::to_string_pretty(self)?;
+
+        std::fs::write(&config_path, config_str)?;
+
+        Ok(())
     }
 }
 

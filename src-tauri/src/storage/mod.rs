@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 /// Initialize the storage manager with default configuration
 pub async fn init_storage_manager() -> Arc<StorageManager> {
-    let config = StorageConfig::default();
+    // Try to load config from disk, fallback to default if not found
+    let config = StorageConfig::load().unwrap_or_default();
     Arc::new(StorageManager::new(config).await.expect("Failed to initialize storage manager"))
 }

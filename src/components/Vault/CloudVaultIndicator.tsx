@@ -18,113 +18,119 @@ export const CloudVaultIndicator = ({
 }: CloudVaultIndicatorProps) => {
 	const { t } = useTranslation('home');
 	const providers = useSelector((state: RootState) => state.vault.providers);
-	
+
 	const isCloud = vault.storageType === 'cloud';
-	const provider = getVaultProvider(vault, providers);
-	
+  const provider = getVaultProvider(vault, providers);
+
 	const formatLastSync = (dateStr?: string) => {
-		if (!dateStr) return t('vaultSelector.never');
-		const date = new Date(dateStr);
-		const now = new Date();
-		const diffMs = now.getTime() - date.getTime();
-		const diffMins = Math.floor(diffMs / 60000);
-		const diffHours = Math.floor(diffMins / 60);
-		const diffDays = Math.floor(diffHours / 24);
-		
-		if (diffMins < 1) return t('vaultSelector.never');
-		if (diffMins < 60) return `${diffMins} ${t('vaultSelector.minutesAgo', 'minutes ago')}`;
-		if (diffHours < 24) return `${diffHours} ${t('vaultSelector.hoursAgo', 'hours ago')}`;
-		return `${diffDays} ${t('vaultSelector.daysAgo', 'days ago')}`;
-	};
-	
+    if (!dateStr) return t('vaultSelector.never');
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return t('vaultSelector.never');
+    if (diffMins < 60)
+      return `${diffMins} ${t('vaultSelector.minutesAgo', 'minutes ago')}`;
+    if (diffHours < 24)
+      return `${diffHours} ${t('vaultSelector.hoursAgo', 'hours ago')}`;
+    return `${diffDays} ${t('vaultSelector.daysAgo', 'days ago')}`;
+  };
+
 	const indicatorContent = (
-		<div className={`flex items-center gap-1 ${className}`}>
-			{isCloud ? (
-				<>
-					{/* Cloud icon */}
-					<svg
-						className="w-4 h-4 text-blue-500"
-						fill="currentColor"
-						viewBox="0 0 24 24"
-						title={t('vaultSelector.cloudVault')}
-					>
-						<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
-					</svg>
-					
-					{/* Provider badge */}
-					{provider && (
-						<span
-							className="badge badge-sm badge-info text-xs"
-							title={t('vaultSelector.provider')}
-						>
-							{provider.providerType === StorageProviderType.GOOGLE_DRIVE
-								? 'Google Drive'
-								: provider.providerType === StorageProviderType.LOCAL
-								? 'Local'
-								: provider.name}
-						</span>
-					)}
-					
-					{/* Last sync info */}
-					{vault.cloudMetadata?.lastSync && (
-						<span className="text-xs text-base-content/60 hidden sm:inline">
-							<span>{`${t('vaultSelector.lastSync')}:`}</span>
-							<span className="ml-1">{formatLastSync(vault.cloudMetadata.lastSync)}</span>
-						</span>
-					)}
-				</>
-			) : (
-				<>
-					{/* Local storage icon */}
-					<svg
-						className="w-4 h-4 text-gray-500"
-						fill="currentColor"
-						viewBox="0 0 24 24"
-						title={t('vaultSelector.localVault')}
-					>
-						<path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
-					</svg>
-					
-					{/* Local badge */}
-					<span
-						className="badge badge-sm badge-neutral text-xs"
-					>
-						{t('vaultSelector.local')}
-					</span>
-				</>
-			)}
-		</div>
-	);
-	
+    <div className={`flex items-center gap-1 ${className}`}>
+      {isCloud ? (
+        <>
+          {/* Cloud icon */}
+          <svg
+            className="w-4 h-4 text-blue-500"
+            fill="currentColor"
+            viewBox="0 0 24 24"
+            title={t('vaultSelector.cloudVault')}
+          >
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
+          </svg>
+
+          {/* Provider badge */}
+          {provider && (
+            <span
+              className="badge badge-sm badge-info text-xs"
+              title={t('vaultSelector.provider')}
+            >
+              {provider.provider_type === StorageProviderType.GOOGLE_DRIVE
+                ? 'Google Drive'
+                : provider.provider_type === StorageProviderType.LOCAL
+                  ? 'Local'
+                  : provider.name}
+            </span>
+          )}
+
+          {/* Last sync info */}
+          {vault.cloudMetadata?.lastSync && (
+            <span className="text-xs text-base-content/60 hidden sm:inline">
+              <span>{`${t('vaultSelector.lastSync')}:`}</span>
+              <span className="ml-1">
+                {formatLastSync(vault.cloudMetadata.lastSync)}
+              </span>
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Local storage icon */}
+          <svg
+            className="w-4 h-4 text-gray-500"
+            fill="currentColor"
+            viewBox="0 0 24 24"
+            title={t('vaultSelector.localVault')}
+          >
+            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z" />
+          </svg>
+
+          {/* Local badge */}
+          <span className="badge badge-sm badge-neutral text-xs">
+            {t('vaultSelector.local')}
+          </span>
+        </>
+      )}
+    </div>
+  );
+
 	if (!showTooltip) {
 		return indicatorContent;
 	}
-	
+
 	const tooltipContent = isCloud ? (
-		<div className="text-sm">
-			<div className="font-semibold">{t('vaultSelector.cloudVault')}</div>
-			{provider && (
-				<div>{t('vaultSelector.provider')}: {provider.name}</div>
-			)}
-			{vault.cloudMetadata?.lastSync && (
-				<div>
-					<span>{`${t('vaultSelector.lastSync')}:`}</span>
-					<span className="ml-1">{formatLastSync(vault.cloudMetadata.lastSync)}</span>
-				</div>
-			)}
-			<div className="text-xs text-base-content/60 mt-1">
-				{t('vaultSelector.path')}: {vault.path}
-			</div>
-		</div>
-	) : (
-		<div className="text-sm">
-			<div className="font-semibold">{t('vaultSelector.localVault')}</div>
-			<div className="text-xs text-base-content/60 mt-1">
-				{t('vaultSelector.path')}: {vault.path}
-			</div>
-		</div>
-	);
-	
+    <div className="text-sm">
+      <div className="font-semibold">{t('vaultSelector.cloudVault')}</div>
+      {provider && (
+        <div>
+          {t('vaultSelector.provider')}: {provider.name}
+        </div>
+      )}
+      {vault.cloudMetadata?.lastSync && (
+        <div>
+          <span>{`${t('vaultSelector.lastSync')}:`}</span>
+          <span className="ml-1">
+            {formatLastSync(vault.cloudMetadata.lastSync)}
+          </span>
+        </div>
+      )}
+      <div className="text-xs text-base-content/60 mt-1">
+        {t('vaultSelector.path')}: {vault.path}
+      </div>
+    </div>
+  ) : (
+    <div className="text-sm">
+      <div className="font-semibold">{t('vaultSelector.localVault')}</div>
+      <div className="text-xs text-base-content/60 mt-1">
+        {t('vaultSelector.path')}: {vault.path}
+      </div>
+    </div>
+  );
+
 	return (
 		<div className="tooltip tooltip-right" data-tip={tooltipContent}>
 			{indicatorContent}

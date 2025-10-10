@@ -98,6 +98,22 @@ export class CloudStorageCommands {
   }
 
   /**
+   * Checks if a storage provider is authenticated
+   * @param providerName - Name of the provider to check
+   * @returns Promise resolving to boolean indicating if provider is authenticated
+   */
+  static async checkProviderAuthStatus(providerName: string): Promise<boolean> {
+    try {
+      return await invoke<boolean>('check_provider_auth_status', {
+        providerName,
+      });
+    } catch (error) {
+      console.error('Failed to check provider auth status:', error);
+      return false;
+    }
+  }
+
+  /**
    * Lists cloud vaults from storage providers
    * @param providerName - Optional name of the provider to list vaults from
    * @returns Promise resolving to array of cloud vault metadata
@@ -153,36 +169,43 @@ export class CloudStorageCommands {
   /**
    * Writes a cloud vault to storage
    * @param request - Cloud vault creation request
+   * @param maybeVaultContent - Optional vault content (for positional style)
+   * @param maybeProviderName - Optional provider name (for positional style)
+   * @param maybeParentId - Optional parent folder ID (for positional style)
    * @returns Promise resolving to vault ID
    */
   static async writeCloudVault(
     requestOrVaultId: CreateCloudVaultRequest | string,
     maybeVaultContent?: any,
-    maybeProviderName?: string
+    maybeProviderName?: string,
+    maybeParentId?: string
   ): Promise<string> {
     try {
       // Support two calling styles for compatibility with tests and callers:
-      // 1) writeCloudVault(request: CreateCloudVaultRequest) -> invokes with vaultName, password, vaultContent, providerName
-      // 2) writeCloudVault(vaultId: string, vaultContent: any, providerName?: string) -> invokes with vaultId, vaultContent, providerName
+      // 1) writeCloudVault(request: CreateCloudVaultRequest) -> invokes with vaultName, password, vaultContent, providerName, parentId
+      // 2) writeCloudVault(vaultId: string, vaultContent: any, providerName?: string, parentId?: string) -> invokes with vaultId, vaultContent, providerName, parentId
       if (typeof requestOrVaultId === 'string') {
         const vaultId = requestOrVaultId;
         const vaultContent = maybeVaultContent;
         const providerName = maybeProviderName;
+        const parentId = maybeParentId;
         return await invoke<string>('write_cloud_vault', {
           vaultId,
           vaultContent,
           providerName,
+          parentId,
         });
       } else {
         const request = requestOrVaultId as CreateCloudVaultRequest;
         // For create requests, do not send vaultId in the payload so mocks and
-        // backend that expect (vaultName, password, vaultContent, providerName)
+        // backend that expect (vaultName, password, vaultContent, providerName, parentId)
         // receive the exact shape.
         return await invoke<string>('write_cloud_vault', {
           vaultName: request.vaultName,
           password: request.password,
           vaultContent: request.vaultContent,
           providerName: request.providerName,
+          parentId: (request as any).parentId,
         });
       }
     } catch (error) {
@@ -467,6 +490,11 @@ export class CloudStorageCommands {
     state: string
   ): Promise<void> {
     try {
+      console.log('Calling handle_google_drive_oauth_callback with:', {
+        providerName,
+        code,
+        state,
+      });
       await invoke('handle_google_drive_oauth_callback', {
         request: {
           provider_name: providerName,
@@ -474,7 +502,9 @@ export class CloudStorageCommands {
           state,
         },
       });
+      console.log('OAuth callback completed successfully');
     } catch (error) {
+      console.error('OAuth callback error:', error);
       throw this.handleError(error, 'Failed to complete OAuth authentication');
     }
   }
@@ -517,7 +547,30 @@ export class CloudStorageCommands {
     error: any,
     defaultMessage: string
   ): CloudStorageError {
-    const message = error?.message || String(error);
+    // Extract the actual error message from various error formats
+    let message: string;
+    let originalError: string;
+
+    if (typeof error === 'string') {
+      message = error;
+      originalError = error;
+    } else if (error?.message) {
+      message = error.message;
+      originalError = JSON.stringify(error, null, 2);
+    } else if (typeof error === 'object') {
+      // Try to extract meaningful info from the error object
+      try {
+        originalError = JSON.stringify(error, null, 2);
+        // Check for common error properties
+        message = error.error || error.msg || error.reason || originalError;
+      } catch (e) {
+        originalError = String(error);
+        message = defaultMessage;
+      }
+    } else {
+      message = defaultMessage;
+      originalError = String(error);
+    }
 
     // Determine error type based on message content
     let errorType: CloudStorageErrorType =
@@ -547,7 +600,7 @@ export class CloudStorageCommands {
     return {
       type: errorType,
       message: message || defaultMessage,
-      originalError: String(error),
+      originalError: originalError,
     };
   }
 }

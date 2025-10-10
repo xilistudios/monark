@@ -1,6 +1,6 @@
 /**
  * Cloud Storage Interface Definitions
- * 
+ *
  * This file contains TypeScript interfaces that match the Rust backend structures
  * for cloud storage integration. All types are designed to be serializable and
  * compatible with Tauri's invoke() calls.
@@ -19,9 +19,9 @@ export enum StorageProviderType {
  * Storage provider information matching Rust ProviderInfo struct
  */
 export interface StorageProvider {
-	name: string;
-	providerType: StorageProviderType;
-	isDefault: boolean;
+  name: string;
+  provider_type: StorageProviderType;
+  is_default: boolean;
 }
 
 /**
@@ -46,9 +46,9 @@ export interface LocalStorageConfig {
 /**
  * Union type for provider configurations matching Rust ProviderConfig enum
  */
-export type ProviderConfig = 
-	| { type: StorageProviderType.LOCAL; basePath: string }
-	| { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig };
+export type ProviderConfig =
+  | { type: StorageProviderType.LOCAL; basePath: string }
+  | { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig };
 
 /**
  * Request to add a new storage provider matching Rust AddProviderRequest

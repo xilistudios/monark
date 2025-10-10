@@ -25,19 +25,18 @@ impl StorageManager {
             config: Arc::new(RwLock::new(config)),
         };
 
-        // Initialize default provider
-        manager.initialize_default_provider().await?;
+        // Initialize all configured providers
+        manager.initialize_all_providers().await?;
         Ok(manager)
     }
 
-    async fn initialize_default_provider(&self) -> StorageResult<()> {
+    async fn initialize_all_providers(&self) -> StorageResult<()> {
         let config = self.config.read().await;
-        let default_provider_name = &config.default_provider;
+        let mut providers = self.providers.write().await;
 
-        if let Some(provider_config) = config.get_provider_config(default_provider_name) {
+        for (name, provider_config) in &config.providers {
             let provider = self.create_provider_from_config(provider_config)?;
-            let mut providers = self.providers.write().await;
-            providers.insert(default_provider_name.clone(), provider);
+            providers.insert(name.clone(), provider);
         }
 
         Ok(())
@@ -67,6 +66,8 @@ impl StorageManager {
         {
             let mut config = self.config.write().await;
             config.add_provider(name.clone(), provider_config);
+            // Save config to disk
+            config.save()?;
         }
 
         Ok(())
@@ -93,6 +94,8 @@ impl StorageManager {
         {
             let mut config = self.config.write().await;
             config.providers.remove(name);
+            // Save config to disk
+            config.save()?;
         }
 
         Ok(())
@@ -101,18 +104,18 @@ impl StorageManager {
     pub async fn set_default_provider(&self, name: String) -> StorageResult<()> {
         // Check if provider exists
         {
-            let providers = self.providers.read().await;
-            if !providers.contains_key(&name) {
-                return Err(StorageError::invalid_configuration(
-                    "Provider does not exist"
-                ));
+            let config = self.config.read().await;
+            if !config.provider_exists(&name) {
+                return Err(StorageError::provider_not_supported(name));
             }
         }
 
         // Update config
         {
             let mut config = self.config.write().await;
-            *config = config.clone().set_default_provider(name);
+            config.default_provider = name;
+            // Save config to disk
+            config.save()?;
         }
 
         Ok(())
@@ -193,17 +196,21 @@ impl StorageManager {
             providers.clear();
         }
 
-        self.initialize_default_provider().await?;
+        self.initialize_all_providers().await?;
         Ok(())
     }
 
     /// Update a Google Drive provider's configuration (e.g., after token refresh)
     pub async fn update_google_drive_config(&self, provider_name: &str, new_config: GoogleDriveConfig) -> StorageResult<()> {
+        println!("update_google_drive_config called for provider: {}", provider_name);
+        println!("New config has access_token: {}", new_config.access_token.is_some());
+
         // Update in the config
         {
             let mut config = self.config.write().await;
             if let Some(provider_config) = config.providers.get_mut(provider_name) {
                 if let ProviderConfig::GoogleDrive { config } = provider_config {
+                    println!("Updating GoogleDrive config in memory");
                     *config = new_config.clone();
                 } else {
                     return Err(StorageError::invalid_configuration("Provider is not Google Drive"));
@@ -211,6 +218,10 @@ impl StorageManager {
             } else {
                 return Err(StorageError::provider_not_supported(provider_name.to_string()));
             }
+            // Save config to disk after updating tokens
+            println!("Saving config to disk...");
+            config.save()?;
+            println!("Config saved successfully");
         }
 
         // Update the provider instance if it exists
@@ -242,14 +253,6 @@ impl StorageManager {
             let mut providers = self.providers.write().await;
             if let Some(provider) = providers.get_mut(&provider_name_str) {
                 provider.authenticate().await?;
-
-                // If it's a GoogleDriveProvider, save the updated config
-                if provider.provider_type() == super::providers::StorageProviderType::GoogleDrive {
-                    // We need to get the updated config from the provider
-                    // For now, we'll recreate from storage config
-                    // This is a limitation of the current architecture
-                }
-
                 return Ok(());
             }
         }
