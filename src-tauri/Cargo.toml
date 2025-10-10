@@ -41,3 +41,8 @@ tempfile = "3"
 tokio = "1.47.1"
 tauri-plugin-fs = "2.4.1"
 tauri-plugin-os = "2"
+async-trait = "0.1"
+reqwest = { version = "0.11", features = ["json", "multipart"] }
+url = "2.5"
+dirs = "5.0"
+urlencoding = "2.1"

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monark Password Manager</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 48px 32px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      text-align: center;
+    }
+
+    .icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+      animation: bounce 1s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    h1 {
+      color: #1a202c;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    p {
+      color: #718096;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .status {
+      background: #f7fafc;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      color: #4a5568;
+    }
+
+    .button {
+      display: inline-block;
+      background: #667eea;
+      color: white;
+      padding: 12px 32px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .button:hover {
+      background: #5a67d8;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .error {
+      color: #e53e3e;
+    }
+
+    .success {
+      color: #38a169;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .code {
+      background: #2d3748;
+      color: #48bb78;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      word-break: break-all;
+      margin: 16px 0;
+    }
+
+    .copy-button {
+      background: #48bb78;
+      color: white;
+      padding: 10px 24px;
+      border-radius: 6px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 16px;
+    }
+
+    .copy-button:hover {
+      background: #38a169;
+      transform: translateY(-2px);
+    }
+
+    .copy-button:disabled {
+      background: #a0aec0;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .credentials-section {
+      background: #f7fafc;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .alert-info {
+      background: #e6f7ff;
+      border-left: 4px solid #1890ff;
+      padding: 12px;
+      margin-top: 16px;
+      border-radius: 4px;
+    }
+
+    .alert-info p {
+      font-size: 12px;
+      color: #4a5568;
+      margin: 0;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div id="content">
+      <div class="spinner"></div>
+      <h1>Redirecting to Monark...</h1>
+      <p>Please wait while we complete your authentication.</p>
+      <div class="status" id="status">Processing OAuth callback...</div>
+    </div>
+  </div>
+
+  <script>
+    // Parse URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+    const errorDescription = urlParams.get('error_description');
+
+    const statusEl = document.getElementById('status');
+    const contentEl = document.getElementById('content');
+
+    // Store credentials globally for the copy function
+    let authCode = null;
+    let authState = null;
+
+    function copyCredentialsAsBase64(event) {
+      try {
+        // Create credentials object
+        const credentials = {
+          code: authCode,
+          state: authState
+        };
+
+        // Convert to JSON and then to base64
+        const jsonString = JSON.stringify(credentials);
+        const base64 = btoa(jsonString);
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(base64).then(() => {
+          // Show feedback
+          const feedback = document.getElementById('copy-feedback');
+          if (feedback) {
+            feedback.style.display = 'block';
+          }
+
+          // Change button text temporarily
+          const button = event ? event.target : document.querySelector('.copy-button');
+          if (button) {
+            const originalText = button.innerHTML;
+            button.innerHTML = '✅ Copied!';
+            button.disabled = true;
+
+            setTimeout(() => {
+              button.innerHTML = originalText;
+              button.disabled = false;
+            }, 3000);
+          }
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          alert('Failed to copy credentials. Please try again.');
+        });
+      } catch (error) {
+        console.error('Error creating base64:', error);
+        alert('Failed to create credentials. Please try again.');
+      }
+    }
+
+    function updateStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.style.color = isError ? '#e53e3e' : '#4a5568';
+    }
+
+    function showError(title, message) {
+      contentEl.innerHTML = `
+                <div class="icon error">❌</div>
+                <h1>${title}</h1>
+                <p>${message}</p>
+                <div class="status error">${errorDescription || error || 'Unknown error'}</div>
+                <a href="#" class="button" onclick="window.close()">Close Window</a>
+            `;
+    }
+
+    function showSuccess(deepLink) {
+      contentEl.innerHTML = `
+                <div class="icon success">✅</div>
+                <h1>Authentication Successful!</h1>
+                <p>You can now complete the authentication in the Monark app.</p>
+                <div class="credentials-section">
+                    <p style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Copy Credentials</p>
+                    <p style="font-size: 12px; color: #4a5568; margin-bottom: 12px;">
+                        Copy these credentials and paste them in the Monark app to complete authentication.
+                    </p>
+                    <button class="copy-button" onclick="copyCredentialsAsBase64(event)">
+                        📋 Copy Credentials as Base64
+                    </button>
+                    <div id="copy-feedback" style="margin-top: 8px; font-size: 12px; color: #38a169; display: none;">
+                        ✅ Credentials copied! Now paste them in the Monark app.
+                    </div>
+                </div>
+                <div class="alert alert-info" style="background: #e6f7ff; border-left: 4px solid #1890ff; padding: 12px; margin-top: 16px; border-radius: 4px;">
+                    <p style="font-size: 12px; color: #4a5568; margin: 0;">
+                        <strong>Instructions:</strong><br>
+                        1. Click the "Copy Credentials" button above<br>
+                        2. Go back to the Monark app<br>
+                        3. In the authentication modal, click "Paste Base64 Credentials"<br>
+                        4. Paste and click "Import & Authenticate"
+                    </p>
+                </div>
+                <p style="margin-top: 16px; font-size: 12px;">
+                    You can close this window after copying the credentials.
+                </p>
+            `;
+    }
+
+    // Main logic
+    if (error) {
+      console.error('OAuth error:', error, errorDescription);
+      showError('Authentication Failed', 'There was an error during authentication.');
+    } else if (!code || !state) {
+      showError('Invalid Callback', 'Missing required parameters (code or state).');
+    } else {
+      // Store credentials globally
+      authCode = code;
+      authState = state;
+
+      // Build the deep link URL
+      const deepLink = `monark://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+
+      console.log('Deep link:', deepLink);
+      updateStatus('Authentication successful...');
+
+      // Try to open the deep link (but expect it to fail in browser)
+      setTimeout(() => {
+        try {
+          // Create an invisible iframe to attempt deep link without navigation error
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = deepLink;
+          document.body.appendChild(iframe);
+
+          // Remove iframe after a short delay
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 1000);
+        } catch (e) {
+          console.log('Deep link attempt (expected to fail in browser):', e);
+        }
+
+        // Show success message immediately
+        showSuccess(deepLink);
+      }, 500);
+    }
+
+    // Log for debugging
+    console.log('OAuth Redirect Handler');
+    console.log('Code:', code ? code.substring(0, 20) + '...' : 'missing');
+    console.log('State:', state);
+    console.log('Error:', error);
+  </script>
+</body>
+
+</html>

@@ -1,11 +1,15 @@
-mod commands;
-mod crypto;
-mod io;
-mod models;
-mod vault;
+use commands::storage::StorageState;
+use std::sync::Arc;
+
+pub mod commands;
+pub mod crypto;
+pub mod io;
+pub mod models;
+pub mod storage;
+pub mod vault;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run(storage_manager: Arc<storage::StorageManager>) {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -14,10 +18,35 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        .manage(StorageState {
+            manager: storage_manager,
+        })
         .invoke_handler(tauri::generate_handler![
             vault::lifecycle::write_vault,
             vault::lifecycle::read_vault,
             vault::lifecycle::delete_vault,
+            vault::cloud_lifecycle::write_cloud_vault,
+            vault::cloud_lifecycle::read_cloud_vault,
+            vault::cloud_lifecycle::delete_cloud_vault,
+            vault::cloud_lifecycle::list_cloud_vaults,
+            commands::storage::list_providers,
+            commands::storage::add_provider,
+            commands::storage::remove_provider,
+            commands::storage::set_default_provider,
+            commands::storage::list_files,
+            commands::storage::create_file,
+            commands::storage::read_file,
+            commands::storage::delete_file,
+            commands::storage::update_file,
+            commands::storage::create_folder,
+            commands::storage::delete_folder,
+            commands::storage::get_file_info,
+            commands::storage::search_files,
+            commands::storage::list_vaults,
+            commands::storage::authenticate_provider,
+            commands::storage::check_provider_auth_status,
+            commands::storage::get_google_drive_oauth_url,
+            commands::storage::handle_google_drive_oauth_callback,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

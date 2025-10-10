@@ -1,6 +1,6 @@
 // ButtercupParser implements ICsvParser for Buttercup CSV import logic
 
-import type { Field } from '../interfaces/vault.interface';
+import type { Field, FieldType } from '../interfaces/vault.interface';
 import type { ParsedEntry } from '../interfaces/parsers.interface';
 import type { ICsvParser } from '../interfaces/csv.interface';
 import type { GroupEntry, DataEntry } from '../interfaces/vault.interface';
@@ -53,7 +53,7 @@ export class ButtercupParser implements ICsvParser {
 
           fields.push({
             title: key.charAt(0).toUpperCase() + key.slice(1),
-            property: key.toLowerCase().replace(/\s+/g, '_'),
+            property: this.mapToFieldType(key),
             value: value.trim(),
             secret: isSecret,
           });
@@ -72,6 +72,43 @@ export class ButtercupParser implements ICsvParser {
     console.log(entries);
 
     return entries;
+  }
+
+  /**
+   * Maps CSV column names to valid FieldType values.
+   * @param key - The CSV column name
+   * @returns The corresponding FieldType
+   */
+  private mapToFieldType(key: string): FieldType {
+    const normalizedKey = key.toLowerCase();
+
+    // Password-related fields
+    if (['password', 'pass', 'pwd', 'secret'].includes(normalizedKey)) {
+      return 'password';
+    }
+
+    // URL-related fields
+    if (['url', 'link', 'website'].includes(normalizedKey)) {
+      return 'url';
+    }
+
+    // Note-related fields
+    if (['note', 'notes', 'description', 'desc'].includes(normalizedKey)) {
+      return 'note';
+    }
+
+    // OTP-related fields
+    if (['otp', 'totp', '2fa'].includes(normalizedKey)) {
+      return 'otp';
+    }
+
+    // SSH-related fields
+    if (['ssh key', 'sshkey', 'ssh'].includes(normalizedKey)) {
+      return 'ssh key';
+    }
+
+    // Default to text for unrecognized column names
+    return 'text';
   }
 
   /**
