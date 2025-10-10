@@ -1,7 +1,6 @@
 import {
   Entry,
   DataEntry,
-  GroupEntry,
   isGroupEntry,
   isDataEntry,
 } from '../interfaces/vault.interface';
@@ -30,7 +29,7 @@ export function flattenEntries(
       // For DataEntry, add to result with current path
       result.push({ entry, path: basePath });
     } else if (isGroupEntry(entry)) {
-      // For GroupEntry, recursively process children with updated path
+      // For  recursively process children with updated path
       const newPath = [...basePath, entry.id];
       result.push(...flattenEntries(entry.children, newPath));
     }

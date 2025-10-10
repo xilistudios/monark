@@ -1,9 +1,9 @@
-import { open } from "@tauri-apps/plugin-dialog";
+import { open } from '@tauri-apps/plugin-dialog';
 import * as path from '@tauri-apps/api/path';
 import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
-import { addVault, updateVault, type Vault } from '../../../redux/actions/vault';
+import { updateVault, type Vault } from '../../../redux/actions/vault';
 import VaultCommands from '../../../services/commands';
 import { VaultManager } from '../../../services/vault';
 import { CloudStorageCommands } from '../../../services/cloudStorage';
@@ -61,10 +61,6 @@ export const AddVaultForm = ({
     }
   }, [storageType]);
 
-  const generateVaultId = () => {
-    return crypto.randomUUID();
-  };
-
   const extractVaultNameFromPath = (path: string) => {
     const fileName = path.split('/').pop() || '';
     return fileName.replace('.monark', '');
@@ -86,8 +82,6 @@ export const AddVaultForm = ({
     setLoading(true);
 
     try {
-      let vaultId: string;
-
       if (storageType === 'cloud') {
         // Check authentication status before creating vault
         try {
@@ -117,7 +111,7 @@ export const AddVaultForm = ({
 
         // Create cloud vault using VaultManager
         // parentFolderId is undefined - the backend will automatically use the "Monark" folder
-        vaultId = await VaultManager.getInstance().createVault(
+        await VaultManager.getInstance().createVault(
           vaultName,
           password,
           'cloud',
@@ -131,7 +125,7 @@ export const AddVaultForm = ({
           filePath || (await path.appDataDir()),
           `${vaultName}.monark`
         );
-        vaultId = await VaultManager.getInstance().createVault(
+        await VaultManager.getInstance().createVault(
           vaultName,
           password,
           'local',

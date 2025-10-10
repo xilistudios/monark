@@ -5,10 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   setCurrentVault,
   updateLastAccessed,
-  removeVault,
-  deleteVault,
   isCloudVault,
-  getVaultProvider,
   type Vault,
 } from '../../redux/actions/vault';
 import type { RootState } from '../../redux/store';
@@ -34,7 +31,7 @@ const VaultSelector = ({
   const error = useSelector((state: RootState) => state.vault.error);
   const providers = useSelector((state: RootState) => state.vault.providers);
   const context = useContext(VaultModalContext);
-  
+
   const [cloudVaultsLoading, setCloudVaultsLoading] = useState(false);
   const [syncingVaults, setSyncingVaults] = useState<Set<string>>(new Set());
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -45,23 +42,25 @@ const VaultSelector = ({
       try {
         setCloudVaultsLoading(true);
         setRefreshError(null);
-        
+
         const vaultManager = VaultManager.getInstance();
-        
+
         // Initialize VaultManager if not already done
         if (!vaultManager) {
           console.warn('VaultManager not available');
           return;
         }
-        
+
         // Load providers first
         await vaultManager.loadProviders();
-        
+
         // Then refresh cloud vaults
         await vaultManager.refreshCloudVaults();
       } catch (error) {
         console.error('Failed to load cloud vaults:', error);
-        setRefreshError(t('vaultSelector.refreshError', 'Failed to refresh cloud vaults'));
+        setRefreshError(
+          t('vaultSelector.refreshError', 'Failed to refresh cloud vaults')
+        );
       } finally {
         setCloudVaultsLoading(false);
       }
@@ -87,16 +86,12 @@ const VaultSelector = ({
     onDeleteVault(vault);
   };
 
-  const handleCloseModal = () => {
-    // This function is no longer needed as delete modal is handled in Home.tsx
-  };
-
   const handleSyncVault = async (vault: Vault) => {
     if (!isCloudVault(vault)) return;
-    
+
     try {
-      setSyncingVaults(prev => new Set(prev).add(vault.id));
-      
+      setSyncingVaults((prev) => new Set(prev).add(vault.id));
+
       const vaultInstance = VaultManager.getInstance().getInstance(vault.id);
       if (vaultInstance) {
         await vaultInstance.syncWithCloud();
@@ -105,7 +100,7 @@ const VaultSelector = ({
       console.error('Failed to sync vault:', error);
       // Could show a toast or error message here
     } finally {
-      setSyncingVaults(prev => {
+      setSyncingVaults((prev) => {
         const newSet = new Set(prev);
         newSet.delete(vault.id);
         return newSet;
@@ -117,12 +112,14 @@ const VaultSelector = ({
     try {
       setCloudVaultsLoading(true);
       setRefreshError(null);
-      
+
       const vaultManager = VaultManager.getInstance();
       await vaultManager.refreshCloudVaults();
     } catch (error) {
       console.error('Failed to refresh cloud vaults:', error);
-      setRefreshError(t('vaultSelector.refreshError', 'Failed to refresh cloud vaults'));
+      setRefreshError(
+        t('vaultSelector.refreshError', 'Failed to refresh cloud vaults')
+      );
     } finally {
       setCloudVaultsLoading(false);
     }
@@ -196,7 +193,7 @@ const VaultSelector = ({
             </li>
           </ul>
         </div>
-        
+
         {/* Cloud vaults loading indicator */}
         {cloudVaultsLoading && (
           <div className="flex items-center gap-2 text-xs text-base-content/60">
@@ -205,17 +202,27 @@ const VaultSelector = ({
           </div>
         )}
       </div>
-      
+
       {error && (
         <div className="alert alert-error mx-2 mb-2">
           <span>{error}</span>
         </div>
       )}
-      
+
       {refreshError && (
         <div className="alert alert-warning mx-2 mb-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="stroke-current shrink-0 h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
           </svg>
           <span>{refreshError}</span>
         </div>
@@ -246,8 +253,12 @@ const VaultSelector = ({
                   </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {/* Cloud/Local indicator */}
-                    <CloudVaultIndicator vault={vault} showTooltip={false} className="hidden sm:flex" />
-                    
+                    <CloudVaultIndicator
+                      vault={vault}
+                      showTooltip={false}
+                      className="hidden sm:flex"
+                    />
+
                     {/* Lock status */}
                     {vault.isLocked ? (
                       <span
@@ -296,28 +307,39 @@ const VaultSelector = ({
                     )}
                   </div>
                 </div>
-                
+
                 {/* Cloud/Local indicator for mobile */}
                 <div className="flex items-center gap-2 mt-1">
-                  <CloudVaultIndicator vault={vault} showTooltip={false} className="sm:hidden" />
+                  <CloudVaultIndicator
+                    vault={vault}
+                    showTooltip={false}
+                    className="sm:hidden"
+                  />
                   <div className="text-xs text-base-content/60">
-                    {t('vaultSelector.lastAccessed')}: {formatLastAccessed(vault.lastAccessed)}
+                    {t('vaultSelector.lastAccessed')}:{' '}
+                    {formatLastAccessed(vault.lastAccessed)}
                   </div>
                 </div>
-                
+
                 {/* Path display */}
-                <div className="text-xs text-base-content/60 truncate w-full mt-1" title={vault.path}>
-                  {isCloudVault(vault) ? vault.cloudMetadata?.provider : vault.path}
+                <div
+                  className="text-xs text-base-content/60 truncate w-full mt-1"
+                  title={vault.path}
+                >
+                  {isCloudVault(vault)
+                    ? vault.cloudMetadata?.provider
+                    : vault.path}
                 </div>
-                
+
                 {/* Sync status for cloud vaults */}
                 {isCloudVault(vault) && vault.cloudMetadata?.lastSync && (
                   <div className="text-xs text-base-content/60 truncate w-full">
-                    {t('vaultSelector.lastSync')}: {formatLastAccessed(vault.cloudMetadata.lastSync)}
+                    {t('vaultSelector.lastSync')}:{' '}
+                    {formatLastAccessed(vault.cloudMetadata.lastSync)}
                   </div>
                 )}
               </a>
-              
+
               <div className="dropdown dropdown-end">
                 <div
                   tabIndex={0}
@@ -353,7 +375,7 @@ const VaultSelector = ({
                       {t('edit', 'Edit')}
                     </button>
                   </li>
-                  
+
                   {/* Cloud vault specific actions */}
                   {isCloudVault(vault) ? (
                     <>
@@ -401,7 +423,7 @@ const VaultSelector = ({
                       </li>
                     </>
                   )}
-                  
+
                   <li>
                     <button
                       onClick={(e) => {

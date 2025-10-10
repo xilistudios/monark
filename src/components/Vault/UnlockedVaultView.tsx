@@ -1,13 +1,13 @@
 // src/components/Vault/UnlockedVaultView.tsx
 
-import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
 import { AddEntryModal } from './Modals/AddEntryModal';
 import { AddGroupModal } from './Modals/AddGroupModal';
 import { ImportCsvModal } from './Modals/ImportCsvModal';
 import { EntryDetailsSidebar } from './EntryDetailsSidebar';
 import { VaultManager } from '../../services/vault';
-import { flattenEntries } from '../../utils/vaultSearch';
+
 import VaultSearchBar from './VaultSearchBar';
 /**
  * Vault interface for unlocked vault view props.
