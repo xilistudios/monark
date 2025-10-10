@@ -196,17 +196,27 @@ export class CloudStorageCommands {
           parentId,
         });
       } else {
-        const request = requestOrVaultId as CreateCloudVaultRequest;
-        // For create requests, do not send vaultId in the payload so mocks and
-        // backend that expect (vaultName, password, vaultContent, providerName, parentId)
-        // receive the exact shape.
-        return await invoke<string>('write_cloud_vault', {
+        const request = requestOrVaultId as CreateCloudVaultRequest & {
+          vaultId?: string;
+          parentId?: string;
+        };
+
+        const payload: Record<string, any> = {
           vaultName: request.vaultName,
           password: request.password,
           vaultContent: request.vaultContent,
           providerName: request.providerName,
-          parentId: (request as any).parentId,
-        });
+        };
+
+        if (request.parentId) {
+          payload.parentId = request.parentId;
+        }
+
+        if (request.vaultId) {
+          payload.vaultId = request.vaultId;
+        }
+
+        return await invoke<string>('write_cloud_vault', payload);
       }
     } catch (error) {
       throw this.handleError(error, 'Failed to write cloud vault');
