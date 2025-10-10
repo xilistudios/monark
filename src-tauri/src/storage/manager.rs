@@ -1,5 +1,5 @@
 use super::{StorageProvider, StorageError, StorageResult, StorageConfig, ProviderConfig};
-use super::providers::{LocalStorageProvider, GoogleDriveProvider};
+use super::providers::{LocalStorageProvider, GoogleDriveProvider, google_drive::GoogleDriveConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -196,14 +196,82 @@ impl StorageManager {
         self.initialize_default_provider().await?;
         Ok(())
     }
+
+    /// Update a Google Drive provider's configuration (e.g., after token refresh)
+    pub async fn update_google_drive_config(&self, provider_name: &str, new_config: GoogleDriveConfig) -> StorageResult<()> {
+        // Update in the config
+        {
+            let mut config = self.config.write().await;
+            if let Some(provider_config) = config.providers.get_mut(provider_name) {
+                if let ProviderConfig::GoogleDrive { config } = provider_config {
+                    *config = new_config.clone();
+                } else {
+                    return Err(StorageError::invalid_configuration("Provider is not Google Drive"));
+                }
+            } else {
+                return Err(StorageError::provider_not_supported(provider_name.to_string()));
+            }
+        }
+
+        // Update the provider instance if it exists
+        {
+            let mut providers = self.providers.write().await;
+            if let Some(provider) = providers.get_mut(provider_name) {
+                // Downcast to GoogleDriveProvider to update config
+                // This is a bit tricky with trait objects, so we'll recreate the provider
+                *provider = Box::new(GoogleDriveProvider::new(new_config));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // High-level storage operations that work with the default provider
 impl StorageManager {
     pub async fn authenticate(&self, provider_name: Option<String>) -> StorageResult<()> {
-        let mut provider = self.get_provider_mut(provider_name).await?;
-        provider.authenticate().await?;
-        Ok(())
+        let provider_name_str = if let Some(name) = &provider_name {
+            name.clone()
+        } else {
+            let config = self.config.read().await;
+            config.default_provider.clone()
+        };
+
+        // Get mutable access to the provider
+        {
+            let mut providers = self.providers.write().await;
+            if let Some(provider) = providers.get_mut(&provider_name_str) {
+                provider.authenticate().await?;
+
+                // If it's a GoogleDriveProvider, save the updated config
+                if provider.provider_type() == super::providers::StorageProviderType::GoogleDrive {
+                    // We need to get the updated config from the provider
+                    // For now, we'll recreate from storage config
+                    // This is a limitation of the current architecture
+                }
+
+                return Ok(());
+            }
+        }
+
+        // If provider doesn't exist in the map, try to create and authenticate it
+        let provider_config_opt = {
+            let config = self.config.read().await;
+            config.get_provider_config(&provider_name_str).cloned()
+        };
+
+        if let Some(provider_config) = provider_config_opt {
+            let mut provider = self.create_provider_from_config(&provider_config)?;
+            provider.authenticate().await?;
+
+            // Store the authenticated provider
+            let mut providers = self.providers.write().await;
+            providers.insert(provider_name_str.clone(), provider);
+
+            Ok(())
+        } else {
+            Err(StorageError::provider_not_supported(provider_name_str))
+        }
     }
 
     pub async fn list_files(&self, folder_id: Option<String>, provider_name: Option<String>) -> StorageResult<Vec<super::providers::StorageFile>> {

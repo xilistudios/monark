@@ -70,14 +70,14 @@ impl GoogleDriveProvider {
         Self::new(config)
     }
 
-    async fn ensure_valid_token(&mut self) -> StorageResult<()> {
+    pub async fn ensure_valid_token(&mut self) -> StorageResult<()> {
         if self.is_token_expired() {
             self.refresh_access_token().await?;
         }
         Ok(())
     }
 
-    fn is_token_expired(&self) -> bool {
+    pub fn is_token_expired(&self) -> bool {
         if let (Some(_token), Some(expires_at)) = (&self.config.access_token, &self.config.token_expires_at) {
             Utc::now() >= *expires_at - chrono::Duration::minutes(5)
         } else {
@@ -85,7 +85,15 @@ impl GoogleDriveProvider {
         }
     }
 
-    async fn refresh_access_token(&mut self) -> StorageResult<()> {
+    pub fn get_config(&self) -> &GoogleDriveConfig {
+        &self.config
+    }
+
+    pub fn update_config(&mut self, config: GoogleDriveConfig) {
+        self.config = config;
+    }
+
+    pub async fn refresh_access_token(&mut self) -> StorageResult<()> {
         let refresh_token = self.config.refresh_token.as_ref()
             .ok_or_else(|| StorageError::authentication("No refresh token available"))?;
 
@@ -103,8 +111,13 @@ impl GoogleDriveProvider {
             .await
             .map_err(|e| StorageError::network(format!("Failed to refresh token: {}", e)))?;
 
-        if !response.status().is_success() {
-            return Err(StorageError::authentication("Failed to refresh access token"));
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(StorageError::authentication(
+                format!("Failed to refresh access token ({}): {}", status, error_text)
+            ));
         }
 
         let token_response: OAuthTokenResponse = response.json().await
@@ -214,8 +227,13 @@ impl StorageProvider for GoogleDriveProvider {
             .await
             .map_err(|e| StorageError::network(format!("Failed to list files: {}", e)))?;
 
-        if !response.status().is_success() {
-            return Err(StorageError::operation_failed("Failed to list files"));
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(StorageError::operation_failed(
+                format!("Failed to list files ({}): {}", status, error_text)
+            ));
         }
 
         let file_list: GoogleDriveFileList = response.json().await

@@ -43,107 +43,126 @@ export const AddProviderModal = ({ isOpen, onClose }: AddProviderModalProps) => 
 	const loading = useSelector((state: RootState) => state.vault.loading);
 
 	const [formData, setFormData] = useState<ProviderFormData>({
-		providerName: '',
-		providerType: StorageProviderType.GOOGLE_DRIVE,
-		clientId: '',
-		clientSecret: '',
-		redirectUri: 'http://localhost:1420/auth/callback',
-	});
+    providerName: '',
+    providerType: StorageProviderType.GOOGLE_DRIVE,
+    clientId: '',
+    clientSecret: '',
+    redirectUri: 'https://your-app.web.app/redirect/',
+  });
+  const [errors, setErrors] = useState<Partial<ProviderFormData>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const [errors, setErrors] = useState<Partial<ProviderFormData>>({});
-	const [isSubmitting, setIsSubmitting] = useState(false);
+  const validateForm = (): boolean => {
+    const newErrors: Partial<ProviderFormData> = {};
 
-	const validateForm = (): boolean => {
-		const newErrors: Partial<ProviderFormData> = {};
+    if (!formData.providerName.trim()) {
+      newErrors.providerName = t(
+        'addProvider.errors.providerNameRequired',
+        'Provider name is required'
+      );
+    }
 
-		if (!formData.providerName.trim()) {
-			newErrors.providerName = t('addProvider.errors.providerNameRequired', 'Provider name is required');
-		}
+    if (!formData.clientId.trim()) {
+      newErrors.clientId = t(
+        'addProvider.errors.clientIdRequired',
+        'Client ID is required'
+      );
+    }
 
-		if (!formData.clientId.trim()) {
-			newErrors.clientId = t('addProvider.errors.clientIdRequired', 'Client ID is required');
-		}
+    if (!formData.clientSecret.trim()) {
+      newErrors.clientSecret = t(
+        'addProvider.errors.clientSecretRequired',
+        'Client Secret is required'
+      );
+    }
 
-		if (!formData.clientSecret.trim()) {
-			newErrors.clientSecret = t('addProvider.errors.clientSecretRequired', 'Client Secret is required');
-		}
+    if (!formData.redirectUri.trim()) {
+      newErrors.redirectUri = t(
+        'addProvider.errors.redirectUriRequired',
+        'Redirect URI is required'
+      );
+    }
 
-		if (!formData.redirectUri.trim()) {
-			newErrors.redirectUri = t('addProvider.errors.redirectUriRequired', 'Redirect URI is required');
-		}
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-		setErrors(newErrors);
-		return Object.keys(newErrors).length === 0;
-	};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		
-		if (!validateForm()) {
-			return;
-		}
+    if (!validateForm()) {
+      return;
+    }
 
-		setIsSubmitting(true);
-		setErrors({});
+    setIsSubmitting(true);
+    setErrors({});
 
-		try {
-			const vaultManager = VaultManager.getInstance();
-			
-			// Create provider configuration
-			const providerConfig = {
-				type: formData.providerType,
-				config: {
-					client_id: formData.clientId.trim(),
-					client_secret: formData.clientSecret.trim(),
-					redirect_uri: formData.redirectUri.trim(),
-				},
-			};
+    try {
+      const vaultManager = VaultManager.getInstance();
 
-			// Add provider through VaultManager
-			await vaultManager.addProvider(providerConfig);
+      // Create provider request with name and configuration
+      const providerRequest = {
+        name: formData.providerName.trim(),
+        config: {
+          type: formData.providerType,
+          config: {
+            client_id: formData.clientId.trim(),
+            client_secret: formData.clientSecret.trim(),
+            redirect_uri: formData.redirectUri.trim(),
+          },
+        } as any, // Type assertion needed due to union type complexity
+      };
 
-			// Update Redux state
-			dispatch(addStorageProvider({
-				name: formData.providerName.trim(),
-				providerType: formData.providerType,
-				isDefault: false,
-			}));
+      // Add provider through VaultManager
+      await vaultManager.addProvider(providerRequest);
 
-			// Reset form and close modal
-			setFormData({
-				providerName: '',
-				providerType: StorageProviderType.GOOGLE_DRIVE,
-				clientId: '',
-				clientSecret: '',
-				redirectUri: 'http://localhost:1420/auth/callback',
-			});
-			onClose();
-		} catch (error) {
-			console.error('Failed to add provider:', error);
-			setErrors({
-				providerName: t('addProvider.errors.addFailed', 'Failed to add provider. Please check your credentials.'),
-			});
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
+      // Update Redux state
+      dispatch(
+        addStorageProvider({
+          name: formData.providerName.trim(),
+          providerType: formData.providerType,
+          isDefault: false,
+        })
+      );
 
-	const handleInputChange = (field: keyof ProviderFormData) => (
-		e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-	) => {
-		setFormData(prev => ({
-			...prev,
-			[field]: e.target.value,
-		}));
-		
-		// Clear error for this field when user starts typing
-		if (errors[field]) {
-			setErrors(prev => ({
-				...prev,
-				[field]: undefined,
-			}));
-		}
-	};
+      // Reset form and close modal
+      setFormData({
+        providerName: '',
+        providerType: StorageProviderType.GOOGLE_DRIVE,
+        clientId: '',
+        clientSecret: '',
+        redirectUri: 'https://your-app.web.app/redirect/',
+      });
+      onClose();
+    } catch (error) {
+      console.error('Failed to add provider:', error);
+      setErrors({
+        providerName: t(
+          'addProvider.errors.addFailed',
+          'Failed to add provider. Please check your credentials.'
+        ),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange =
+    (field: keyof ProviderFormData) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: e.target.value,
+      }));
+
+      // Clear error for this field when user starts typing
+      if (errors[field]) {
+        setErrors((prev) => ({
+          ...prev,
+          [field]: undefined,
+        }));
+      }
+    };
 
 	const handleClose = () => {
 		if (!isSubmitting) {

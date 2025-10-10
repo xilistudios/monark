@@ -1,9 +1,11 @@
 use crate::commands::errors::CommandError;
 use crate::storage::{StorageManager, StorageConfig, ProviderConfig};
 use crate::storage::providers::{CreateFileRequest, UpdateFileRequest, CreateFolderRequest, StorageFile};
+use crate::storage::providers::google_drive::GoogleDriveConfig;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
+use chrono::Utc;
 
 // Global state for storage manager
 pub struct StorageState {
@@ -255,4 +257,116 @@ pub async fn list_vaults(
 ) -> Result<Vec<StorageFile>, CommandError> {
     state.manager.list_vaults(provider_name).await
         .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OAuthUrlResponse {
+    pub url: String,
+    pub state: String,
+}
+
+#[tauri::command]
+pub async fn get_google_drive_oauth_url(
+    provider_name: String,
+    state: State<'_, StorageState>,
+) -> Result<OAuthUrlResponse, CommandError> {
+    // Get the provider config
+    let config = state.manager.get_config().await;
+    let provider_config = config.get_provider_config(&provider_name)
+        .ok_or_else(|| CommandError::Io("Provider not found".to_string()))?;
+
+    match provider_config {
+        ProviderConfig::GoogleDrive { config: gd_config } => {
+            // Generate a random state for CSRF protection
+            let oauth_state = format!("{}", uuid::Uuid::new_v4());
+
+            // Build OAuth URL
+            let scopes = "https://www.googleapis.com/auth/drive.file";
+            let auth_url = format!(
+                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&state={}&prompt=consent",
+                urlencoding::encode(&gd_config.client_id),
+                urlencoding::encode(&gd_config.redirect_uri),
+                urlencoding::encode(scopes),
+                &oauth_state
+            );
+
+            Ok(OAuthUrlResponse {
+                url: auth_url,
+                state: oauth_state,
+            })
+        }
+        _ => Err(CommandError::Io("Provider is not Google Drive".to_string())),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OAuthCallbackRequest {
+    pub provider_name: String,
+    pub code: String,
+    pub state: String,
+}
+
+#[tauri::command]
+pub async fn handle_google_drive_oauth_callback(
+    request: OAuthCallbackRequest,
+    state: State<'_, StorageState>,
+) -> Result<(), CommandError> {
+    // Get the provider config
+    let config = state.manager.get_config().await;
+    let provider_config = config.get_provider_config(&request.provider_name)
+        .ok_or_else(|| CommandError::Io("Provider not found".to_string()))?;
+
+    let gd_config = match provider_config {
+        ProviderConfig::GoogleDrive { config } => config.clone(),
+        _ => return Err(CommandError::Io("Provider is not Google Drive".to_string())),
+    };
+
+    // Exchange authorization code for tokens
+    let client = reqwest::Client::new();
+    let params = [
+        ("client_id", gd_config.client_id.as_str()),
+        ("client_secret", gd_config.client_secret.as_str()),
+        ("code", request.code.as_str()),
+        ("redirect_uri", gd_config.redirect_uri.as_str()),
+        ("grant_type", "authorization_code"),
+    ];
+
+    let response = client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| CommandError::Io(format!("Failed to exchange code for tokens: {}", e)))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CommandError::Io(format!("Token exchange failed: {}", error_text)));
+    }
+
+    #[derive(Deserialize)]
+    struct TokenResponse {
+        access_token: String,
+        refresh_token: Option<String>,
+        expires_in: u64,
+    }
+
+    let token_response: TokenResponse = response.json().await
+        .map_err(|e| CommandError::Io(format!("Failed to parse token response: {}", e)))?;
+
+    // Update the provider config with the new tokens
+    let new_config = GoogleDriveConfig {
+        client_id: gd_config.client_id,
+        client_secret: gd_config.client_secret,
+        redirect_uri: gd_config.redirect_uri,
+        access_token: Some(token_response.access_token),
+        refresh_token: token_response.refresh_token,
+        token_expires_at: Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64)),
+    };
+
+    // Update the configuration
+    state.manager.update_google_drive_config(&request.provider_name, new_config).await
+        .map_err(|e| CommandError::Io(format!("Failed to update provider config: {}", e)))?;
+
+    Ok(())
 }
