@@ -3,9 +3,11 @@ use crate::commands::storage::StorageState;
 use crate::crypto;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
 use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
-use crate::storage::StorageManager;
+use crate::storage::{StorageError, StorageManager};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 const CURRENT_VAULT_VERSION: &str = "1.0";
@@ -15,6 +17,87 @@ const VAULT_EXTENSION: &str = "monark";
 const ARGON2_MEMORY_COST_KIB: u32 = 65536;
 const ARGON2_ITERATIONS: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;
+
+fn sanitize_path_component(input: &str) -> String {
+    let sanitized: String = input
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    if sanitized.trim_matches('_').is_empty() {
+        "default".to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn cloud_cache_file_path(provider: &str, vault_id: &str) -> PathBuf {
+    let base_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    base_dir
+        .join("monark")
+        .join("cloud_cache")
+        .join(sanitize_path_component(provider))
+        .join(format!("{}.monark", sanitize_path_component(vault_id)))
+}
+
+fn cache_vault_bytes(provider: &str, vault_id: &str, data: &[u8]) -> Result<(), CommandError> {
+    let path = cloud_cache_file_path(provider, vault_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| {
+            CommandError::Io(format!(
+                "Failed to create cloud cache directory '{}': {}",
+                parent.display(),
+                e
+            ))
+        })?;
+    }
+
+    fs::write(&path, data).map_err(|e| {
+        CommandError::Io(format!(
+            "Failed to write cached cloud vault '{}': {}",
+            path.display(),
+            e
+        ))
+    })
+}
+
+fn load_cached_vault(provider: &str, vault_id: &str) -> Result<Vec<u8>, CommandError> {
+    let path = cloud_cache_file_path(provider, vault_id);
+    fs::read(&path).map_err(|e| {
+        CommandError::Io(format!(
+            "Failed to read cached cloud vault '{}': {}",
+            path.display(),
+            e
+        ))
+    })
+}
+
+fn map_provider_name_for_cache(provider_name: &str) -> String {
+    if provider_name == "Drive" {
+        "google_drive".to_string()
+    } else {
+        provider_name.to_string()
+    }
+}
+
+async fn resolve_provider_name(
+    storage_manager: &Arc<StorageManager>,
+    provider_name: &Option<String>,
+) -> Result<String, CommandError> {
+    let raw_name = if let Some(name) = provider_name {
+        name.clone()
+    } else {
+        storage_manager.get_default_provider().await
+    };
+
+    Ok(map_provider_name_for_cache(&raw_name))
+}
 
 #[tauri::command(async)]
 pub async fn write_cloud_vault(
@@ -123,11 +206,58 @@ pub async fn read_cloud_vault(
     state: tauri::State<'_, StorageState>,
 ) -> Result<Vault, CommandError> {
     let storage_manager = &state.manager;
+    let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
 
-    let vault_data = storage_manager
-        .read_file(vault_id.clone(), provider_name)
+    let vault_data = match storage_manager
+        .read_file(vault_id.clone(), provider_name.clone())
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to read vault file: {}", e)))?;
+    {
+        Ok(data) => {
+            if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, &vault_id, &data) {
+                println!(
+                    "[read_cloud_vault] Failed to cache vault '{}' locally: {}",
+                    vault_id, cache_err
+                );
+            }
+            data
+        }
+        Err(err) => {
+            println!(
+                "[read_cloud_vault] Failed to fetch vault '{}' from provider '{}': {}",
+                vault_id, provider_cache_key, err
+            );
+
+            if matches!(
+                err,
+                StorageError::Network(_) | StorageError::Authentication(_)
+            ) {
+                match load_cached_vault(&provider_cache_key, &vault_id) {
+                    Ok(cached) => {
+                        println!(
+                            "[read_cloud_vault] Using cached copy for vault '{}' (provider '{}')",
+                            vault_id, provider_cache_key
+                        );
+                        cached
+                    }
+                    Err(cache_err) => {
+                        println!(
+                            "[read_cloud_vault] Cached copy unavailable for vault '{}': {}",
+                            vault_id, cache_err
+                        );
+                        return Err(CommandError::Io(format!(
+                            "Failed to read vault file ({}); no cached copy available",
+                            err
+                        )));
+                    }
+                }
+            } else {
+                return Err(CommandError::Io(format!(
+                    "Failed to read vault file: {}",
+                    err
+                )));
+            }
+        }
+    };
 
     let vault_file = parse_vault_from_bytes(&vault_data)?;
 
@@ -155,11 +285,25 @@ pub async fn delete_cloud_vault(
     state: tauri::State<'_, StorageState>,
 ) -> Result<(), CommandError> {
     let storage_manager = &state.manager;
+    let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
+    let cached_vault_id = vault_id.clone();
 
     storage_manager
         .delete_file(vault_id, provider_name)
         .await
         .map_err(|e| CommandError::Io(format!("Failed to delete vault: {}", e)))?;
+
+    let cache_path = cloud_cache_file_path(&provider_cache_key, &cached_vault_id);
+    if cache_path.exists() {
+        if let Err(err) = fs::remove_file(&cache_path) {
+            println!(
+                "[delete_cloud_vault] Failed to remove cached vault '{}' at '{}': {}",
+                cached_vault_id,
+                cache_path.display(),
+                err
+            );
+        }
+    }
     Ok(())
 }
 
@@ -185,6 +329,7 @@ async fn create_new_cloud_vault(
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<String, CommandError> {
+    let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
     let master_key_vec = crypto::random::generate_key()?;
     let master_key: [u8; KEY_LENGTH] = master_key_vec
         .try_into()
@@ -233,6 +378,7 @@ async fn create_new_cloud_vault(
     };
 
     let vault_bytes = create_vault_bytes(&vault_file)?;
+    let cached_bytes = vault_bytes.clone();
 
     let create_request = CreateFileRequest {
         name: vault_name.to_string(),
@@ -248,6 +394,14 @@ async fn create_new_cloud_vault(
         .await
         .map_err(|e| CommandError::Io(format!("Failed to create vault file: {}", e)))?;
 
+    if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, &created_file.id, &cached_bytes)
+    {
+        println!(
+            "[create_new_cloud_vault] Failed to cache new vault '{}' locally: {}",
+            created_file.id, cache_err
+        );
+    }
+
     Ok(created_file.id)
 }
 
@@ -258,6 +412,7 @@ async fn update_existing_cloud_vault(
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<(), CommandError> {
+    let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
     let vault_data = storage_manager
         .read_file(vault_id.to_string(), provider_name.clone())
         .await
@@ -277,6 +432,7 @@ async fn update_existing_cloud_vault(
     vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
 
     let vault_bytes = create_vault_bytes(&vault_file)?;
+    let cached_bytes = vault_bytes.clone();
 
     let update_request = UpdateFileRequest {
         id: vault_id.to_string(),
@@ -288,6 +444,13 @@ async fn update_existing_cloud_vault(
         .update_file(update_request, provider_name)
         .await
         .map_err(|e| CommandError::Io(format!("Failed to update vault file: {}", e)))?;
+
+    if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, vault_id, &cached_bytes) {
+        println!(
+            "[update_existing_cloud_vault] Failed to update cached vault '{}' locally: {}",
+            vault_id, cache_err
+        );
+    }
 
     Ok(())
 }
