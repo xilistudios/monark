@@ -40,7 +40,6 @@ export function LockedVaultView({
   handleUnlockVault,
   unlockError,
   loading,
-  cloudUnlockMessage,
   t,
 }: LockedVaultViewProps) {
   if (!currentVault) return null;
