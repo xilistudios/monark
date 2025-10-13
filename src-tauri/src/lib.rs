@@ -1,6 +1,9 @@
 use commands::storage::StorageState;
 use std::sync::Arc;
 
+#[cfg(mobile)]
+use tokio::runtime::Builder;
+
 pub mod commands;
 pub mod crypto;
 pub mod io;
@@ -9,8 +12,23 @@ pub mod storage;
 pub mod vault;
 pub mod state;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(storage_manager: Arc<storage::StorageManager>) {
+    build_app(storage_manager);
+}
+
+#[cfg(mobile)]
+#[tauri::mobile_entry_point]
+pub fn mobile_main() {
+    let runtime = Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to start Tokio runtime");
+    // Tauri mobile entry point cannot be async, so we bootstrap storage before launching the app.
+    let storage_manager = runtime.block_on(storage::init_storage_manager());
+    build_app(storage_manager);
+}
+
+fn build_app(storage_manager: Arc<storage::StorageManager>) {
     let vault_state_manager = state::VaultStateManager::new();
 
     tauri::Builder::default()
@@ -56,5 +74,5 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
             state::save_vault_state,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    .expect("error while running tauri application");
 }
