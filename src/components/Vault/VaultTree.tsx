@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { type Entry, isGroupEntry } from '../../interfaces/vault.interface';
 import { VaultManager } from '../../services/vault';
 import { VaultModalContext } from './VaultContext';
+import { Modal } from '../UI/Modal';
 
 /**
  * Props for VaultTree component.
@@ -252,31 +253,43 @@ const VaultTree = ({
 }: VaultTreeProps) => {
   const { t } = useTranslation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    isOpen: boolean;
+    vaultId: string;
+    path: string[];
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = useCallback(
-    async (vaultId: string, path: string[]) => {
-      if (confirm(t('home.vault.tree.deleteConfirm'))) {
-        const entryId = path[path.length - 1];
-        setDeletingId(entryId);
-        try {
-          if (vaultId) {
-            // Get the VaultInstance from VaultManager
-            const vaultInstance =
-              VaultManager.getInstance().getInstance(vaultId);
-            if (vaultInstance) {
-              // Delete the entry using VaultManager
-              await vaultInstance.deleteEntry(path);
-            }
-          }
-        } catch (err) {
-          console.error('Delete failed:', err);
-        } finally {
-          setDeletingId(null);
+    (vaultId: string, path: string[]) => {
+      setConfirmDelete({ isOpen: true, vaultId, path });
+    },
+    []
+  );
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+
+    const { vaultId, path } = confirmDelete;
+    const entryId = path[path.length - 1];
+    setDeletingId(entryId);
+    setIsDeleting(true);
+    try {
+      if (vaultId) {
+        const vaultInstance =
+          VaultManager.getInstance().getInstance(vaultId);
+        if (vaultInstance) {
+          await vaultInstance.deleteEntry(path);
         }
       }
-    },
-    [t]
-  );
+    } catch (err) {
+      console.error('Delete failed:', err);
+    } finally {
+      setDeletingId(null);
+      setIsDeleting(false);
+      setConfirmDelete(null);
+    }
+  };
 
   const renderEmptyState = useCallback(
     () => (
@@ -343,6 +356,46 @@ const VaultTree = ({
             />
           ))}
         </div>
+      )}
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <Modal
+          isOpen={confirmDelete.isOpen}
+          onClose={() => setConfirmDelete(null)}
+        >
+          <div className="p-6">
+            <h3 className="text-lg font-bold">
+              {t('home.vault.tree.deleteConfirmTitle', 'Confirm Delete')}
+            </h3>
+            <p className="py-4">
+              {t('home.vault.tree.deleteConfirm', 'Are you sure you want to delete this item?')}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setConfirmDelete(null)}
+                disabled={isDeleting}
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                className="btn btn-error"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="loading loading-spinner loading-xs"></span>
+                    {t('common.deleting', 'Deleting...')}
+                  </>
+                ) : (
+                  t('common.delete', 'Delete')
+                )}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

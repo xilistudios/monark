@@ -49,6 +49,12 @@ export const CloudStorageSettings = () => {
     state: string;
   } | null>(null);
 
+  const [confirmRemove, setConfirmRemove] = useState<{
+    isOpen: boolean;
+    providerName: string | null;
+  }>({ isOpen: false, providerName: null });
+  const [isRemoving, setIsRemoving] = useState(false);
+
   const handleAuthenticate = async (provider: StorageProvider) => {
     setAuthenticatingProvider(provider.name);
     dispatch(
@@ -199,24 +205,23 @@ export const CloudStorageSettings = () => {
     }
   };
 
-  const handleRemoveProvider = async (providerName: string) => {
-    if (
-      !confirm(
-        t(
-          'cloudStorage.confirmRemove',
-          'Are you sure you want to remove this provider?'
-        )
-      )
-    ) {
-      return;
-    }
+  const handleRemoveProvider = (providerName: string) => {
+    setConfirmRemove({ isOpen: true, providerName });
+  };
 
+  const handleConfirmRemove = async () => {
+    if (!confirmRemove.providerName) return;
+
+    setIsRemoving(true);
     try {
       const vaultManager = VaultManager.getInstance();
-      await vaultManager.removeProvider(providerName);
-      dispatch(removeStorageProvider(providerName));
+      await vaultManager.removeProvider(confirmRemove.providerName);
+      dispatch(removeStorageProvider(confirmRemove.providerName));
     } catch (error) {
       console.error('Failed to remove provider:', error);
+    } finally {
+      setIsRemoving(false);
+      setConfirmRemove({ isOpen: false, providerName: null });
     }
   };
 
@@ -448,6 +453,51 @@ export const CloudStorageSettings = () => {
               }
             }}
           />
+        </Modal>
+      )}
+
+      {/* Confirm Remove Modal */}
+      {confirmRemove.isOpen && (
+        <Modal
+          isOpen={confirmRemove.isOpen}
+          onClose={() => setConfirmRemove({ isOpen: false, providerName: null })}
+        >
+          <div className="p-6">
+            <h3 className="text-lg font-bold">
+              {t('cloudStorage.confirmRemoveTitle', 'Confirm Removal')}
+            </h3>
+            <p className="py-4">
+              {t(
+                'cloudStorage.confirmRemove',
+                'Are you sure you want to remove this provider?'
+              )}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="btn btn-ghost"
+                onClick={() =>
+                  setConfirmRemove({ isOpen: false, providerName: null })
+                }
+                disabled={isRemoving}
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                className="btn btn-error"
+                onClick={handleConfirmRemove}
+                disabled={isRemoving}
+              >
+                {isRemoving ? (
+                  <>
+                    <span className="loading loading-spinner loading-xs"></span>
+                    {t('common.removing', 'Removing...')}
+                  </>
+                ) : (
+                  t('common.remove', 'Remove')
+                )}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </section>
