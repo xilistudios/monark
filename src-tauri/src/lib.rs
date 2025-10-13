@@ -7,9 +7,12 @@ pub mod io;
 pub mod models;
 pub mod storage;
 pub mod vault;
+pub mod state;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(storage_manager: Arc<storage::StorageManager>) {
+    let vault_state_manager = state::VaultStateManager::new();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -21,6 +24,7 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
         .manage(StorageState {
             manager: storage_manager,
         })
+        .manage(state::ManagedVaultState::new(vault_state_manager))
         .invoke_handler(tauri::generate_handler![
             vault::lifecycle::write_vault,
             vault::lifecycle::read_vault,
@@ -47,6 +51,8 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
             commands::storage::check_provider_auth_status,
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
+            state::load_vault_state,
+            state::save_vault_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

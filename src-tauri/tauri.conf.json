@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "monark",
+  "productName": "Monark",
   "version": "0.1.0",
   "identifier": "com.monark.app",
   "build": {
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "monark",
-        "width": 800,
-        "height": 600
+        "title": "Monark Password Manager",
+        "width": 1200,
+        "height": 1000
       }
     ],
     "security": {

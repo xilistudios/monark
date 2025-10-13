@@ -4,9 +4,10 @@ import {
 } from "@reduxjs/toolkit"
 import type { Entry } from "../../interfaces/vault.interface"
 import type { StorageProvider } from '../../interfaces/cloud-storage.interface';
-import { settingsStore } from "../../store/settings"
+import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
 import { VaultManager } from "../../services/vault"
 import VaultCommands from "../../services/commands"
+import { VaultStateCommands } from '../../services/vaultState';
 
 export interface Vault {
 	id: string
@@ -48,35 +49,56 @@ export interface VaultState {
  * Save vaults array to settings store.
  * Mirrors savePreferencesToSettings pattern.
  */
-const saveVaultStateToSettings = async (vaults: Vault[]) => {
-	try {
-		const persistentVaults = vaults.map((v) => ({
-			id: v.id,
-			name: v.name,
-			path: v.path,
-			lastAccessed: v.lastAccessed,
-			isLocked: v.isLocked,
-			storageType: v.storageType,
-			providerId: v.providerId,
-			cloudMetadata: v.cloudMetadata,
-		}))
-		await settingsStore.set("vaults", persistentVaults)
-	} catch (error) {
-		console.error("Error saving vaults to settings:", error)
-	}
-}
+const persistVaultState = async (
+  vaults: Vault[],
+  providers: StorageProvider[],
+  defaultProvider: string | null,
+  providerStatus: VaultState['providerStatus']
+) => {
+  try {
+    const serializedStatus = Object.fromEntries(
+      Object.entries(providerStatus).map(([providerId, status]) => [
+        providerId,
+        status,
+      ])
+    );
+    await VaultStateCommands.persistVaultsSnapshot({
+      vaults,
+      providers,
+      defaultProvider,
+      providerStatus: serializedStatus,
+    });
+  } catch (error) {
+    console.error('Error persisting vault state:', error);
+  }
+};
 
-/**
- * Save storage providers to settings store.
- */
-const saveStorageProvidersToSettings = async (providers: StorageProvider[], defaultProvider: string | null) => {
-	try {
-		await settingsStore.set("storageProviders", providers)
-		await settingsStore.set("defaultStorageProvider", defaultProvider)
-	} catch (error) {
-		console.error("Error saving storage providers to settings:", error)
-	}
-}
+const normalizeProviderStatus = (
+  statusMap?: Record<string, string>
+): VaultState['providerStatus'] => {
+  if (!statusMap) {
+    return {};
+  }
+
+  const allowedStatuses: VaultState['providerStatus'][string][] = [
+    'idle',
+    'authenticating',
+    'authenticated',
+    'error',
+  ];
+
+  return Object.entries(statusMap).reduce(
+    (acc, [providerId, status]) => {
+      if ((allowedStatuses as string[]).includes(status)) {
+        acc[providerId] = status as VaultState['providerStatus'][string];
+      } else {
+        acc[providerId] = 'idle';
+      }
+      return acc;
+    },
+    {} as VaultState['providerStatus']
+  );
+};
 
 /**
  * Load vault state from settings store.
@@ -86,17 +108,16 @@ export const loadVaultStateFromSettings = async (): Promise<
 	Partial<VaultState>
 > => {
 	try {
-		const vaults = await settingsStore.get("vaults")
-		const providers = await settingsStore.get("storageProviders")
-		const defaultProvider = await settingsStore.get("defaultStorageProvider")
+		const persistedState = await VaultStateCommands.load();
 
 		let loadedVaults: Vault[] = [];
-    if (vaults && Array.isArray(vaults)) {
-      loadedVaults = vaults.map((vault: any) => ({
+    if (persistedState.vaults && Array.isArray(persistedState.vaults)) {
+      loadedVaults = persistedState.vaults.map((vault: any) => ({
         ...vault,
         // Migrate existing vaults to local storage type
         storageType: vault.storageType || 'local',
         lastAccessed: vault.lastAccessed || undefined,
+        // Force vaults to load locked so decrypted data is never treated as persisted
         isLocked: true,
         volatile: {
           entries: [],
@@ -107,13 +128,34 @@ export const loadVaultStateFromSettings = async (): Promise<
       }));
     }
 
+		const persistedProviders = (persistedState.providers || []).map(
+      (provider: any) => {
+        const rawType =
+          provider.provider_type ??
+          provider.providerType ??
+          StorageProviderType.LOCAL;
+        const validTypes = Object.values(StorageProviderType) as string[];
+        const normalizedType = validTypes.includes(rawType)
+          ? (rawType as StorageProviderType)
+          : StorageProviderType.LOCAL;
+
+        return {
+          name: provider.name,
+          provider_type: normalizedType,
+          is_default: Boolean(
+            provider.is_default ?? provider.isDefault ?? false
+          ),
+        };
+      }
+    ) as StorageProvider[];
+
 		return {
-			vaults: loadedVaults,
-			currentVaultId: null,
-			providers: providers || [],
-			defaultProvider: defaultProvider || null,
-			providerStatus: {},
-		}
+      vaults: loadedVaults,
+      currentVaultId: null,
+      providers: persistedProviders,
+      defaultProvider: persistedState.defaultProvider || null,
+      providerStatus: normalizeProviderStatus(persistedState.providerStatus),
+    };
 	} catch (error) {
 		console.error("Error loading vaults from settings:", error)
 	}
@@ -159,14 +201,24 @@ export const vaultSlice = createSlice({
 				},
 			}
 			state.vaults.push(vault)
-			void saveVaultStateToSettings(state.vaults)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 			// VaultManager will create instances on-demand when getInstance() is called
 		},
 		removeVault: (state, action: PayloadAction<string>) => {
 			state.vaults = state.vaults.filter(
 				(vault: Vault) => vault.id !== action.payload
 			)
-			void saveVaultStateToSettings(state.vaults)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 			if (state.currentVaultId === action.payload) {
 				state.currentVaultId = null
 			}
@@ -180,7 +232,12 @@ export const vaultSlice = createSlice({
 			if (index !== -1) {
 				state.vaults[index] = action.payload
 			}
-			void saveVaultStateToSettings(state.vaults)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		setCurrentVault: (state, action: PayloadAction<string | null>) => {
 			state.currentVaultId = action.payload
@@ -192,7 +249,12 @@ export const vaultSlice = createSlice({
 			if (vault) {
 				vault.lastAccessed = new Date().toISOString()
 			}
-			void saveVaultStateToSettings(state.vaults)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		setLoading: (state, action: PayloadAction<boolean>) => {
 			state.loading = action.payload
@@ -317,14 +379,24 @@ export const vaultSlice = createSlice({
 		 */
 		setStorageProviders: (state, action: PayloadAction<StorageProvider[]>) => {
 			state.providers = action.payload
-			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		/**
 		 * Add a new storage provider
 		 */
 		addStorageProvider: (state, action: PayloadAction<StorageProvider>) => {
 			state.providers.push(action.payload)
-			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		/**
 		 * Remove a storage provider by ID
@@ -345,21 +417,36 @@ export const vaultSlice = createSlice({
 			if (state.defaultProvider === action.payload) {
 				state.defaultProvider = state.providers.length > 0 ? state.providers[0].name : null
 			}
-			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
-			void saveVaultStateToSettings(state.vaults)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		/**
 		 * Set the default storage provider
 		 */
 		setDefaultStorageProvider: (state, action: PayloadAction<string>) => {
 			state.defaultProvider = action.payload
-			void saveStorageProvidersToSettings(state.providers, state.defaultProvider)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		/**
 		 * Set the authentication status for a provider
 		 */
 		setProviderStatus: (state, action: PayloadAction<{ providerId: string; status: 'idle' | 'authenticating' | 'authenticated' | 'error' }>) => {
 			state.providerStatus[action.payload.providerId] = action.payload.status
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		/**
 		 * Set cloud vaults list
@@ -381,7 +468,12 @@ export const vaultSlice = createSlice({
 					state.vaults.push(cloudVault)
 				}
 			})
-			void saveVaultStateToSettings(state.vaults)
+			void persistVaultState(
+        state.vaults,
+        state.providers,
+        state.defaultProvider,
+        state.providerStatus
+      );
 		},
 		/**
 		 * Trigger cloud sync for a vault
@@ -390,7 +482,12 @@ export const vaultSlice = createSlice({
 			const vault = state.vaults.find(v => v.id === action.payload)
 			if (vault && vault.cloudMetadata) {
 				vault.cloudMetadata.lastSync = new Date().toISOString()
-				void saveVaultStateToSettings(state.vaults)
+				void persistVaultState(
+          state.vaults,
+          state.providers,
+          state.defaultProvider,
+          state.providerStatus
+        );
 			}
 		},
 	},
