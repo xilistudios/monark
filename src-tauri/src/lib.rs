@@ -33,6 +33,7 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
             vault::cloud_lifecycle::read_cloud_vault,
             vault::cloud_lifecycle::delete_cloud_vault,
             vault::cloud_lifecycle::list_cloud_vaults,
+            vault::cloud_lifecycle::change_cloud_vault_password,
             commands::storage::list_providers,
             commands::storage::add_provider,
             commands::storage::remove_provider,

@@ -35,7 +35,9 @@
     "clearDataSuccess": "Datos de la aplicación borrados correctamente.",
     "clearDataError": "Error al borrar los datos de la aplicación",
     "errors": {
-      "invalidLanguage": "Selección de idioma no válida"
+      "invalidLanguage": "Selección de idioma no válida",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "passwordChangeFailed": "Error al cambiar la contraseña de la bóveda"
     },
     "themes": {
       "light": "Claro",
@@ -126,6 +128,9 @@
         "securityText": "Tus credenciales se almacenan localmente y están encriptadas. Nunca compartas tus secretos de cliente con otros."
       }
     },
+    "vaultSelector": {
+      "autoStorageNote": "Las bóvedas se almacenarán automáticamente en la carpeta \"Monark\" en tu almacenamiento en la nube."
+    },
     "addProvider": {
       "title": "Agregar Proveedor de Almacenamiento",
       "providerName": "Nombre del Proveedor",
@@ -210,6 +215,9 @@
       "filePathPlaceholder": "Seleccione una carpeta",
       "password": "Contraseña",
       "passwordPlaceholder": "Ingrese la contraseña",
+      "confirmPassword": "Confirmar Contraseña",
+      "confirmPasswordPlaceholder": "Confirme la contraseña",
+      "success": "Bóveda creada correctamente",
       "createVault": "Crear Bóveda",
       "creating": "Creando...",
       "browse": "Examinar",
@@ -227,6 +235,8 @@
       "filePathHelp": "La ruta del archivo no se puede cambiar para bóvedas existentes",
       "newPassword": "Nueva Contraseña",
       "newPasswordPlaceholder": "Ingrese nueva contraseña (deje vacío para mantener la actual)",
+      "confirmNewPassword": "Confirmar Nueva Contraseña",
+      "confirmNewPasswordPlaceholder": "Confirme la nueva contraseña",
       "passwordHelp": "Deje vacío para mantener la contraseña actual",
       "save": "Guardar Cambios",
       "saving": "Guardando...",

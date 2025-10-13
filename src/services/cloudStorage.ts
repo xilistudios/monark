@@ -277,6 +277,31 @@ export class CloudStorageCommands {
   }
 
   /**
+   * Changes the password for a cloud vault
+   * @param vaultId - ID of the vault to change password for
+   * @param oldPassword - Current password of the vault
+   * @param newPassword - New password to set
+   * @param providerName - Optional name of the storage provider
+   */
+  static async changeCloudVaultPassword(
+    vaultId: string,
+    oldPassword: string,
+    newPassword: string,
+    providerName?: string
+  ): Promise<void> {
+    try {
+      await invoke('change_cloud_vault_password', {
+        vaultId,
+        oldPassword,
+        newPassword,
+        providerName,
+      });
+    } catch (error) {
+      throw this.handleError(error, 'Failed to change cloud vault password');
+    }
+  }
+
+  /**
    * Lists files from a storage provider
    * @param request - File listing request parameters
    * @returns Promise resolving to file list response

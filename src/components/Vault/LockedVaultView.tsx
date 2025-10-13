@@ -1,5 +1,7 @@
 // src/components/Vault/LockedVaultView.tsx
 
+import { useState, useEffect } from 'react';
+
 /**
  * LockedVaultView component displays the UI for unlocking a locked vault.
  *
@@ -40,13 +42,19 @@ export function LockedVaultView({
   handleUnlockVault,
   unlockError,
   loading,
-  cloudUnlockMessage,
   t,
 }: LockedVaultViewProps) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 10);
+    return () => clearTimeout(timer);
+  }, []);
+
   if (!currentVault) return null;
 
   return (
-    <div className="h-full flex flex-col items-center justify-center">
+    <div data-testid="locked-vault-view" className={`h-full flex flex-col items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
       <div className="card w-full max-w-md bg-base-100 shadow-xl">
         <div className="card-body">
           <div className="flex items-center gap-2 mb-2">

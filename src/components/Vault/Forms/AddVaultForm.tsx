@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateVault, type Vault } from '../../../redux/actions/vault';
-import VaultCommands from '../../../services/commands';
 import { VaultManager } from '../../../services/vault';
 import { CloudStorageCommands } from '../../../services/cloudStorage';
 import { isMobile } from '../../../utils/platform';
@@ -25,13 +24,21 @@ export const AddVaultForm = ({
   const { t } = useTranslation('home');
   const [filePath, setFilePath] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [vaultName, setVaultName] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [storageType, setStorageType] = useState<'local' | 'cloud'>('local');
   const [providerId, setProviderId] = useState<string>('');
   const mobile = useMemo(() => isMobile(), []);
   const isEditMode = !!vault;
+
+  // Clear success message when user starts typing
+  const clearMessages = () => {
+    setError('');
+    setSuccess('');
+  };
 
   // Get providers and their status from Redux
   const { providers, providerStatus } = useSelector((state: RootState) => ({
@@ -72,6 +79,12 @@ export const AddVaultForm = ({
       return;
     }
 
+    // Password confirmation validation
+    if (password !== confirmPassword) {
+      setError(t('errors.passwordMismatch') || 'Passwords do not match');
+      return;
+    }
+
     // Additional validation for cloud storage
     if (storageType === 'cloud' && !providerId) {
       setError(t('vaultSelector.missingProvider'));
@@ -79,6 +92,7 @@ export const AddVaultForm = ({
     }
 
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -134,7 +148,10 @@ export const AddVaultForm = ({
         );
       }
 
-      onSuccess();
+      setSuccess(t('addVault.success') || 'Vault created successfully');
+      setTimeout(() => {
+        onSuccess();
+      }, 1500); // Show success message for 1.5 seconds
     } catch (err) {
       console.error('Error creating vault:', err);
 
@@ -191,23 +208,26 @@ export const AddVaultForm = ({
       return;
     }
 
+    // Password confirmation validation when changing password
+    if (password && password !== confirmPassword) {
+      setError(t('errors.passwordMismatch') || 'Passwords do not match');
+      return;
+    }
+
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
       // Only update password if new value is provided
       if (password) {
         try {
-          const credential = vault.volatile?.credential || '';
-          if (!credential) {
-            throw new Error('Vault credential is missing');
-          }
-          const vaultContent = await VaultCommands.read(vault.path, credential);
-          await VaultCommands.write(vault.path, password, vaultContent);
+          // Use the new changePassword method from VaultManager
+          await VaultManager.getInstance().changeVaultPassword(vault.id, password);
         } catch (err) {
-          console.error('Error accessing vault credentials:', err);
+          console.error('Error changing vault password:', err);
           setError(
-            t('errors.unlockFailed') || 'Failed to access vault credentials'
+            t('errors.passwordChangeFailed') || 'Failed to change vault password'
           );
           setLoading(false);
           return;
@@ -218,14 +238,20 @@ export const AddVaultForm = ({
         ...vault,
         name: vaultName,
         path: filePath || vault.path, // Preserve existing path if not changed
-        volatile: {
-          ...vault.volatile,
-          credential: password || vault.volatile.credential, // Use new password or keep existing
-        },
+        // Don't update credential here - it's handled by the changePassword method
       };
 
       dispatch(updateVault(updatedVault));
-      onSuccess();
+      
+      // Show success message for password change
+      if (password) {
+        setSuccess(t('editVault.passwordChanged') || 'Password changed successfully');
+        setTimeout(() => {
+          onSuccess();
+        }, 1500); // Show success message for 1.5 seconds
+      } else {
+        onSuccess();
+      }
     } catch (err) {
       console.error('Error updating vault:', err);
       setError(String(err));
@@ -278,7 +304,10 @@ export const AddVaultForm = ({
           placeholder={t('addVault.namePlaceholder')}
           className="input input-bordered"
           value={vaultName}
-          onChange={(e) => setVaultName(e.target.value)}
+          onChange={(e) => {
+            setVaultName(e.target.value);
+            clearMessages();
+          }}
         />
       </div>
 
@@ -470,7 +499,10 @@ export const AddVaultForm = ({
           }
           className="input input-bordered"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            clearMessages();
+          }}
           disabled={isEditMode && vault?.isLocked}
         />
         {isEditMode && (
@@ -480,9 +512,58 @@ export const AddVaultForm = ({
         )}
       </div>
 
+      {/* Password confirmation field */}
+      {(password || !isEditMode) && (
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">
+              {isEditMode
+                ? t('editVault.confirmNewPassword')
+                : t('addVault.confirmPassword')
+              }
+              {!isEditMode && ' *'}
+            </span>
+          </label>
+          <input
+            type="password"
+            placeholder={
+              isEditMode
+                ? t('editVault.confirmNewPasswordPlaceholder')
+                : t('addVault.confirmPasswordPlaceholder')
+            }
+            className="input input-bordered"
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              clearMessages();
+            }}
+            disabled={isEditMode && vault?.isLocked}
+          />
+        </div>
+      )}
+
       {error && (
         <div className="alert alert-error">
           <span>{JSON.stringify(error.toString())}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="alert alert-success">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="stroke-current shrink-0 h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span>{success}</span>
         </div>
       )}
 

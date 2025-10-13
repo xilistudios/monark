@@ -47,4 +47,10 @@ describe('UnlockedVaultView', () => {
       screen.queryByText('vault.manager.emptyVault')
     ).not.toBeInTheDocument();
   });
+
+  it('applies fade-in animation classes', () => {
+    renderWithProvider(<UnlockedVaultView {...mockProps} />);
+    const container = screen.getByTestId('unlocked-vault-view');
+    expect(container).toHaveClass('transition-opacity', 'duration-300', 'opacity-100');
+  });
 });

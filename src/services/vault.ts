@@ -352,6 +352,68 @@ export class VaultInstance {
   }
 
   /**
+   * Changes the vault password and re-encrypts the vault with the new password
+   * Supports both local and cloud vaults
+   * @param newPassword - The new password to set
+   * @throws Error if password change fails
+   */
+  async changePassword(newPassword: string): Promise<void> {
+    // Get the current vault state
+    const state = this.getState();
+    const vault = state.vault.vaults.find((v) => v.id === this.id);
+
+    if (!vault?.volatile?.credential) {
+      throw new Error('Vault must be unlocked to change password');
+    }
+
+    if (!newPassword || newPassword.length === 0) {
+      throw new Error('New password is required');
+    }
+
+    const oldPassword = vault.volatile.credential;
+    const entries = vault.volatile.entries ?? [];
+
+    try {
+      // Create the vault content with current entries
+      const vaultContent = {
+        updated_at: new Date().toISOString(),
+        hmac: '',
+        entries: entries,
+      };
+
+      if (vault.storageType === 'cloud' && vault.providerId) {
+        // For cloud vaults, use the dedicated password change command
+        const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
+        
+        // Use the new changeCloudVaultPassword command
+        await CloudStorageCommands.changeCloudVaultPassword(
+          cloudFileId,
+          oldPassword, // Use the old password to decrypt
+          newPassword, // Use the new password to encrypt
+          vault.providerId
+        );
+
+        // Update sync timestamp
+        this.dispatch(syncCloudVault(this.id));
+      } else {
+        // For local vaults, use the regular write command with new password
+        await VaultCommands.write(vault.path, newPassword, vaultContent);
+      }
+
+      // Update the stored credential with the new password
+      this.dispatch(
+        setVaultCredential({ vaultId: this.id, credential: newPassword })
+      );
+
+    } catch (error) {
+      const errorMessage =
+        (error as any)?.message ||
+        (error instanceof Error ? error.message : String(error));
+      throw new Error(`Failed to change vault password: ${errorMessage}`);
+    }
+  }
+
+  /**
    * Gets cloud metadata for cloud vaults
    * @returns CloudVaultMetadata or null if not a cloud vault
    */
@@ -788,5 +850,20 @@ export class VaultManager {
         (error instanceof Error ? error.message : String(error));
       throw new Error(`Failed to create vault: ${errorMessage}`);
     }
+  }
+
+  /**
+   * Changes the password for an existing vault
+   * @param vaultId - ID of the vault to change password for
+   * @param newPassword - The new password to set
+   * @throws Error if vault not found or password change fails
+   */
+  async changeVaultPassword(vaultId: string, newPassword: string): Promise<void> {
+    const vaultInstance = this.getInstance(vaultId);
+    if (!vaultInstance) {
+      throw new Error('Vault not found');
+    }
+
+    await vaultInstance.changePassword(newPassword);
   }
 }

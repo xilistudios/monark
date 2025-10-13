@@ -224,4 +224,10 @@ describe('LockedVaultView', () => {
     expect(screen.getByText('Downloading from cloud...')).toBeInTheDocument();
     expect(screen.getByText('Invalid password')).toBeInTheDocument();
   });
+
+  it('applies fade-in animation classes', () => {
+    render(<LockedVaultView {...defaultProps} />);
+    const container = screen.getByTestId('locked-vault-view');
+    expect(container).toHaveClass('transition-opacity', 'duration-300', 'opacity-100');
+  });
 });
