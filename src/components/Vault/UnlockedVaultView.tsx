@@ -73,11 +73,17 @@ function UnlockedVaultView({
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const { setIsSearchModalOpen } = useContext(VaultModalContext)!;
   useEffect(() => {
     setSidebarMode('view');
     setIsMobileSidebarOpen(false);
   }, [currentPath]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 10);
+    return () => clearTimeout(timer);
+  }, []);
 
   /**
    * Handles the selection of an entry, either from search results or the tree.
@@ -134,7 +140,7 @@ function UnlockedVaultView({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div data-testid="unlocked-vault-view" className={`flex flex-col h-full transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
       {/* Modal components (context-driven, no props) */}
       <AddEntryModal />
       <AddGroupModal />

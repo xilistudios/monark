@@ -35,7 +35,9 @@
     "clearDataSuccess": "App data cleared successfully.",
     "clearDataError": "Failed to clear app data",
     "errors": {
-      "invalidLanguage": "Invalid language selection"
+      "invalidLanguage": "Invalid language selection",
+      "passwordMismatch": "Passwords do not match",
+      "passwordChangeFailed": "Failed to change vault password"
     },
     "themes": {
       "light": "Light",
@@ -126,6 +128,9 @@
         "securityText": "Your credentials are stored locally and encrypted. Never share your client secrets with others."
       }
     },
+    "vaultSelector": {
+      "autoStorageNote": "Vaults will be automatically stored in the \"Monark\" folder in your cloud storage."
+    },
     "addProvider": {
       "title": "Add Storage Provider",
       "providerName": "Provider Name",
@@ -210,6 +215,9 @@
       "filePathPlaceholder": "Select a folder",
       "password": "Password",
       "passwordPlaceholder": "Enter password",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Confirm password",
+      "success": "Vault created successfully",
       "createVault": "Create Vault",
       "creating": "Creating...",
       "browse": "Browse",
@@ -227,6 +235,8 @@
       "filePathHelp": "File path cannot be changed for existing vaults",
       "newPassword": "New Password",
       "newPasswordPlaceholder": "Enter new password (leave empty to keep current)",
+      "confirmNewPassword": "Confirm New Password",
+      "confirmNewPasswordPlaceholder": "Confirm new password",
       "passwordHelp": "Leave empty to keep the current password",
       "save": "Save Changes",
       "saving": "Saving...",
@@ -413,6 +423,7 @@
     "errors": {
       "missingFields": "Please fill in all fields",
       "invalidPassword": "Invalid password",
+      "passwordMismatch": "Passwords do not match",
       "unlockFailed": "Failed to unlock vault"
     },
     "editEntry": {

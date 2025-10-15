@@ -48,6 +48,7 @@ const mockVaultActions = {
 	setProviderStatus: vi.fn(),
 	setCloudVaults: vi.fn(),
 	addVault: vi.fn(),
+	setVaultLocked: vi.fn(),
 }
 
 vi.mock('../../services/commands', () => mockVaultCommands)
@@ -124,6 +125,9 @@ describe('VaultInstance', () => {
 			expect(mockDispatch).toHaveBeenCalledWith(
 				vaultActions.setVaultEntries({ vaultId: 'test-vault-id', entries: mockVaultContent.entries })
 			)
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultLocked({ vaultId: 'test-vault-id', isLocked: false })
+			)
 		})
 
 		it('should unlock a cloud vault successfully', async () => {
@@ -156,6 +160,9 @@ describe('VaultInstance', () => {
 			)
 			expect(mockDispatch).toHaveBeenCalledWith(
 				vaultActions.setVaultEntries({ vaultId: 'test-vault-id', entries: mockVaultContent.entries })
+			)
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultLocked({ vaultId: 'test-vault-id', isLocked: false })
 			)
 		})
 

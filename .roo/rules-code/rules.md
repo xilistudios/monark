@@ -234,6 +234,5 @@ This comprehensive guide outlines best practices, conventions, and standards for
 * Always put unit test inside a test folder, never embbed test on the function file
 * Before finish your task, Always create a subtask with `new_task` tool to delegate to review mode to review all your changes, include the description and main goal task, You must follow the review recommendations
 * After you finished some code functionality, create a subtask with tester mode to write unit test
-* Always use memory mode with a subtask to retrieve relevant project information before starting any coding task
 * When implementing features or fixing bugs, create a subtask using memory mode to understand the existing codebase context and architectural decisions
 * When you mark the task as finished you must include all files you modified

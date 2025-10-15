@@ -1,15 +1,36 @@
 use commands::storage::StorageState;
 use std::sync::Arc;
 
+#[cfg(mobile)]
+use tokio::runtime::Builder;
+
 pub mod commands;
 pub mod crypto;
 pub mod io;
 pub mod models;
 pub mod storage;
 pub mod vault;
+pub mod state;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(storage_manager: Arc<storage::StorageManager>) {
+    build_app(storage_manager);
+}
+
+#[cfg(mobile)]
+#[tauri::mobile_entry_point]
+pub fn mobile_main() {
+    let runtime = Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to start Tokio runtime");
+    // Tauri mobile entry point cannot be async, so we bootstrap storage before launching the app.
+    let storage_manager = runtime.block_on(storage::init_storage_manager());
+    build_app(storage_manager);
+}
+
+fn build_app(storage_manager: Arc<storage::StorageManager>) {
+    let vault_state_manager = state::VaultStateManager::new();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -21,6 +42,7 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
         .manage(StorageState {
             manager: storage_manager,
         })
+        .manage(state::ManagedVaultState::new(vault_state_manager))
         .invoke_handler(tauri::generate_handler![
             vault::lifecycle::write_vault,
             vault::lifecycle::read_vault,
@@ -29,6 +51,7 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
             vault::cloud_lifecycle::read_cloud_vault,
             vault::cloud_lifecycle::delete_cloud_vault,
             vault::cloud_lifecycle::list_cloud_vaults,
+            vault::cloud_lifecycle::change_cloud_vault_password,
             commands::storage::list_providers,
             commands::storage::add_provider,
             commands::storage::remove_provider,
@@ -47,7 +70,9 @@ pub fn run(storage_manager: Arc<storage::StorageManager>) {
             commands::storage::check_provider_auth_status,
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
+            state::load_vault_state,
+            state::save_vault_state,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    .expect("error while running tauri application");
 }

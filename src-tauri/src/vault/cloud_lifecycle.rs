@@ -308,6 +308,85 @@ pub async fn delete_cloud_vault(
 }
 
 #[tauri::command(async)]
+pub async fn change_cloud_vault_password(
+    vault_id: String,
+    old_password: String,
+    new_password: String,
+    provider_name: Option<String>,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), CommandError> {
+    let storage_manager = &state.manager;
+    let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
+    
+    // Read the existing vault file
+    let vault_data = storage_manager
+        .read_file(vault_id.clone(), provider_name.clone())
+        .await
+        .map_err(|e| CommandError::Io(format!("Failed to read existing vault: {}", e)))?;
+
+    let mut vault_file = parse_vault_from_bytes(&vault_data)?;
+
+    // Decrypt the master key with the OLD password
+    let master_key = derive_and_decrypt_master_key(&old_password, &vault_file)?;
+
+    // Generate new salt and derive new key with NEW password
+    let user_salt = crypto::random::generate_salt()?;
+    let argon2_params = Argon2Params {
+        salt: URL_SAFE_NO_PAD.encode(&user_salt),
+        memory_cost_kib: ARGON2_MEMORY_COST_KIB,
+        iterations: ARGON2_ITERATIONS,
+        parallelism: ARGON2_PARALLELISM,
+    };
+
+    let new_kdf_key = crypto::argon2::derive_key_argon2id(
+        new_password.as_bytes(),
+        &user_salt,
+        argon2_params.memory_cost_kib,
+        argon2_params.iterations,
+        argon2_params.parallelism,
+        KEY_LENGTH as u32,
+    )?;
+
+    // Re-encrypt the master key with the NEW password
+    let mk_nonce = crypto::random::generate_nonce()?;
+    let mk_ciphertext =
+        crypto::chacha::encrypt_xchacha20poly1305(&new_kdf_key, &mk_nonce, &master_key)?;
+    let new_credentials = EncryptedData {
+        nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
+        ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
+    };
+
+    // Update the vault file with new credentials and salt
+    vault_file.argon2_params = argon2_params;
+    vault_file.credentials = new_credentials;
+
+    let vault_bytes = create_vault_bytes(&vault_file)?;
+    let cached_bytes = vault_bytes.clone();
+
+    // Update the vault file in storage
+    let update_request = UpdateFileRequest {
+        id: vault_id.clone(),
+        content: vault_bytes,
+        metadata: None,
+    };
+
+    storage_manager
+        .update_file(update_request, provider_name)
+        .await
+        .map_err(|e| CommandError::Io(format!("Failed to update vault file: {}", e)))?;
+
+    // Update the local cache
+    if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, &vault_id, &cached_bytes) {
+        println!(
+            "[change_cloud_vault_password] Failed to update cached vault '{}' locally: {}",
+            vault_id, cache_err
+        );
+    }
+
+    Ok(())
+}
+
+#[tauri::command(async)]
 pub async fn list_cloud_vaults(
     provider_name: Option<String>,
     state: tauri::State<'_, StorageState>,
