@@ -1,1 +1,93 @@
-MOkljkhsdghjk6752456!@#$%^&*()_+
+name: Tauri Release
+
+on:
+	push:
+		tags:
+			- 'v*'
+	workflow_dispatch:
+
+permissions:
+	contents: read
+
+jobs:
+	build:
+		name: ${{ matrix.job_name }}
+		runs-on: ${{ matrix.os }}
+		permissions:
+			contents: write
+		strategy:
+			fail-fast: false
+			matrix:
+				include:
+					- job_name: macOS (Apple Silicon)
+						os: macos-latest
+						args: '--target aarch64-apple-darwin'
+						rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+					- job_name: macOS (Intel)
+						os: macos-latest
+						args: '--target x86_64-apple-darwin'
+						rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+					- job_name: Linux
+						os: ubuntu-22.04
+						args: ''
+						rust_targets: ''
+					- job_name: Windows
+						os: windows-latest
+						args: ''
+						rust_targets: ''
+
+		steps:
+			- name: Checkout sources
+				uses: actions/checkout@v4
+
+			- name: Setup Bun
+				uses: oven-sh/setup-bun@v2
+				with:
+					bun-version: '1.1.30'
+					cache: true
+
+			- name: Install frontend dependencies
+				run: bun install --frozen-lockfile
+
+			- name: Setup Rust toolchain
+				uses: dtolnay/rust-toolchain@stable
+				with:
+					components: 'clippy,rustfmt'
+					targets: ${{ matrix.rust_targets }}
+
+			- name: Cache Cargo artifacts
+				uses: Swatinem/rust-cache@v2
+				with:
+					workspaces: |
+						src-tauri -> target
+
+			- name: Install Linux system dependencies
+				if: matrix.os == 'ubuntu-22.04'
+				run: |
+					sudo apt-get update
+					sudo apt-get install -y \
+						build-essential \
+						clang \
+						libclang-dev \
+						libgtk-3-dev \
+						libwebkit2gtk-4.0-dev \
+						libwebkit2gtk-4.1-dev \
+						libayatana-appindicator3-dev \
+						librsvg2-dev \
+						patchelf
+
+			- name: Build and upload Tauri artifacts
+				uses: tauri-apps/tauri-action@v0
+				env:
+					GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+					TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+					TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+				with:
+					tagName: v__VERSION__
+					releaseName: 'Monark v__VERSION__'
+					releaseBody: >-
+						Automated release for Monark v__VERSION__. See attached assets for platform installers.
+					releaseDraft: true
+					prerelease: false
+					tauriScript: bun run tauri
+					args: ${{ matrix.args }}
