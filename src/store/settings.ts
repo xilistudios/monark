@@ -8,7 +8,7 @@ export class SettingsStore {
   private store?: Store;
   public initialized: boolean = false;
   constructor() {
-    load('store.json', { autoSave: false })
+    load('store.json', { autoSave: false, defaults: {} })
       .then((store) => {
         this.initialized = true;
         this.store = store;
@@ -22,7 +22,7 @@ export class SettingsStore {
   }
   init = async () => {
     if (!this.store) {
-      this.store = await load('store.json', { autoSave: false });
+      this.store = await load('store.json', { autoSave: false, defaults: {} });
       this.initialized = true;
     }
   };
