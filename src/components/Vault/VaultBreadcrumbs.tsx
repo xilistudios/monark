@@ -63,6 +63,7 @@ const VaultBreadcrumbs: React.FC<{
         <ul>
           <li>
             <a
+              className="px-3 py-2 hover:bg-base-200 rounded-md transition-colors cursor-pointer inline-block min-w-[2rem] text-center"
               onClick={() => {
                 if (currentVault) {
                   onNavigate([]);
@@ -83,6 +84,7 @@ const VaultBreadcrumbs: React.FC<{
             return (
               <li key={id}>
                 <a
+                  className="px-3 py-2 hover:bg-base-200 rounded-md transition-colors cursor-pointer inline-block"
                   onClick={() => {
                     if (currentVault) {
                       onNavigate(pathUpTo);

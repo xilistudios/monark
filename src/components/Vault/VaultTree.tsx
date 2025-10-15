@@ -1,4 +1,4 @@
-import { useState, useCallback, useContext } from 'react';
+import { useState, useCallback, useContext, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type Entry, isGroupEntry } from '../../interfaces/vault.interface';
 import { VaultManager } from '../../services/vault';
@@ -64,11 +64,27 @@ const TreeNode = ({
 }: TreeNodeProps) => {
   const { t } = useTranslation('home');
   const context = useContext(VaultModalContext);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [shouldDropUp, setShouldDropUp] = useState(false);
+  
   if (!context)
     throw new Error(
       'VaultModalContext must be used within a VaultModalProvider'
     );
   const { openEditEntry, openEditGroup, openEntryDetails } = context;
+
+  // Check if dropdown should open upward based on available space
+  const checkDropdownPosition = useCallback(() => {
+    if (dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      const dropdownHeight = 120; // Approximate height of dropdown menu
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      // If there's not enough space below but enough space above, drop up
+      setShouldDropUp(spaceBelow < dropdownHeight && spaceAbove > dropdownHeight);
+    }
+  }, []);
 
   const handleNavigate = useCallback(() => {
     if (isGroupEntry(entry)) {
@@ -86,6 +102,20 @@ const TreeNode = ({
     currentPath,
     onEntrySelect,
   ]);
+
+  // Check dropdown position when dropdown is about to open
+  useEffect(() => {
+    const handleDropdownToggle = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (dropdownRef.current?.contains(target)) {
+        // Small delay to ensure dropdown is rendered
+        setTimeout(checkDropdownPosition, 0);
+      }
+    };
+
+    document.addEventListener('click', handleDropdownToggle);
+    return () => document.removeEventListener('click', handleDropdownToggle);
+  }, [checkDropdownPosition]);
 
   const getIndentStyle = useCallback(() => {
     const baseIndent = level * 16; // Reduced indent for mobile
@@ -119,11 +149,11 @@ const TreeNode = ({
       {renderTreeLines()}
       <div className="relative">
         <div
-          className="flex items-center justify-between bg-base-200 hover:bg-base-300 active:bg-base-300 transition-colors rounded-lg border border-base-300 touch-manipulation"
+          className="flex items-center justify-between bg-base-200 hover:bg-base-300 active:bg-base-300 transition-colors rounded-lg border border-base-300 touch-manipulation group"
           style={getIndentStyle()}
         >
           <div
-            className="flex items-center cursor-pointer flex-1 py-3 px-3 sm:py-2 min-h-[44px] sm:min-h-[36px]"
+            className="flex items-center cursor-pointer flex-1 py-3 px-3 sm:py-2 min-h-[48px] sm:min-h-[44px] hover:bg-base-300/50 rounded-lg transition-colors -mx-2 px-4"
             onClick={handleNavigate}
           >
             <div className="flex items-center">
@@ -170,11 +200,18 @@ const TreeNode = ({
           </div>
 
           <div className="flex gap-1 px-2 flex-shrink-0">
-            <div className="dropdown dropdown-end">
+            <div
+              ref={dropdownRef}
+              className={`dropdown dropdown-end ${shouldDropUp ? 'dropdown-top' : ''}`}
+            >
               <div
                 tabIndex={0}
                 role="button"
-                className="btn btn-sm sm:btn-xs btn-ghost min-h-[40px] sm:min-h-[24px] px-2"
+                className="btn btn-sm sm:btn-xs btn-ghost min-h-[44px] sm:min-h-[32px] px-2 hover:bg-base-300/70"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  checkDropdownPosition();
+                }}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
