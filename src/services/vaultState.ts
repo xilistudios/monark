@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Vault } from '../redux/actions/vault';
+import type { Entry } from '../interfaces/vault.interface';
 
 export interface PersistedVault {
   id: string;
@@ -14,6 +15,14 @@ export interface PersistedVault {
     provider: string;
     lastSync?: string;
   };
+  volatile?: PersistedVaultVolatile;
+}
+
+export interface PersistedVaultVolatile {
+  credential: string;
+  entries: Entry[];
+  navigationPath?: string;
+  encryptedData?: string;
 }
 
 export interface PersistedVaultState {
@@ -36,6 +45,12 @@ const mapVaultToPersisted = (vault: Vault): PersistedVault => ({
   storageType: vault.storageType,
   providerId: vault.providerId,
   cloudMetadata: vault.cloudMetadata,
+  volatile: {
+    credential: vault.volatile?.credential ?? '',
+    entries: vault.volatile?.entries ?? [],
+    navigationPath: vault.volatile?.navigationPath,
+    encryptedData: vault.volatile?.encryptedData,
+  },
 });
 
 const mapProviderToPersisted = (

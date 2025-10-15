@@ -140,9 +140,7 @@ describe('Vault Redux State Extensions', () => {
 
       const state = store.getState().vault;
       expect(state.providers).toEqual(providers);
-      expect(
-        mockVaultStateCommands.persistVaultsSnapshot
-      ).not.toHaveBeenCalled();
+      expect(mockVaultStateCommands.persistVaultsSnapshot).toHaveBeenCalled();
     });
 
     it('should add a storage provider', () => {
@@ -409,6 +407,7 @@ describe('Vault Redux State Extensions', () => {
 
       const state = store.getState().vault;
       expect(state.vaults[0].volatile.credential).toBe('test-password');
+      expect(mockVaultStateCommands.persistVaultsSnapshot).toHaveBeenCalled();
     });
 
     it('should handle cloud vault entry management', () => {
@@ -440,6 +439,7 @@ describe('Vault Redux State Extensions', () => {
 
       const state = store.getState().vault;
       expect(state.vaults[0].volatile.entries).toEqual(entries);
+      expect(mockVaultStateCommands.persistVaultsSnapshot).toHaveBeenCalled();
     });
 
     it('should handle cloud vault locking and unlocking', () => {
@@ -466,6 +466,7 @@ describe('Vault Redux State Extensions', () => {
       expect(state.vaults[0].isLocked).toBe(true);
       expect(state.vaults[0].volatile.credential).toBe('');
       expect(state.vaults[0].volatile.entries).toEqual([]);
+  expect(mockVaultStateCommands.persistVaultsSnapshot).toHaveBeenCalled();
     });
   });
 
@@ -622,6 +623,40 @@ describe('Vault Redux State Extensions', () => {
       expect(result.vaults![0].storageType).toBe('local');
       expect(result.vaults![0].volatile).toBeDefined();
       expect(result.vaults![0].volatile.entries).toEqual([]);
+    });
+
+    it('should hydrate volatile state from persisted data', async () => {
+      const persistedEntries = [createEntry({ id: 'entry-volatile' })];
+
+      mockVaultStateCommands.load.mockResolvedValueOnce({
+        vaults: [
+          {
+            id: 'vault-volatile',
+            name: 'Persisted Vault',
+            path: '/path/to/vault.bc',
+            storageType: 'cloud',
+            isLocked: false,
+            volatile: {
+              credential: 'persisted-secret',
+              entries: persistedEntries,
+              navigationPath: '/group/child',
+              encryptedData: 'opaque-data',
+            },
+          },
+        ],
+        defaultProvider: 'google-drive',
+        providerStatus: {},
+      });
+
+      const result = await loadVaultStateFromSettings();
+
+      const hydratedVault = result.vaults?.[0];
+      expect(hydratedVault?.id).toBe('vault-volatile');
+      expect(hydratedVault?.isLocked).toBe(false);
+      expect(hydratedVault?.volatile.credential).toBe('persisted-secret');
+      expect(hydratedVault?.volatile.entries).toEqual(persistedEntries);
+      expect(hydratedVault?.volatile.navigationPath).toBe('/group/child');
+      expect(hydratedVault?.volatile.encryptedData).toBe('opaque-data');
     });
 
     it('should handle missing vault data gracefully', async () => {

@@ -1,4 +1,5 @@
 use crate::commands::errors::{CommandError, CommandResult};
+use crate::models::Entry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Error as IoError, ErrorKind};
@@ -46,6 +47,8 @@ pub struct VaultSummary {
     pub provider_id: Option<String>,
     #[serde(default)]
     pub cloud_metadata: Option<CloudMetadata>,
+    #[serde(default)]
+    pub volatile: Option<VaultVolatile>,
 }
 
 impl Default for VaultSummary {
@@ -59,8 +62,22 @@ impl Default for VaultSummary {
             storage_type: StorageType::Local,
             provider_id: None,
             cloud_metadata: None,
+            volatile: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultVolatile {
+    #[serde(default)]
+    pub credential: String,
+    #[serde(default)]
+    pub entries: Vec<Entry>,
+    #[serde(default)]
+    pub navigation_path: Option<String>,
+    #[serde(default)]
+    pub encrypted_data: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -88,6 +105,7 @@ pub struct VaultStateData {
 
 pub struct VaultStateManager {
     data: RwLock<VaultStateData>,
+    volatile: RwLock<HashMap<String, VaultVolatile>>,
     path: PathBuf,
 }
 
@@ -109,8 +127,11 @@ impl VaultStateManager {
             .and_then(|content| serde_json::from_str::<VaultStateData>(&content).ok())
             .unwrap_or_default();
 
+        let (initial_state, initial_volatile) = Self::partition_volatile(initial);
+
         Arc::new(Self {
-            data: RwLock::new(initial),
+            data: RwLock::new(initial_state),
+            volatile: RwLock::new(initial_volatile),
             path,
         })
     }
@@ -126,16 +147,26 @@ impl VaultStateManager {
     }
 
     pub async fn get(&self) -> VaultStateData {
-        self.data.read().await.clone()
+        let base_state = self.data.read().await.clone();
+        let volatile = self.volatile.read().await.clone();
+
+        Self::merge_volatile(base_state, &volatile)
     }
 
     pub async fn set(&self, next: VaultStateData) -> Result<(), IoError> {
+        let (persistable_state, volatile_map) = Self::partition_volatile(next);
+
         {
             let mut guard = self.data.write().await;
-            *guard = next.clone();
+            *guard = persistable_state.clone();
         }
 
-        self.persist(&next).await
+        {
+            let mut volatile_guard = self.volatile.write().await;
+            *volatile_guard = volatile_map;
+        }
+
+        self.persist(&persistable_state).await
     }
 }
 
@@ -146,6 +177,47 @@ pub struct ManagedVaultState {
 impl ManagedVaultState {
     pub fn new(manager: Arc<VaultStateManager>) -> Self {
         Self { manager }
+    }
+}
+
+impl VaultStateManager {
+    fn partition_volatile(state: VaultStateData) -> (VaultStateData, HashMap<String, VaultVolatile>) {
+        let VaultStateData {
+            vaults,
+            providers,
+            default_provider,
+            provider_status,
+        } = state;
+
+        let mut volatile_map = HashMap::new();
+
+        let sanitized_vaults = vaults
+            .into_iter()
+            .map(|mut summary| {
+                if let Some(volatile) = summary.volatile.take() {
+                    volatile_map.insert(summary.id.clone(), volatile);
+                }
+                summary
+            })
+            .collect();
+
+        (
+            VaultStateData {
+                vaults: sanitized_vaults,
+                providers,
+                default_provider,
+                provider_status,
+            },
+            volatile_map,
+        )
+    }
+
+    fn merge_volatile(mut state: VaultStateData, volatile: &HashMap<String, VaultVolatile>) -> VaultStateData {
+        for summary in &mut state.vaults {
+            summary.volatile = volatile.get(&summary.id).cloned();
+        }
+
+        state
     }
 }
 

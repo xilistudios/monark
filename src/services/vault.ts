@@ -20,6 +20,7 @@ import {
   setProviderStatus,
   setCloudVaults,
   addVault,
+  setVaultLocked,
 } from '../redux/actions/vault';
 import { findEntryByPath, isGroupEntry } from "../interfaces/vault.interface"
 
@@ -71,6 +72,15 @@ export class VaultInstance {
         setVaultEntries({ vaultId: this.id, entries: vaultContent.entries })
       );
 
+      this.dispatch(
+        setVaultLocked({ vaultId: this.id, isLocked: false })
+      );
+
+      this.vault = {
+        ...this.vault,
+        isLocked: false,
+      };
+
       // Note: Setting isLocked = false requires a reducer action that works by vault ID
       // This would typically be added to the vault slice reducers
     } catch (error) {
@@ -87,6 +97,10 @@ export class VaultInstance {
   lock(): void {
     // Dispatch an action to clear the vault's volatile data (entries, credential, etc.)
     this.dispatch(lockVault(this.id));
+    this.vault = {
+      ...this.vault,
+      isLocked: true,
+    };
   }
 
   /**

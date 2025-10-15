@@ -23,7 +23,7 @@ export interface Vault {
 		provider: string
 		lastSync?: string
 	}
-	// Multi-vault: volatile in-memory state, not persisted
+	// Multi-vault runtime state persisted via Rust backend
 	volatile: {
 		credential: string
 		entries: Entry[]
@@ -111,22 +111,27 @@ export const loadVaultStateFromSettings = async (): Promise<
 		const persistedState = await VaultStateCommands.load();
 
 		let loadedVaults: Vault[] = [];
-    if (persistedState.vaults && Array.isArray(persistedState.vaults)) {
-      loadedVaults = persistedState.vaults.map((vault: any) => ({
-        ...vault,
-        // Migrate existing vaults to local storage type
-        storageType: vault.storageType || 'local',
-        lastAccessed: vault.lastAccessed || undefined,
-        // Force vaults to load locked so decrypted data is never treated as persisted
-        isLocked: true,
-        volatile: {
-          entries: [],
-          credential: '',
-          navigationPath: '/',
-          encryptedData: undefined,
-        },
-      }));
-    }
+		if (persistedState.vaults && Array.isArray(persistedState.vaults)) {
+			loadedVaults = persistedState.vaults.map((vault: any) => {
+				const rawVolatile = vault.volatile ?? {};
+
+				return {
+					...vault,
+					// Migrate existing vaults to local storage type
+					storageType: vault.storageType || 'local',
+					lastAccessed: vault.lastAccessed || undefined,
+					isLocked: typeof vault.isLocked === 'boolean' ? vault.isLocked : true,
+					volatile: {
+						entries: Array.isArray(rawVolatile.entries)
+							? rawVolatile.entries
+							: [],
+						credential: rawVolatile.credential || '',
+						navigationPath: rawVolatile.navigationPath || '/',
+						encryptedData: rawVolatile.encryptedData,
+					},
+				} as Vault;
+			});
+		}
 
 		const persistedProviders = (persistedState.providers || []).map(
       (provider: any) => {
@@ -214,11 +219,11 @@ export const vaultSlice = createSlice({
 				(vault: Vault) => vault.id !== action.payload
 			)
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus
+			);
 			if (state.currentVaultId === action.payload) {
 				state.currentVaultId = null
 			}
@@ -308,6 +313,12 @@ export const vaultSlice = createSlice({
 					}
 				}
 				vault.volatile.credential = action.payload.credential
+				void persistVaultState(
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus
+				);
 			}
 		},
 		setNavigationPath: (
@@ -327,6 +338,12 @@ export const vaultSlice = createSlice({
 					}
 				}
 				vault.volatile.navigationPath = action.payload.navigationPath
+				void persistVaultState(
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus
+				);
 			}
 		},
 		setVaultEntries: (
@@ -346,6 +363,12 @@ export const vaultSlice = createSlice({
 					}
 				}
 				vault.volatile.entries = action.payload.entries
+				void persistVaultState(
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus
+				);
 			}
 		},
 		lockVault: (state, action: PayloadAction<string>) => {
@@ -364,6 +387,12 @@ export const vaultSlice = createSlice({
 						vault.isLocked = true
 						vault.volatile.credential = "" // Clear credential on lock
 						vault.volatile.navigationPath = "/"
+						void persistVaultState(
+							state.vaults,
+							state.providers,
+							state.defaultProvider,
+							state.providerStatus
+						);
 					}
 				},
 		// New reducer for setting vault locked state
@@ -371,6 +400,12 @@ export const vaultSlice = createSlice({
 			const vault = state.vaults.find((v) => v.id === action.payload.vaultId)
 			if (vault) {
 				vault.isLocked = action.payload.isLocked
+				void persistVaultState(
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus
+				);
 			}
 		},
 		// Storage Provider Actions

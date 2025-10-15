@@ -1,7 +1,8 @@
+import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import { VaultSelector } from '../../../components/Vault/VaultSelector';
+import VaultSelector from '../../../components/Vault/VaultSelector';
 import { vaultSlice, type Vault } from '../../../redux/actions/vault';
 import { StorageProviderType } from '../../../interfaces/cloud-storage.interface';
 import { VaultManager } from '../../../services/vault';
@@ -13,16 +14,47 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+// Mock TanStack Router completely by replacing Link with a simple button
+jest.mock('@tanstack/react-router', () => ({
+  Link: ({ children, onClick, ...props }: any) => (
+    <button onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
+  useRouter: () => ({
+    navigate: jest.fn(),
+  }),
+  useRouterState: () => ({
+    location: {
+      pathname: '/',
+    },
+  }),
+  useLinkProps: () => ({}),
+}));
+
+// Helper function to render with all providers
+const renderWithProviders = (ui: React.ReactElement, { initialState = {} } = {}) => {
+  const store = createMockStore(initialState);
+  return {
+    store,
+    ...render(
+      <Provider store={store}>
+        {ui}
+      </Provider>
+    ),
+  };
+};
+
 // Mock VaultManager
+const mockVaultManagerInstance = {
+  loadProviders: jest.fn().mockResolvedValue(undefined),
+  refreshCloudVaults: jest.fn().mockResolvedValue(undefined),
+  syncWithCloud: jest.fn().mockResolvedValue(undefined),
+};
+
 jest.mock('../../../services/vault', () => ({
   VaultManager: {
-    getInstance: jest.fn(() => ({
-      loadProviders: jest.fn().mockResolvedValue(undefined),
-      refreshCloudVaults: jest.fn().mockResolvedValue(undefined),
-      getInstance: jest.fn(() => ({
-        syncWithCloud: jest.fn().mockResolvedValue(undefined),
-      })),
-    })),
+    getInstance: jest.fn(() => mockVaultManagerInstance),
   },
 }));
 
@@ -110,57 +142,37 @@ describe('VaultSelector', () => {
   });
 
   it('renders loading state correctly', () => {
-    const store = createMockStore({ loading: true });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
+    renderWithProviders(<VaultSelector {...defaultProps} />, { initialState: { loading: true } });
 
-    expect(screen.getByRole('status')).toBeInTheDocument(); // loading spinner
+    expect(document.querySelector('.loading-spinner')).toBeInTheDocument();
   });
 
   it('renders empty state when no vaults exist', () => {
-    const store = createMockStore();
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
+    renderWithProviders(<VaultSelector {...defaultProps} />);
 
     expect(screen.getByText('vaultSelector.noVaults')).toBeInTheDocument();
     expect(screen.getByText('vaultSelector.emptyState')).toBeInTheDocument();
   });
 
   it('renders local vault correctly', () => {
-    const store = createMockStore({
-      vaults: [mockLocalVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockLocalVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     expect(screen.getByText('Local Vault')).toBeInTheDocument();
     expect(screen.getByTitle('vaultSelector.localVault')).toBeInTheDocument();
   });
 
   it('renders cloud vault correctly', () => {
-    const store = createMockStore({
-      vaults: [mockCloudVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     expect(screen.getByText('Cloud Vault')).toBeInTheDocument();
     expect(screen.getByTitle('vaultSelector.cloudVault')).toBeInTheDocument();
@@ -168,16 +180,12 @@ describe('VaultSelector', () => {
   });
 
   it('shows cloud vaults loading indicator on mount', async () => {
-    const store = createMockStore({
-      vaults: [mockCloudVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Should show loading indicator initially
     await waitFor(() => {
@@ -186,13 +194,7 @@ describe('VaultSelector', () => {
   });
 
   it('calls onAddVault when add vault button is clicked', () => {
-    const store = createMockStore();
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
+    renderWithProviders(<VaultSelector {...defaultProps} />);
 
     // Open dropdown menu
     const dropdownButton = screen.getByRole('button');
@@ -206,16 +208,12 @@ describe('VaultSelector', () => {
   });
 
   it('calls refresh cloud vaults when refresh button is clicked', async () => {
-    const store = createMockStore({
-      vaults: [mockCloudVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Open dropdown menu
     const dropdownButton = screen.getByRole('button');
@@ -231,16 +229,12 @@ describe('VaultSelector', () => {
   });
 
   it('shows sync option for cloud vaults in dropdown menu', () => {
-    const store = createMockStore({
-      vaults: [mockCloudVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Open vault dropdown menu
     const vaultDropdownButton = screen.getAllByRole('button')[1]; // Second button is vault dropdown
@@ -252,16 +246,12 @@ describe('VaultSelector', () => {
   });
 
   it('shows migrate to cloud option for local vaults in dropdown menu', () => {
-    const store = createMockStore({
-      vaults: [mockLocalVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockLocalVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Open vault dropdown menu
     const vaultDropdownButton = screen.getAllByRole('button')[1]; // Second button is vault dropdown
@@ -272,16 +262,12 @@ describe('VaultSelector', () => {
   });
 
   it('handles vault selection correctly', () => {
-    const store = createMockStore({
-      vaults: [mockLocalVault],
-      providers: mockProviders,
+    const { store } = renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockLocalVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Click on vault
     const vaultElement = screen.getByText('Local Vault');
@@ -292,16 +278,12 @@ describe('VaultSelector', () => {
   });
 
   it('handles sync operation for cloud vaults', async () => {
-    const store = createMockStore({
-      vaults: [mockCloudVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Open vault dropdown menu
     const vaultDropdownButton = screen.getAllByRole('button')[1];
@@ -312,21 +294,17 @@ describe('VaultSelector', () => {
     fireEvent.click(syncOption);
 
     await waitFor(() => {
-      expect(VaultManager.getInstance().getInstance(mockCloudVault.id)?.syncWithCloud).toHaveBeenCalled();
+      expect(mockVaultManagerInstance.syncWithCloud).toHaveBeenCalled();
     });
   });
 
   it('disables migrate to cloud when no providers available', () => {
-    const store = createMockStore({
-      vaults: [mockLocalVault],
-      providers: [], // No providers
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockLocalVault],
+        providers: [], // No providers
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     // Open vault dropdown menu
     const vaultDropdownButton = screen.getAllByRole('button')[1];
@@ -338,26 +316,14 @@ describe('VaultSelector', () => {
   });
 
   it('shows error message when refresh fails', async () => {
-    const mockVaultManager = {
-      loadProviders: jest.fn().mockResolvedValue(undefined),
-      refreshCloudVaults: jest.fn().mockRejectedValue(new Error('Network error')),
-      getInstance: jest.fn(() => ({
-        syncWithCloud: jest.fn().mockResolvedValue(undefined),
-      })),
-    };
+    mockVaultManagerInstance.refreshCloudVaults.mockRejectedValue(new Error('Network error'));
 
-    (VaultManager.getInstance as jest.Mock).mockReturnValue(mockVaultManager);
-
-    const store = createMockStore({
-      vaults: [mockCloudVault],
-      providers: mockProviders,
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
     });
-    
-    render(
-      <Provider store={store}>
-        <VaultSelector {...defaultProps} />
-      </Provider>
-    );
 
     await waitFor(() => {
       expect(screen.getByText(/Failed to refresh cloud vaults/)).toBeInTheDocument();
