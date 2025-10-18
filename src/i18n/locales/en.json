@@ -152,6 +152,14 @@
         "redirectUriRequired": "Redirect URI is required",
         "addFailed": "Failed to add provider. Please check your credentials."
       }
+    },
+    "updates": {
+      "title": "Updates",
+      "description": "Check for and install the latest version of the application.",
+      "currentVersion": "Current version: {{version}}",
+      "checkButton": "Check for Updates",
+      "checkAriaLabel": "Check for application updates",
+      "checking": "Checking..."
     }
   },
   "home": {
