@@ -18,6 +18,14 @@
     "updater:allow-install",
     "updater:allow-download-and-install",
     "fs:allow-app-read",
-    "os:default"
-  ]
+    "os:default",
+    "http:default"
+  ],
+  "remote": {
+    "urls": [
+      "https://www.googleapis.com/*",
+      "https://oauth2.googleapis.com/*",
+      "https://*.googleapis.com/*"
+    ]
+  }
 }

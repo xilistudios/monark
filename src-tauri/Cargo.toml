@@ -42,6 +42,7 @@ tempfile = "3"
 tokio = "1.47.1"
 tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
+tauri-plugin-http = { version = "2", features = ["multipart"] }
 async-trait = "0.1"
 reqwest = { version = "0.11", default-features = false, features = ["json", "multipart", "rustls-tls", "gzip", "stream"] }
 url = "2.5"

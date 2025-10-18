@@ -38,6 +38,7 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .manage(StorageState {
             manager: storage_manager,
