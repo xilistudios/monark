@@ -159,7 +159,15 @@
       "currentVersion": "Current version: {{version}}",
       "checkButton": "Check for Updates",
       "checkAriaLabel": "Check for application updates",
-      "checking": "Checking..."
+      "checking": "Checking...",
+      "updateAvailable": "Update available: {{version}}",
+      "downloading": "Downloading update...",
+      "downloadingProgress": "Downloading update: {{progress}}%",
+      "downloadedSuccessfully": "Update downloaded successfully. Relaunching...",
+      "noUpdatesAvailable": "No updates available. You are on the latest version.",
+      "errorCheck": "Failed to check for updates: {{message}}",
+      "loading": "Loading...",
+      "versionUnavailable": "Version unavailable"
     }
   },
   "home": {

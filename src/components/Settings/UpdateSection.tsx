@@ -27,7 +27,7 @@ function UpdateSection() {
 			const update = await check();
 
 			if (update) {
-				setUpdateMessage(`Update available: ${update.version}`);
+				setUpdateMessage(t('updates.available', { version: update.version }));
 				
 				// Download and install the update
 				let downloaded = 0;
@@ -37,15 +37,15 @@ function UpdateSection() {
 					switch (event.event) {
 						case 'Started':
 							contentLength = event?.data?.contentLength || 0;
-							setUpdateMessage('Downloading update...');
+							setUpdateMessage(t('updates.downloading'));
 							break;
 						case 'Progress':
-							downloaded += event.data.chunkLength;
+							downloaded += event.data?.chunkLength ?? 0;
 							const progress = contentLength > 0 ? (downloaded / contentLength) * 100 : 0;
-							setUpdateMessage(`Downloading update: ${Math.round(progress)}%`);
+							setUpdateMessage(t('updates.downloadingProgress', { progress: Math.round(progress) }));
 							break;
 						case 'Finished':
-							setUpdateMessage('Update downloaded successfully. Relaunching...');
+							setUpdateMessage(t('updates.downloaded'));
 							break;
 					}
 				});
@@ -53,10 +53,11 @@ function UpdateSection() {
 				// Relaunch the app to apply the update
 				await relaunch();
 			} else {
-				setUpdateMessage('No updates available. You are on the latest version.');
+				setUpdateMessage(t('updates.upToDate'));
 			}
 		} catch (error) {
-			setUpdateError(`Failed to check for updates: ${error}`);
+			const message = error instanceof Error ? error.message : String(error);
+			setUpdateError(t('updates.errorCheck', { message }));
 		} finally {
 			setIsChecking(false);
 		}
@@ -88,11 +89,11 @@ function UpdateSection() {
 			{/* Version Display */}
 			<div className="text-sm">
 				{versionLoading ? (
-					<span className="opacity-70">Loading...</span>
+					<span className="opacity-70">{t('updates.loading')}</span>
 				) : appVersion ? (
 					t('updates.currentVersion', { version: appVersion })
 				) : (
-					<span className="opacity-70">Version unavailable</span>
+					<span className="opacity-70">{t('updates.versionUnavailable')}</span>
 				)}
 			</div>
 			
