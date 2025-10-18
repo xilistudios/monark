@@ -73,6 +73,11 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
             state::load_vault_state,
             state::save_vault_state,
         ])
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+            Ok(())
+        })
         .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

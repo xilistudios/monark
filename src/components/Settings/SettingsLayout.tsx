@@ -9,9 +9,10 @@ import { useTranslation } from 'react-i18next';
 import AppearanceSettings from './AppearanceSettings';
 import GeneralSettings from './GeneralSettings';
 import ResetSection from './ResetSection';
+import UpdateSection from './UpdateSection';
 import { CloudStorageSettings } from './CloudStorageSettings';
 
-type SettingsTab = 'general' | 'appearance' | 'cloudStorage' | 'reset';
+type SettingsTab = 'general' | 'appearance' | 'cloudStorage' | 'reset' | 'updates';
 
 interface TabConfig {
   id: SettingsTab;
@@ -48,6 +49,12 @@ function SettingsLayout() {
       label: t('resetButton', 'Reset'),
       icon: '🔄',
       component: ResetSection,
+    },
+    {
+      id: 'updates',
+      label: t('updates.title', 'Updates'),
+      icon: '🔄',
+      component: UpdateSection,
     },
   ];
 

@@ -24,6 +24,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,6 +42,10 @@
           "role": "Viewer"
         }
       ]
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM3OEI0NTY0MUZFQUI4QTIKUldTaXVPb2ZaRVdMeCtCa1BqM240RlNOSmo5enRRUzBOcCtBTThPT1ZQSmQwSDFVbE5VRENhU2kK",
+      "endpoints": ["https://github.com/xilistudios/monark/releases/latest/download/latest.json"]
     }
   }
 }

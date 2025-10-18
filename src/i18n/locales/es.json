@@ -152,6 +152,22 @@
         "redirectUriRequired": "La URI de Redirección es obligatoria",
         "addFailed": "Error al agregar el proveedor. Por favor verifica tus credenciales."
       }
+    },
+    "updates": {
+      "title": "Actualizaciones",
+      "description": "Busca e instala la última versión de la aplicación.",
+      "currentVersion": "Versión actual: {{version}}",
+      "checkButton": "Buscar Actualizaciones",
+      "checkAriaLabel": "Buscar actualizaciones de la aplicación",
+      "checking": "Buscando...",
+      "updateAvailable": "Actualización disponible: {{version}}",
+      "downloading": "Descargando actualización...",
+      "downloadingProgress": "Descargando actualización: {{progress}}%",
+      "downloadedSuccessfully": "Actualización descargada correctamente. Reiniciando...",
+      "noUpdatesAvailable": "No hay actualizaciones disponibles. Estás en la última versión.",
+      "errorCheck": "Error al buscar actualizaciones: {{message}}",
+      "loading": "Cargando...",
+      "versionUnavailable": "Versión no disponible"
     }
   },
   "home": {

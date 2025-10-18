@@ -13,7 +13,10 @@
     "clipboard-manager:default",
     "deep-link:default",
     "clipboard-manager:allow-write-text",
-    "clipboard-manager:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "updater:allow-download-and-install",
     "fs:allow-app-read",
     "os:default"
   ]
