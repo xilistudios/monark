@@ -343,6 +343,26 @@ export const CloudStorageSettings = () => {
                         </button>
                       )}
 
+                      {status === 'authenticated' && provider.provider_type === StorageProviderType.GOOGLE_DRIVE && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleAuthenticate(provider)}
+                          disabled={isAuthenticating || loading}
+                        >
+                          {isAuthenticating ? (
+                            <>
+                              <span className="loading loading-spinner loading-xs"></span>
+                              {t(
+                                'cloudStorage.authenticating',
+                                'Authenticating...'
+                              )}
+                            </>
+                          ) : (
+                            t('cloudStorage.reAuthenticate', 'Re-authenticate')
+                          )}
+                        </button>
+                      )}
+
                       {status === 'authenticated' && !isDefault && (
                         <button
                           className="btn btn-outline btn-sm"

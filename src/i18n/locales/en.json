@@ -82,6 +82,7 @@
       "setAsDefault": "Set as Default",
       "remove": "Remove",
       "authenticate": "Authenticate",
+      "reAuthenticate": "Re-authenticate",
       "defaultProvider": "Default Provider",
       "confirmRemove": "Are you sure you want to remove this provider?",
       "addProviderHint": "Add a provider to start using cloud storage for your vaults",
