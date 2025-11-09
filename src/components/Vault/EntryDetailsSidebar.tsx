@@ -7,6 +7,7 @@ import { EntryDetailsHeader } from './EntryDetailsHeader';
 import { EntryBasicInfo } from './EntryBasicInfo';
 import { EntryFieldsSection } from './EntryFieldsSection';
 import { EntryTagsSection } from './EntryTagsSection';
+import { CopyToast } from './CopyToast';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 interface EntryDetailsSidebarProps {
@@ -44,8 +45,9 @@ export function EntryDetailsSidebar({
   );
   const [newTag, setNewTag] = useState('');
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
-  const [copyError, setCopyError] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [copyToastVisible, setCopyToastVisible] = useState(false);
+  const [copyToastFieldName, setCopyToastFieldName] = useState('');
+  const [copyToastIsError, setCopyToastIsError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,21 +86,21 @@ export function EntryDetailsSidebar({
   };
 
   const handleCopy = async (value: string, fieldName?: string) => {
-    setCopyError(null);
-    setCopySuccess(null);
     try {
       await writeText(value);
-      setCopySuccess(
-        fieldName
-          ? `${fieldName} ${t('vault.manager.copied')}`
-          : t('vault.manager.copied')
-      );
-      setTimeout(() => setCopySuccess(null), 2000);
+      setCopyToastFieldName(fieldName || '');
+      setCopyToastIsError(false);
+      setCopyToastVisible(true);
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
-      setCopyError(t('vault.manager.copyFailed'));
-      setTimeout(() => setCopyError(null), 3000);
+      setCopyToastFieldName(fieldName || '');
+      setCopyToastIsError(true);
+      setCopyToastVisible(true);
     }
+  };
+
+  const hideCopyToast = () => {
+    setCopyToastVisible(false);
   };
 
   const handleAddField = () => {
@@ -223,15 +225,9 @@ export function EntryDetailsSidebar({
             )}
           </div>
 
-          {(error || copyError || copySuccess) && (
+          {error && (
             <div className="px-6 py-2">
-              {error && <div className="text-error text-sm">{error}</div>}
-              {copyError && (
-                <div className="text-error text-sm">{copyError}</div>
-              )}
-              {copySuccess && (
-                <div className="text-success text-sm">{copySuccess}</div>
-              )}
+              <div className="text-error text-sm">{error}</div>
             </div>
           )}
 
@@ -356,16 +352,6 @@ export function EntryDetailsSidebar({
             )}
           </div>
 
-          {(copyError || copySuccess) && (
-            <div className="px-6 py-2">
-              {copyError && (
-                <div className="text-error text-sm">{copyError}</div>
-              )}
-              {copySuccess && (
-                <div className="text-success text-sm">{copySuccess}</div>
-              )}
-            </div>
-          )}
 
           <div className="border-t bg-base-100 px-6 py-4">
             <div className="flex flex-col sm:flex-row gap-3">
@@ -418,6 +404,13 @@ export function EntryDetailsSidebar({
           </div>
         </>
       )}
+
+      <CopyToast
+        fieldName={copyToastFieldName}
+        isVisible={copyToastVisible}
+        onHide={hideCopyToast}
+        isError={copyToastIsError}
+      />
     </aside>
   );
 }
