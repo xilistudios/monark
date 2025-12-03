@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "monark",
@@ -17,7 +18,7 @@
         "@tauri-apps/plugin-os": "~2",
         "@tauri-apps/plugin-process": "^2.3.0",
         "@tauri-apps/plugin-store": "2.4.0",
-        "@tauri-apps/plugin-updater": "2",
+        "@tauri-apps/plugin-updater": "2.9.0",
         "@testing-library/jest-dom": "^6.6.3",
         "@testing-library/react": "^16.3.0",
         "@testing-library/user-event": "^14.6.1",

@@ -248,9 +248,6 @@ const VaultSelector = ({
                 onClick={() => handleVaultSelect(vault)}
               >
                 <div className="flex items-center justify-between w-full min-w-0">
-                  <span className="font-medium truncate flex-1 mr-2">
-                    {vault.name}
-                  </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {/* Cloud/Local indicator */}
                     <CloudVaultIndicator
@@ -258,7 +255,9 @@ const VaultSelector = ({
                       showTooltip={false}
                       className="hidden sm:flex"
                     />
-
+                    <span className="font-medium truncate flex-1 mr-2">
+                      {vault.name}
+                    </span>
                     {/* Lock status */}
                     {vault.isLocked ? (
                       <span
