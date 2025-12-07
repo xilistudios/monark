@@ -271,7 +271,8 @@
       "adding": "Adding...",
       "cancel": "Cancel",
       "errors": {
-        "nameRequired": "Group name is required"
+        "nameRequired": "Group name is required",
+        "addFailed": "Failed to add group"
       }
     },
     "importVault": {
@@ -445,7 +446,20 @@
     "editEntry": {
       "title": "Edit Entry",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "entryTitle": "Entry Title",
+      "entryTitlePlaceholder": "Enter entry title",
+      "dataType": "Data Type",
+      "dataTypePlaceholder": "Enter data type",
+      "fields": "Fields",
+      "secret": "Secret",
+      "addField": "Add Field",
+      "fieldTitle": "Field name",
+      "fieldProperty": "Property",
+      "fieldValue": "Value",
+      "tags": "Tags",
+      "addTag": "Add Tag",
+      "tagPlaceholder": "Enter tag"
     },
     "editGroup": {
       "title": "Edit Group"

@@ -201,7 +201,7 @@ export const EditEntryModal: React.FC = () => {
         {/* Data Type */}
         <div className="form-control">
           <label className="label">
-            <span className="label-text">{t('editEntry.dataType')}</span>
+            <span className="label-text">{t('editEntry.dataType')} *</span>
           </label>
           <input
             type="text"

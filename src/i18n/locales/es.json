@@ -444,7 +444,19 @@
     "editEntry": {
       "title": "Editar Entrada",
       "save": "Guardar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "entryTitle": "Título de la Entrada",
+      "dataType": "Tipo de Datos",
+      "entryTitlePlaceholder": "Ingrese el título de la entrada",
+      "fields": "Campos",
+      "fieldTitle": "Nombre del campo",
+      "fieldProperty": "Propiedad",
+      "fieldValue": "Valor",
+      "secret": "Secreto",
+      "addField": "Agregar Campo",
+      "tags": "Etiquetas",
+      "tagPlaceholder": "Ingrese etiqueta",
+      "addTag": "Agregar Etiqueta"
     },
     "editGroup": {
       "title": "Editar Grupo"
