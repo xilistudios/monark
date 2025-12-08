@@ -459,7 +459,8 @@
       "fieldValue": "Value",
       "tags": "Tags",
       "addTag": "Add Tag",
-      "tagPlaceholder": "Enter tag"
+      "tagPlaceholder": "Enter tag",
+      "saving": "Saving..."
     },
     "editGroup": {
       "title": "Edit Group"

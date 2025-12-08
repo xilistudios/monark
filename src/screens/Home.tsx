@@ -247,7 +247,7 @@ function HomeScreen() {
     <div className="flex h-[100vh] w-screen overflow-hidden">
       <div className="drawer lg:drawer-open">
         <input id="vault-drawer" type="checkbox" className="drawer-toggle" />
-        <div className="drawer-content flex flex-col">
+        <div className="drawer-content flex flex-col h-full min-h-0">
           <div className="w-full px-4 py-2 bg-base-200 border-b border-base-300">
             <label
               htmlFor="vault-drawer"

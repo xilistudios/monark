@@ -160,7 +160,7 @@ function UnlockedVaultView({
         <div
           className={`w-full md:w-[40%] flex flex-col h-full overflow-auto border-r border-base-300 ${
             isMobileSidebarOpen ? 'hidden md:flex' : 'flex'
-          }`}
+            }`}
         >
           <VaultBreadcrumbs
             navigationPath={currentPath.join('/')}
@@ -173,7 +173,7 @@ function UnlockedVaultView({
             }}
             onNavigate={handleNavigate}
           />
-          <div className="p-4 flex-1 overflow-auto relative">
+          <div className="p-4 flex-1 h-full w-full min-h-0 overflow-hidden relative">
             {/* VaultTree always visible */}
             {entries.length === 0 ? (
               <div className="text-center py-12">
@@ -219,7 +219,7 @@ function UnlockedVaultView({
             />
 
             {/* Mobile Sidebar */}
-            <div className="md:hidden fixed inset-0 w-full bg-base-100 z-50 shadow-xl">
+            <div className="md:hidden fixed inset-0 w-full bg-base-100 z-50 h-full min-h-0 flex flex-col">
               {/* Mobile Header */}
               <div className="w-full flex items-center justify-between p-4 border-b bg-base-200">
                 <h3 className="font-semibold text-lg">Entry Details</h3>
