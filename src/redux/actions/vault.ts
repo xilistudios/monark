@@ -113,24 +113,32 @@ export const loadVaultStateFromSettings = async (): Promise<
 		let loadedVaults: Vault[] = [];
 		if (persistedState.vaults && Array.isArray(persistedState.vaults)) {
 			loadedVaults = persistedState.vaults.map((vault: any) => {
-				const rawVolatile = vault.volatile ?? {};
+				const rawVolatile = vault.volatile ?? {}
+				const credential =
+					typeof rawVolatile.credential === 'string'
+						? rawVolatile.credential
+						: ''
+				const persistedLocked =
+					typeof vault.isLocked === 'boolean' ? vault.isLocked : true
+				const effectiveLocked = persistedLocked || !credential
 
 				return {
 					...vault,
 					// Migrate existing vaults to local storage type
 					storageType: vault.storageType || 'local',
 					lastAccessed: vault.lastAccessed || undefined,
-					isLocked: typeof vault.isLocked === 'boolean' ? vault.isLocked : true,
+					// If we don't have a runtime credential, always treat as locked.
+					isLocked: effectiveLocked,
 					volatile: {
 						entries: Array.isArray(rawVolatile.entries)
 							? rawVolatile.entries
 							: [],
-						credential: rawVolatile.credential || '',
+						credential,
 						navigationPath: rawVolatile.navigationPath || '/',
 						encryptedData: rawVolatile.encryptedData,
 					},
-				} as Vault;
-			});
+				} as Vault
+			})
 		}
 
 		const persistedProviders = (persistedState.providers || []).map(

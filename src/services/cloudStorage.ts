@@ -142,27 +142,24 @@ export class CloudStorageCommands {
     requestOrVaultId: CloudVaultOperation | string,
     maybeProviderName?: string
   ): Promise<VaultContent> {
+    // Defense-in-depth: the positional overload cannot provide a password.
+    // Avoid silent misuse by throwing with a clear message.
+    if (typeof requestOrVaultId === 'string') {
+      throw new Error(
+        'readCloudVault(vaultId, providerName) requires a password. ' +
+          'Use readCloudVault({ vaultId, password, providerName })'
+      )
+    }
+
     try {
-      // Support two calling styles:
-      // 1) readCloudVault(request: CloudVaultOperation) -> { vaultId, password?, providerName? }
-      // 2) readCloudVault(vaultId: string, providerName?: string) -> positional
-      if (typeof requestOrVaultId === 'string') {
-        const vaultId = requestOrVaultId;
-        const providerName = maybeProviderName;
-        return await invoke<VaultContent>('read_cloud_vault', {
-          vaultId,
-          providerName,
-        });
-      } else {
-        const request = requestOrVaultId as CloudVaultOperation;
-        return await invoke<VaultContent>('read_cloud_vault', {
-          vaultId: request.vaultId,
-          password: request.password,
-          providerName: request.providerName,
-        });
-      }
+      const request = requestOrVaultId as CloudVaultOperation
+      return await invoke<VaultContent>('read_cloud_vault', {
+        vaultId: request.vaultId,
+        password: request.password,
+        providerName: request.providerName,
+      })
     } catch (error) {
-      throw this.handleError(error, 'Failed to read cloud vault');
+      throw this.handleError(error, 'Failed to read cloud vault')
     }
   }
 

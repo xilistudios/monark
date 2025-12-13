@@ -26,7 +26,7 @@ import type {
 } from '../../interfaces/cloud-storage.interface';
 import type { Entry, DataEntry } from '../../interfaces/vault.interface';
 
-const mockVaultStateCommands = {
+const mockVaultStateCommands = vi.hoisted(() => ({
   load: vi.fn().mockResolvedValue({
     vaults: [],
     defaultProvider: null,
@@ -34,11 +34,11 @@ const mockVaultStateCommands = {
   }),
   save: vi.fn(),
   persistVaultsSnapshot: vi.fn().mockResolvedValue(undefined),
-};
+}))
 
 vi.mock('../../services/vaultState', () => ({
   VaultStateCommands: mockVaultStateCommands,
-}));
+}))
 
 const createEntry = (
   overrides: Partial<Omit<DataEntry, 'entry_type'>> = {}
@@ -657,6 +657,30 @@ describe('Vault Redux State Extensions', () => {
       expect(hydratedVault?.volatile.entries).toEqual(persistedEntries);
       expect(hydratedVault?.volatile.navigationPath).toBe('/group/child');
       expect(hydratedVault?.volatile.encryptedData).toBe('opaque-data');
+    });
+
+    it('should treat vault as locked when credential is missing on hydrate', async () => {
+      mockVaultStateCommands.load.mockResolvedValueOnce({
+        vaults: [
+          {
+            id: 'vault-missing-credential',
+            name: 'Persisted Vault (Missing Credential)',
+            path: '/path/to/vault.bc',
+            storageType: 'cloud',
+            isLocked: false,
+            // volatile omitted: backend drops credential on save
+          },
+        ],
+        defaultProvider: 'google-drive',
+        providerStatus: {},
+      });
+
+      const result = await loadVaultStateFromSettings();
+
+      const hydratedVault = result.vaults?.[0];
+      expect(hydratedVault?.id).toBe('vault-missing-credential');
+      expect(hydratedVault?.volatile.credential).toBe('');
+      expect(hydratedVault?.isLocked).toBe(true);
     });
 
     it('should handle missing vault data gracefully', async () => {

@@ -260,7 +260,7 @@ const VaultSelector = ({
                     />
 
                     {/* Lock status */}
-                    {vault.isLocked ? (
+                    {vault.isLocked || !vault.volatile?.credential ? (
                       <span
                         className="flex items-center gap-1"
                         aria-label={t('vaultSelector.locked', 'Locked')}

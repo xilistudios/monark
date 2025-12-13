@@ -41,6 +41,8 @@ function HomeScreen() {
   const error = useSelector((state: RootState) => state.vault.error);
   const currentVault = vaults.find((v) => v.id === currentVaultId) ?? null;
   const navigationPath = currentVault?.volatile?.navigationPath || '/';
+  const effectiveLocked =
+    currentVault?.isLocked || !currentVault?.volatile?.credential;
 
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
@@ -213,7 +215,7 @@ function HomeScreen() {
         </div>
       </div>
     );
-  } else if (currentVault.isLocked) {
+  } else if (effectiveLocked) {
     vaultContent = (
       <LockedVaultView
         currentVault={{
