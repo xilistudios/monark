@@ -41,6 +41,13 @@
           "name": "Monark OAuth Callback",
           "role": "Viewer"
         }
+      ],
+      "mobile": [
+        {
+          "schemes": ["monark"],
+          "host": "oauth",
+          "name": "Monark OAuth Callback"
+        }
       ]
     },
     "updater": {

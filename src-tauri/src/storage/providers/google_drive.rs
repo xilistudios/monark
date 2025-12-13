@@ -7,9 +7,25 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use tauri_plugin_http::reqwest;
 
 const GOOGLE_DRIVE_API_BASE: &str = "https://www.googleapis.com/drive/v3";
 const GOOGLE_DRIVE_UPLOAD_API_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
+
+// Static HTTP client for connection pooling and reuse
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+/// Get or create the shared HTTP client
+fn get_http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .user_agent("Monark-App/1.0")
+            .build()
+            .expect("Failed to create HTTP client")
+    })
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoogleDriveConfig {
@@ -24,7 +40,6 @@ pub struct GoogleDriveConfig {
 #[derive(Debug, Clone)]
 pub struct GoogleDriveProvider {
     config: GoogleDriveConfig,
-    client: reqwest::Client,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,10 +72,7 @@ struct GoogleDriveFileList {
 
 impl GoogleDriveProvider {
     pub fn new(config: GoogleDriveConfig) -> Self {
-        Self {
-            config,
-            client: reqwest::Client::new(),
-        }
+        Self { config }
     }
 
     pub fn with_tokens(access_token: String, refresh_token: String, expires_in: u64) -> Self {
@@ -114,8 +126,8 @@ impl GoogleDriveProvider {
             ("grant_type", "refresh_token"),
         ];
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .post("https://oauth2.googleapis.com/token")
             .form(&params)
             .send()
@@ -150,7 +162,7 @@ impl GoogleDriveProvider {
         Ok(())
     }
 
-    fn get_auth_headers(&self) -> StorageResult<HashMap<String, String>> {
+    pub fn get_auth_headers(&self) -> StorageResult<HashMap<String, String>> {
         let access_token = self
             .config
             .access_token
@@ -165,7 +177,7 @@ impl GoogleDriveProvider {
         Ok(headers)
     }
 
-    fn google_file_to_storage_file(&self, google_file: GoogleDriveFile) -> StorageFile {
+    pub fn google_file_to_storage_file(&self, google_file: GoogleDriveFile) -> StorageFile {
         let is_folder = google_file
             .mime_type
             .as_ref()
@@ -215,8 +227,8 @@ impl StorageProvider for GoogleDriveProvider {
         self.ensure_valid_token().await?;
 
         let headers = self.get_auth_headers()?;
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .get(&format!("{}/about", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[("fields", "user")])
@@ -249,8 +261,8 @@ impl StorageProvider for GoogleDriveProvider {
             "'root' in parents and trashed=false".to_string()
         };
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[
@@ -333,8 +345,8 @@ impl StorageProvider for GoogleDriveProvider {
                     })?,
             );
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .post(&format!("{}/files", GOOGLE_DRIVE_UPLOAD_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[("uploadType", "multipart")])
@@ -361,8 +373,8 @@ impl StorageProvider for GoogleDriveProvider {
 
         let headers = self.get_auth_headers()?;
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .get(&format!("{}/files/{}", GOOGLE_DRIVE_API_BASE, file_id))
             .header("Authorization", &headers["Authorization"])
             .query(&[("alt", "media")])
@@ -387,8 +399,8 @@ impl StorageProvider for GoogleDriveProvider {
 
         let headers = self.get_auth_headers()?;
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .delete(&format!("{}/files/{}", GOOGLE_DRIVE_API_BASE, file_id))
             .header("Authorization", &headers["Authorization"])
             .send()
@@ -410,8 +422,8 @@ impl StorageProvider for GoogleDriveProvider {
 
         // For media upload, send raw bytes without multipart
         // See: https://developers.google.com/drive/api/guides/manage-uploads#simple
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .patch(&format!(
                 "{}/files/{}",
                 GOOGLE_DRIVE_UPLOAD_API_BASE, request.id
@@ -465,8 +477,8 @@ impl StorageProvider for GoogleDriveProvider {
             );
         }
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .post(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .json(&metadata)
@@ -496,8 +508,8 @@ impl StorageProvider for GoogleDriveProvider {
 
         let headers = self.get_auth_headers()?;
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .get(&format!("{}/files/{}", GOOGLE_DRIVE_API_BASE, file_id))
             .header("Authorization", &headers["Authorization"])
             .query(&[(
@@ -530,8 +542,8 @@ impl StorageProvider for GoogleDriveProvider {
         // This prevents returning "vaults_backup" when searching for "vaults"
         let search_query = format!("name = '{}' and trashed=false", query);
 
-        let response = self
-            .client
+        let client = get_http_client();
+        let response = client
             .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
             .header("Authorization", &headers["Authorization"])
             .query(&[
