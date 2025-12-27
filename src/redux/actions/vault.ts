@@ -548,7 +548,6 @@ export const vaultSlice = createSlice({
 // Async thunk for deleting a vault with optional file deletion
 export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
 	return async (dispatch: any, getState: any) => {
-		try {
       // First, get the vault to access its path
       const state = getState();
       const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
@@ -557,6 +556,8 @@ export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
         throw new Error('Vault not found');
       }
 
+      let fileDeletionError: Error | null = null;
+
       // If deleteFile is true, attempt to delete the file from storage
       if (deleteFile) {
         try {
@@ -564,18 +565,20 @@ export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
           await VaultCommands.deleteVault(vault.path, vault.providerId);
         } catch (error) {
           console.error('Failed to delete vault file:', error);
-          const errorMessage =
+          fileDeletionError = new Error(
             (error as any)?.message ||
-            (error instanceof Error ? error.message : String(error));
-          throw new Error(`Failed to delete vault file: ${errorMessage}`);
+            (error instanceof Error ? error.message : String(error))
+          );
         }
       }
 
       // Remove the vault from Redux state (this will also clean up VaultManager)
       dispatch(removeVault(vaultId));
-    } catch (error) {
-			throw error;
-		}
+
+      // If there was an error during file deletion, re-throw it so UI can show an alert
+      if (fileDeletionError) {
+        throw fileDeletionError;
+      }
 	};
 };
 
