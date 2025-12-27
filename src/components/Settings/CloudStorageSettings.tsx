@@ -4,11 +4,10 @@
  * @module CloudStorageSettings
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import { useContext } from 'react';
-import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { VaultModalContext } from '../Vault/VaultContext';
 import { ProviderStatusBadge } from '../Vault/ProviderStatusBadge';
 import { OAuthFlow } from '../Vault/OAuthFlow';
@@ -19,12 +18,15 @@ import {
   setDefaultStorageProvider,
   removeStorageProvider,
   setProviderStatus,
+  setOAuthState,
+  clearOAuthState,
 } from '../../redux/actions/vault';
 import {
   selectProviders,
   selectDefaultProvider,
   selectProviderStatus,
   selectVaultLoading,
+  selectOAuthState,
 } from '../../redux/selectors/vaultSelectors';
 import type { StorageProvider } from '../../interfaces/cloud-storage.interface';
 import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
@@ -38,16 +40,11 @@ export const CloudStorageSettings = () => {
   const defaultProvider = useSelector(selectDefaultProvider);
   const providerStatus = useSelector(selectProviderStatus);
   const loading = useSelector(selectVaultLoading);
+  const oauthState = useSelector(selectOAuthState);
 
   const [authenticatingProvider, setAuthenticatingProvider] = useState<
     string | null
   >(null);
-  const [oauthState, setOauthState] = useState<{
-    isOpen: boolean;
-    providerName: string;
-    authUrl: string;
-    state: string;
-  } | null>(null);
 
   const [confirmRemove, setConfirmRemove] = useState<{
     isOpen: boolean;
@@ -56,6 +53,7 @@ export const CloudStorageSettings = () => {
   const [isRemoving, setIsRemoving] = useState(false);
 
   const handleAuthenticate = async (provider: StorageProvider) => {
+    console.log('[CloudStorageSettings] Starting authentication for provider:', provider.name);
     setAuthenticatingProvider(provider.name);
     dispatch(
       setProviderStatus({ providerId: provider.name, status: 'authenticating' })
@@ -64,19 +62,29 @@ export const CloudStorageSettings = () => {
     try {
       // Check if this is a Google Drive provider
       if (provider.provider_type === StorageProviderType.GOOGLE_DRIVE) {
+        console.log('[CloudStorageSettings] Getting OAuth URL for Google Drive provider');
         // Get OAuth URL from backend
         const { url, state } =
           await CloudStorageCommands.getGoogleDriveOAuthUrl(provider.name);
 
-        // Open OAuth flow modal
-        setOauthState({
-          isOpen: true,
-          providerName: provider.name,
-          authUrl: url,
-          state: state,
-        });
+        console.log('[CloudStorageSettings] OAuth URL received, storing in Redux');
+        console.log('[CloudStorageSettings]   - Provider:', provider.name);
+        console.log('[CloudStorageSettings]   - State:', state ? `${state.substring(0, 20)}...` : 'null');
+
+        // Store OAuth state in Redux for global deep link service
+        dispatch(
+          setOAuthState({
+            providerName: provider.name,
+            authUrl: url,
+            state: state,
+            isOpen: true,
+          })
+        );
+
+        console.log('[CloudStorageSettings] OAuth state stored in Redux successfully');
       } else {
         // For other providers, use the old flow
+        console.log('[CloudStorageSettings] Using legacy authentication flow');
         await CloudStorageCommands.authenticateProvider(provider.name);
         dispatch(
           setProviderStatus({
@@ -86,14 +94,14 @@ export const CloudStorageSettings = () => {
         );
       }
     } catch (error) {
-      console.error('Authentication failed:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('[CloudStorageSettings] Authentication failed:', error);
+      console.error('[CloudStorageSettings] Error details:', JSON.stringify(error, null, 2));
       console.error(
-        'Error message:',
+        '[CloudStorageSettings] Error message:',
         error instanceof Error ? error.message : String(error)
       );
-      console.error('Error keys:', error ? Object.keys(error as any) : 'null');
-      console.error('Error type:', typeof error);
+      console.error('[CloudStorageSettings] Error keys:', error ? Object.keys(error as any) : 'null');
+      console.error('[CloudStorageSettings] Error type:', typeof error);
       dispatch(
         setProviderStatus({ providerId: provider.name, status: 'error' })
       );
@@ -102,7 +110,8 @@ export const CloudStorageSettings = () => {
   };
 
   const handleOAuthSuccess = () => {
-    if (oauthState) {
+    console.log('[CloudStorageSettings] OAuth success callback');
+    if (oauthState.providerName) {
       dispatch(
         setProviderStatus({
           providerId: oauthState.providerName,
@@ -110,13 +119,13 @@ export const CloudStorageSettings = () => {
         })
       );
     }
-    setOauthState(null);
+    dispatch(clearOAuthState());
     setAuthenticatingProvider(null);
   };
 
   const handleOAuthError = (error: string) => {
-    console.error('OAuth error:', error);
-    if (oauthState) {
+    console.error('[CloudStorageSettings] OAuth error:', error);
+    if (oauthState.providerName) {
       dispatch(
         setProviderStatus({
           providerId: oauthState.providerName,
@@ -124,12 +133,13 @@ export const CloudStorageSettings = () => {
         })
       );
     }
-    setOauthState(null);
+    dispatch(clearOAuthState());
     setAuthenticatingProvider(null);
   };
 
   const handleOAuthCancel = () => {
-    if (oauthState) {
+    console.log('[CloudStorageSettings] OAuth cancel callback');
+    if (oauthState.providerName) {
       dispatch(
         setProviderStatus({
           providerId: oauthState.providerName,
@@ -137,63 +147,9 @@ export const CloudStorageSettings = () => {
         })
       );
     }
-    setOauthState(null);
+    dispatch(clearOAuthState());
     setAuthenticatingProvider(null);
   };
-
-  // Listen for deep link callbacks from OAuth flow
-  useEffect(() => {
-    const handleDeepLink = async (url: string) => {
-      try {
-        console.log('Deep link received:', url);
-
-        // Parse the URL to extract code and state
-        const urlObj = new URL(url);
-        const code = urlObj.searchParams.get('code');
-        const state = urlObj.searchParams.get('state');
-
-        if (code && state && oauthState && state === oauthState.state) {
-          // Handle OAuth callback
-          await CloudStorageCommands.handleGoogleDriveOAuthCallback(
-            oauthState.providerName,
-            code,
-            state
-          );
-          handleOAuthSuccess();
-        }
-      } catch (error) {
-        console.error('Failed to handle OAuth callback:', error);
-        handleOAuthError(
-          error instanceof Error
-            ? error.message
-            : 'Failed to complete authentication'
-        );
-      }
-    };
-
-    // Listen for deep link events (from Firebase redirect page)
-    const unlistenDeepLink = onOpenUrl((urls) => {
-      console.log('Deep link URLs received:', urls);
-      if (urls.length > 0) {
-        handleDeepLink(urls[0]);
-      }
-    });
-
-    // Listen for window messages from OAuth callback route (fallback)
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'oauth_callback') {
-        handleDeepLink(event.data.url);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-
-    return () => {
-      // Cleanup deep link listener
-      unlistenDeepLink.then((unlisten) => unlisten());
-      window.removeEventListener('message', handleMessage);
-    };
-  }, [oauthState]);
 
   const handleSetAsDefault = async (providerName: string) => {
     try {
@@ -451,7 +407,7 @@ export const CloudStorageSettings = () => {
       </div>
 
       {/* OAuth Flow Modal */}
-      {oauthState && (
+      {oauthState.isOpen && oauthState.providerName && oauthState.authUrl && oauthState.state && (
         <Modal isOpen={oauthState.isOpen} onClose={handleOAuthCancel}>
           <OAuthFlow
             providerName={oauthState.providerName}
@@ -462,13 +418,18 @@ export const CloudStorageSettings = () => {
             onCancel={handleOAuthCancel}
             onCredentialsImported={async (code, state) => {
               try {
+                console.log('[CloudStorageSettings] Processing imported credentials');
+                if (!oauthState.providerName) {
+                  throw new Error('Provider name is missing');
+                }
                 await CloudStorageCommands.handleGoogleDriveOAuthCallback(
                   oauthState.providerName,
                   code,
                   state
                 );
+                console.log('[CloudStorageSettings] Imported credentials processed successfully');
               } catch (error) {
-                console.error('Failed to process imported credentials:', error);
+                console.error('[CloudStorageSettings] Failed to process imported credentials:', error);
                 throw error;
               }
             }}

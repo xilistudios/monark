@@ -77,6 +77,11 @@ pub trait StorageProvider: Send + Sync {
     async fn get_file_info(&mut self, file_id: String) -> StorageResult<StorageFile>;
 
     async fn search_files(&mut self, query: String) -> StorageResult<Vec<StorageFile>>;
+
+    /// Lists vault files in the provider's storage
+    /// For local providers: simply lists files with .monark extension in the base directory
+    /// For cloud providers: lists files with .monark extension in the vault folder
+    async fn list_vaults(&mut self) -> StorageResult<Vec<StorageFile>>;
 }
 
 pub use google_drive::GoogleDriveProvider;

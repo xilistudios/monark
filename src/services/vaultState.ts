@@ -96,3 +96,16 @@ export const VaultStateCommands = {
     await this.save(payload);
   },
 };
+
+/**
+ * Helper function to determine if a vault is locked.
+ * A vault is considered locked if:
+ * 1. The isLocked flag is true, OR
+ * 2. The credential is missing (defense in depth - ensures vault cannot be accessed without password)
+ *
+ * @param vault - Vault object with isLocked and volatile.credential properties
+ * @returns true if the vault is locked, false otherwise
+ */
+export const isVaultLocked = (vault: { isLocked: boolean; volatile?: { credential?: string } }): boolean => {
+  return vault.isLocked || !vault.volatile?.credential;
+};

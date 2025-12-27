@@ -3,6 +3,7 @@ use super::{ProviderConfig, StorageConfig, StorageError, StorageResult};
 use crate::storage::providers::{
     google_drive::GoogleDriveConfig, GoogleDriveProvider, StorageProvider,
 };
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 impl StorageManager {
@@ -209,5 +210,85 @@ impl StorageManager {
         }
 
         Ok(())
+    }
+
+    /// Ensure Google Drive token is valid and refresh if needed, persisting the updated config
+    pub async fn ensure_google_drive_token_valid(
+        &self,
+        provider_name: &str,
+    ) -> StorageResult<GoogleDriveConfig> {
+        let _actual_provider_name = self.map_provider_name(provider_name);
+
+        // Get refresh lock to prevent concurrent refreshes
+        let refresh_lock = self.get_refresh_lock(provider_name).await;
+        let _guard = refresh_lock.lock().await;
+
+        // Get current config.
+        // Important: do NOT hold the RwLock guard across `.await` points below,
+        // otherwise we'll deadlock when we later try to acquire a write lock in
+        // `update_google_drive_config`.
+        let gd_config = {
+            let config = self.config.read().await;
+            let provider_config = config
+                .get_provider_config(provider_name)
+                .ok_or_else(|| StorageError::provider_not_supported(provider_name.to_string()))?;
+
+            match provider_config {
+                ProviderConfig::GoogleDrive { config } => config.clone(),
+                _ => {
+                    return Err(StorageError::invalid_configuration(
+                        "Provider is not Google Drive",
+                    ));
+                }
+            }
+        };
+
+        // Check if token needs refresh
+        let provider = GoogleDriveProvider::new(gd_config.clone());
+        if provider.is_token_expired() {
+            // Refresh token and get updated config
+            let updated_config =
+                GoogleDriveProvider::refresh_access_token_for_config(gd_config).await?;
+
+            // Update the configuration
+            self.update_google_drive_config(provider_name, updated_config.clone())
+                .await?;
+
+            Ok(updated_config)
+        } else {
+            Ok(gd_config)
+        }
+    }
+
+    /// Get authentication info for a provider
+    pub async fn get_provider_auth_info(
+        &self,
+        provider_name: &str,
+    ) -> StorageResult<(bool, Option<DateTime<Utc>>)> {
+        let config = self.config.read().await;
+        let provider_config = config
+            .get_provider_config(provider_name)
+            .ok_or_else(|| StorageError::provider_not_supported(provider_name.to_string()))?;
+
+        match provider_config {
+            ProviderConfig::GoogleDrive { config } => {
+                let authenticated = config.access_token.is_some() && !config.is_token_expired();
+                Ok((authenticated, config.token_expires_at))
+            }
+            ProviderConfig::Local { .. } => {
+                // Local provider doesn't need authentication
+                Ok((true, None))
+            }
+        }
+    }
+}
+
+impl GoogleDriveConfig {
+    pub fn is_token_expired(&self) -> bool {
+        if let (Some(_token), Some(expires_at)) = (&self.access_token, &self.token_expires_at) {
+            Utc::now() >= *expires_at - chrono::Duration::minutes(5)
+        } else {
+            true
+        }
     }
 }

@@ -1,6 +1,6 @@
 use super::StorageManager;
 use super::{StorageError, StorageResult};
-use crate::storage::providers::{CreateFolderRequest, StorageFile};
+use crate::storage::providers::{StorageFile, StorageProviderType};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -22,6 +22,19 @@ impl StorageManager {
         );
 
         let actual_provider_name = self.map_provider_name(&provider_name_str);
+
+        // Check if provider is local - local storage doesn't need a vault folder
+        {
+            let providers = self.providers.read().await;
+            if let Some(provider) = providers.get(&actual_provider_name) {
+                if provider.provider_type() == StorageProviderType::Local {
+                    println!(
+                        "[StorageManager::ensure_vault_folder] Local provider - no vault folder needed"
+                    );
+                    return Ok("local".to_string());
+                }
+            }
+        }
 
         {
             let cache = self.vault_folder_cache.read().await;
@@ -118,7 +131,7 @@ impl StorageManager {
 
             println!("[StorageManager] No existing folder found, creating new one");
 
-            let create_request = CreateFolderRequest {
+            let create_request = crate::storage::providers::CreateFolderRequest {
                 name: vault_folder_name.clone(),
                 path: format!("/{}", vault_folder_name),
                 parent_id: None,
@@ -160,97 +173,16 @@ impl StorageManager {
 
         let actual_provider_name = self.map_provider_name(&provider_name_str);
 
-        let vault_folder_id = {
-            let cache = self.vault_folder_cache.read().await;
-            if let Some(folder_id) = cache.get(&actual_provider_name) {
-                println!(
-                    "[StorageManager::list_vaults] Found cached vault folder ID: '{}'",
-                    folder_id
-                );
-                Some(folder_id.clone())
-            } else {
-                println!("[StorageManager::list_vaults] No cached vault folder ID found");
-                None
-            }
-        };
-
-        let vault_folder_id = if let Some(id) = vault_folder_id {
-            id
-        } else {
-            let config = self.config.read().await;
-            let vault_folder_name = config.vault_folder.clone();
-            drop(config);
-
-            println!(
-                "[StorageManager::list_vaults] Searching for vault folder: '{}'",
-                vault_folder_name
-            );
-
-            let mut providers = self.providers.write().await;
-            if let Some(provider) = providers.get_mut(&actual_provider_name) {
-                let search_results = provider.search_files(vault_folder_name.clone()).await?;
-
-                println!(
-                    "[StorageManager::list_vaults] Search returned {} results for folder '{}'",
-                    search_results.len(),
-                    vault_folder_name
-                );
-
-                let folder_candidates: Vec<_> = search_results
-                    .iter()
-                    .filter(|f| {
-                        f.is_folder
-                            && !f.id.starts_with('/')
-                            && (f.mime_type.is_none()
-                                || f.mime_type.as_ref().map_or(true, |mt| {
-                                    mt == "application/vnd.google-apps.folder"
-                                        || mt.contains("folder")
-                                }))
-                    })
-                    .collect();
-
-                println!(
-                    "[StorageManager::list_vaults] Found {} valid folder candidates",
-                    folder_candidates.len()
-                );
-
-                if let Some(vault_folder) = folder_candidates.first() {
-                    let folder_id = vault_folder.id.clone();
-                    println!(
-                        "[StorageManager::list_vaults] Using vault folder: id='{}', name='{}'",
-                        folder_id, vault_folder.name
-                    );
-                    drop(providers);
-
-                    let mut cache = self.vault_folder_cache.write().await;
-                    cache.insert(actual_provider_name.clone(), folder_id.clone());
-
-                    folder_id
-                } else {
-                    println!(
-                        "[StorageManager::list_vaults] No vault folder found, returning empty list"
-                    );
-                    return Ok(Vec::new());
-                }
-            } else {
-                return Err(StorageError::provider_not_supported(actual_provider_name));
-            }
-        };
-
         let mut providers = self.providers.write().await;
         if let Some(provider) = providers.get_mut(&actual_provider_name) {
+            // Use the provider's list_vaults method directly
+            // This handles local vs cloud providers appropriately
+            let vault_files = provider.list_vaults().await?;
+
             println!(
-                "[StorageManager::list_vaults] Listing files in vault folder: '{}'",
-                vault_folder_id
-            );
-            let files = provider.list_files(Some(vault_folder_id)).await?;
-            let vault_files: Vec<_> = files
-                .into_iter()
-                .filter(|f| f.name.ends_with(".monark"))
-                .collect();
-            println!(
-                "[StorageManager::list_vaults] Found {} vault files in folder",
-                vault_files.len()
+                "[StorageManager::list_vaults] Found {} vault files for provider '{}'",
+                vault_files.len(),
+                actual_provider_name
             );
             for (i, file) in vault_files.iter().enumerate() {
                 println!(

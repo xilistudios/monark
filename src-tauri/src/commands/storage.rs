@@ -4,7 +4,7 @@ use crate::storage::providers::{
     CreateFileRequest, CreateFolderRequest, StorageFile, UpdateFileRequest,
 };
 use crate::storage::{ProviderConfig, StorageConfig, StorageManager};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -490,4 +490,45 @@ pub async fn handle_google_drive_oauth_callback(
 
     println!("OAuth callback completed successfully");
     Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProviderAuthInfo {
+    pub authenticated: bool,
+    pub token_expires_at: Option<DateTime<Utc>>,
+}
+
+#[tauri::command]
+pub async fn get_provider_auth_info(
+    provider_name: String,
+    state: State<'_, StorageState>,
+) -> Result<ProviderAuthInfo, CommandError> {
+    let (authenticated, token_expires_at) = state
+        .manager
+        .get_provider_auth_info(&provider_name)
+        .await
+        .map_err(|e| CommandError::Io(format!("Failed to get provider auth info: {}", e)))?;
+
+    Ok(ProviderAuthInfo {
+        authenticated,
+        token_expires_at,
+    })
+}
+
+#[tauri::command]
+pub async fn refresh_provider_auth(
+    provider_name: String,
+    state: State<'_, StorageState>,
+) -> Result<ProviderAuthInfo, CommandError> {
+    // Ensure token is valid (will refresh if needed)
+    let updated_config = state
+        .manager
+        .ensure_google_drive_token_valid(&provider_name)
+        .await
+        .map_err(|e| CommandError::Io(format!("Failed to refresh provider auth: {}", e)))?;
+
+    Ok(ProviderAuthInfo {
+        authenticated: true,
+        token_expires_at: updated_config.token_expires_at,
+    })
 }

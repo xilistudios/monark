@@ -7,7 +7,7 @@ import type { StorageProvider } from '../../interfaces/cloud-storage.interface';
 import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
 import { VaultManager } from "../../services/vault"
 import VaultCommands from "../../services/commands"
-import { VaultStateCommands } from '../../services/vaultState';
+import { VaultStateCommands, isVaultLocked } from '../../services/vaultState';
 
 export interface Vault {
 	id: string
@@ -34,6 +34,13 @@ export interface Vault {
 
 // Types for vault entry operations - using the new unified structure
 
+export interface OAuthState {
+	providerName: string | null;
+	authUrl: string | null;
+	state: string | null;
+	isOpen: boolean;
+}
+
 export interface VaultState {
 	vaults: Vault[]
 	currentVaultId: string | null
@@ -43,6 +50,8 @@ export interface VaultState {
 	providers: StorageProvider[]
 	defaultProvider: string | null
 	providerStatus: Record<string, 'idle' | 'authenticating' | 'authenticated' | 'error'>
+	// OAuth state for deep link handling
+	oauthState: OAuthState;
 }
 
 /**
@@ -113,24 +122,37 @@ export const loadVaultStateFromSettings = async (): Promise<
 		let loadedVaults: Vault[] = [];
 		if (persistedState.vaults && Array.isArray(persistedState.vaults)) {
 			loadedVaults = persistedState.vaults.map((vault: any) => {
-				const rawVolatile = vault.volatile ?? {};
+				const rawVolatile = vault.volatile ?? {}
+				const credential =
+					typeof rawVolatile.credential === 'string'
+						? rawVolatile.credential
+						: ''
+				// Use the isVaultLocked helper for consistent lock state determination.
+				// Defense in depth: a vault is locked if isLocked is true OR if credential is missing.
+				// This ensures that even if isLocked is incorrectly set to false,
+				// the absence of a credential will still prevent access.
+				const effectiveLocked = isVaultLocked({
+					isLocked: typeof vault.isLocked === 'boolean' ? vault.isLocked : true,
+					volatile: { credential }
+				});
 
 				return {
 					...vault,
 					// Migrate existing vaults to local storage type
 					storageType: vault.storageType || 'local',
 					lastAccessed: vault.lastAccessed || undefined,
-					isLocked: typeof vault.isLocked === 'boolean' ? vault.isLocked : true,
+					// If we don't have a runtime credential, always treat as locked.
+					isLocked: effectiveLocked,
 					volatile: {
 						entries: Array.isArray(rawVolatile.entries)
 							? rawVolatile.entries
 							: [],
-						credential: rawVolatile.credential || '',
+						credential,
 						navigationPath: rawVolatile.navigationPath || '/',
 						encryptedData: rawVolatile.encryptedData,
 					},
-				} as Vault;
-			});
+				} as Vault
+			})
 		}
 
 		const persistedProviders = (persistedState.providers || []).map(
@@ -184,6 +206,12 @@ const initialState: VaultState = {
 	providers: [],
 	defaultProvider: null,
 	providerStatus: {},
+	oauthState: {
+		providerName: null,
+		authUrl: null,
+		state: null,
+		isOpen: false,
+	},
 }
 
 export const vaultSlice = createSlice({
@@ -293,6 +321,16 @@ export const vaultSlice = createSlice({
 				state.providerStatus = action.payload.providerStatus
 			} else {
 				state.providerStatus = {}
+			}
+			if (action.payload.oauthState) {
+				state.oauthState = action.payload.oauthState
+			} else {
+				state.oauthState = {
+					providerName: null,
+					authUrl: null,
+					state: null,
+					isOpen: false,
+				}
 			}
 			state.currentVaultId = null
 		},
@@ -525,6 +563,23 @@ export const vaultSlice = createSlice({
         );
 			}
 		},
+		/**
+		 * Set OAuth state for deep link handling
+		 */
+		setOAuthState: (state, action: PayloadAction<OAuthState>) => {
+			state.oauthState = action.payload;
+		},
+		/**
+		 * Clear OAuth state
+		 */
+		clearOAuthState: (state) => {
+			state.oauthState = {
+				providerName: null,
+				authUrl: null,
+				state: null,
+				isOpen: false,
+			};
+		},
 	},
 	extraReducers: (builder) => {
 		builder
@@ -535,7 +590,6 @@ export const vaultSlice = createSlice({
 // Async thunk for deleting a vault with optional file deletion
 export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
 	return async (dispatch: any, getState: any) => {
-		try {
       // First, get the vault to access its path
       const state = getState();
       const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
@@ -544,6 +598,8 @@ export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
         throw new Error('Vault not found');
       }
 
+      let fileDeletionError: Error | null = null;
+
       // If deleteFile is true, attempt to delete the file from storage
       if (deleteFile) {
         try {
@@ -551,18 +607,20 @@ export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
           await VaultCommands.deleteVault(vault.path, vault.providerId);
         } catch (error) {
           console.error('Failed to delete vault file:', error);
-          const errorMessage =
+          fileDeletionError = new Error(
             (error as any)?.message ||
-            (error instanceof Error ? error.message : String(error));
-          throw new Error(`Failed to delete vault file: ${errorMessage}`);
+            (error instanceof Error ? error.message : String(error))
+          );
         }
       }
 
       // Remove the vault from Redux state (this will also clean up VaultManager)
       dispatch(removeVault(vaultId));
-    } catch (error) {
-			throw error;
-		}
+
+      // If there was an error during file deletion, re-throw it so UI can show an alert
+      if (fileDeletionError) {
+        throw fileDeletionError;
+      }
 	};
 };
 
@@ -588,6 +646,8 @@ export const {
 	setProviderStatus,
 	setCloudVaults,
 	syncCloudVault,
+	setOAuthState,
+	clearOAuthState,
 } = vaultSlice.actions
 
 /**

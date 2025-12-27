@@ -1,5 +1,6 @@
 use commands::storage::StorageState;
 use std::sync::Arc;
+use tauri::{Emitter, Manager};
 
 #[cfg(mobile)]
 use tokio::runtime::Builder;
@@ -8,9 +9,9 @@ pub mod commands;
 pub mod crypto;
 pub mod io;
 pub mod models;
+pub mod state;
 pub mod storage;
 pub mod vault;
-pub mod state;
 
 pub fn run(storage_manager: Arc<storage::StorageManager>) {
     build_app(storage_manager);
@@ -32,6 +33,39 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
     let vault_state_manager = state::VaultStateManager::new();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // Prevent multiple instances and focus the existing window for deep-link scenarios
+            println!("Second instance attempted, focusing existing window");
+
+            // Forward args to frontend for deep-link handling
+            let _ = app.emit("single-instance-args", args);
+
+            // Try to focus the main window or any existing window
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                if let Err(e) = window.set_focus() {
+                    println!("Failed to focus main window: {}", e);
+                }
+            } else if let Some(window) = app.get_webview_window("core") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                if let Err(e) = window.set_focus() {
+                    println!("Failed to focus core window: {}", e);
+                }
+            } else {
+                // Fallback: try to focus the first available window
+                if let Some(window) = app.webview_windows().values().next() {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    if let Err(e) = window.set_focus() {
+                        println!("Failed to focus fallback window: {}", e);
+                    }
+                } else {
+                    println!("No windows found to focus");
+                }
+            }
+        }))
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -76,9 +110,10 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
         ])
         .setup(|app| {
             #[cfg(desktop)]
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build());
             Ok(())
         })
         .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+        .expect("error while running tauri application");
 }

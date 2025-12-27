@@ -13,6 +13,7 @@ import { EditVaultModal } from '../components/Vault/Modals/EditVaultModal';
 import { DeleteVaultModal } from '../components/Vault/Modals/DeleteVaultModal';
 import { AddProviderModal } from '../components/Vault/Modals/AddProviderModal';
 import { deleteVault, type Vault, isCloudVault } from '../redux/actions/vault';
+import { isVaultLocked } from '../services/vaultState';
 import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
 import {
   lockVault,
@@ -41,6 +42,7 @@ function HomeScreen() {
   const error = useSelector((state: RootState) => state.vault.error);
   const currentVault = vaults.find((v) => v.id === currentVaultId) ?? null;
   const navigationPath = currentVault?.volatile?.navigationPath || '/';
+  const effectiveLocked = currentVault ? isVaultLocked(currentVault) : true;
 
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
@@ -213,7 +215,7 @@ function HomeScreen() {
         </div>
       </div>
     );
-  } else if (currentVault.isLocked) {
+  } else if (effectiveLocked) {
     vaultContent = (
       <LockedVaultView
         currentVault={{

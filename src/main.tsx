@@ -7,6 +7,8 @@ import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 import { ThemeProvider } from "./hooks/withTheme";
 import "./i18n";
+import { deepLinkService } from "./services/deepLinkService";
+
 const router = createRouter({ routeTree });
 declare module "@tanstack/react-router" {
 	interface Register {
@@ -16,6 +18,14 @@ declare module "@tanstack/react-router" {
 
 // Initialize vault state from settings store
 initializeVaultState().then(() => {
+	// Initialize global deep link service
+	console.log('[Main] Initializing global deep link service');
+	deepLinkService.initialize({
+		dispatch: store.dispatch,
+		getState: store.getState,
+	});
+	console.log('[Main] Global deep link service initialized');
+
 	ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 		<React.StrictMode>
 			<Provider store={store}>

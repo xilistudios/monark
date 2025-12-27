@@ -181,7 +181,9 @@ impl ManagedVaultState {
 }
 
 impl VaultStateManager {
-    fn partition_volatile(state: VaultStateData) -> (VaultStateData, HashMap<String, VaultVolatile>) {
+    fn partition_volatile(
+        state: VaultStateData,
+    ) -> (VaultStateData, HashMap<String, VaultVolatile>) {
         let VaultStateData {
             vaults,
             providers,
@@ -212,7 +214,10 @@ impl VaultStateManager {
         )
     }
 
-    fn merge_volatile(mut state: VaultStateData, volatile: &HashMap<String, VaultVolatile>) -> VaultStateData {
+    fn merge_volatile(
+        mut state: VaultStateData,
+        volatile: &HashMap<String, VaultVolatile>,
+    ) -> VaultStateData {
         for summary in &mut state.vaults {
             summary.volatile = volatile.get(&summary.id).cloned();
         }
@@ -222,7 +227,9 @@ impl VaultStateManager {
 }
 
 #[tauri::command]
-pub async fn load_vault_state(state: State<'_, ManagedVaultState>) -> CommandResult<VaultStateData> {
+pub async fn load_vault_state(
+    state: State<'_, ManagedVaultState>,
+) -> CommandResult<VaultStateData> {
     Ok(state.manager.get().await)
 }
 

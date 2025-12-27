@@ -184,3 +184,6 @@ mod tests {
         assert_eq!(vault_folder_id, vault_folder_id_again);
     }
 }
+
+#[cfg(test)]
+mod google_drive_auth;
