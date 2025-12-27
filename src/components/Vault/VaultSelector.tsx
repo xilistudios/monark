@@ -8,6 +8,7 @@ import {
   isCloudVault,
   type Vault,
 } from '../../redux/actions/vault';
+import { isVaultLocked } from '../../services/vaultState';
 import type { RootState } from '../../redux/store';
 import { useContext } from 'react';
 import { VaultModalContext } from './VaultContext';
@@ -260,7 +261,7 @@ const VaultSelector = ({
                     />
 
                     {/* Lock status */}
-                    {vault.isLocked || !vault.volatile?.credential ? (
+                    {isVaultLocked(vault) ? (
                       <span
                         className="flex items-center gap-1"
                         aria-label={t('vaultSelector.locked', 'Locked')}

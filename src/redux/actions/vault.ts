@@ -7,7 +7,7 @@ import type { StorageProvider } from '../../interfaces/cloud-storage.interface';
 import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
 import { VaultManager } from "../../services/vault"
 import VaultCommands from "../../services/commands"
-import { VaultStateCommands } from '../../services/vaultState';
+import { VaultStateCommands, isVaultLocked } from '../../services/vaultState';
 
 export interface Vault {
 	id: string
@@ -118,9 +118,14 @@ export const loadVaultStateFromSettings = async (): Promise<
 					typeof rawVolatile.credential === 'string'
 						? rawVolatile.credential
 						: ''
-				const persistedLocked =
-					typeof vault.isLocked === 'boolean' ? vault.isLocked : true
-				const effectiveLocked = persistedLocked || !credential
+				// Use the isVaultLocked helper for consistent lock state determination.
+				// Defense in depth: a vault is locked if isLocked is true OR if credential is missing.
+				// This ensures that even if isLocked is incorrectly set to false,
+				// the absence of a credential will still prevent access.
+				const effectiveLocked = isVaultLocked({
+					isLocked: typeof vault.isLocked === 'boolean' ? vault.isLocked : true,
+					volatile: { credential }
+				});
 
 				return {
 					...vault,
