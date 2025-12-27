@@ -84,22 +84,27 @@ function SettingsLayout() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
+    <div className="flex flex-col lg:flex-row gap-8 w-full min-h-[600px]">
       {/* Sidebar Navigation */}
-      <aside className="lg:w-64 w-full">
+      <aside className="lg:w-72 w-full shrink-0">
         <nav
-          className="menu bg-base-200 rounded-lg p-2 w-full"
+          className="bg-base-100 border border-base-200 rounded-xl shadow-sm overflow-hidden"
           role="tablist"
           aria-label={t('navigation', 'Settings navigation')}
         >
-          <ul className="menu menu-horizontal lg:menu-vertical bg-base-200 rounded-box w-full">
+          <div className="px-6 py-4 border-b border-base-200">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-base-content/60">
+              {t('settings', 'Settings')}
+            </h2>
+          </div>
+          <ul className="p-2 space-y-1">
             {tabs.map((tab, index) => (
               <li key={tab.id} role="presentation">
                 <button
-                  className={`flex items-center gap-3 justify-start w-full ${
+                  className={`flex items-center gap-3 px-4 py-3 w-full rounded-lg transition-all duration-200 text-left font-medium ${
                     activeTab === tab.id
-                      ? 'active bg-primary text-primary-content'
-                      : ''
+                      ? 'bg-primary/10 text-primary border-l-4 border-primary'
+                      : 'text-base-content/70 hover:bg-base-200 hover:text-base-content border-l-4 border-transparent'
                   }`}
                   onClick={() => handleTabChange(tab.id)}
                   onKeyDown={(e) => handleKeyDown(e, tab.id, index)}
@@ -110,10 +115,10 @@ function SettingsLayout() {
                   tabIndex={activeTab === tab.id ? 0 : -1}
                   type="button"
                 >
-                  <span className="text-xl" aria-hidden="true">
+                  <span className="text-lg" aria-hidden="true">
                     {tab.icon}
                   </span>
-                  <span>{tab.label}</span>
+                  <span className="text-sm">{tab.label}</span>
                 </button>
               </li>
             ))}
@@ -123,7 +128,7 @@ function SettingsLayout() {
 
       {/* Content Panel */}
       <main
-        className="flex-1 bg-base-100 rounded-lg shadow-xl p-6"
+        className="flex-1 bg-base-100 border border-base-200 rounded-xl shadow-sm p-8"
         role="tabpanel"
         id={`${activeTab}-panel`}
         aria-labelledby={`${activeTab}-tab`}

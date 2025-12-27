@@ -80,59 +80,82 @@ function UpdateSection() {
 	}, []);
 
 	return (
-		<section className="flex flex-col gap-4 mt-8">
-			<h2 className="text-xl font-semibold">{t('updates.title', 'App Updates')}</h2>
-			<p className="text-sm opacity-70">
-				{t('updates.description', 'Check for and install the latest version of the application.')}
-			</p>
-			
-			{/* Version Display */}
-			<div className="text-sm">
-				{versionLoading ? (
-					<span className="opacity-70">{t('updates.loading')}</span>
-				) : appVersion ? (
-					t('updates.currentVersion', { version: appVersion })
-				) : (
-					<span className="opacity-70">{t('updates.versionUnavailable')}</span>
+		<section>
+			<div className="mb-6">
+				<h2 className="text-xl font-semibold text-base-content mb-2">
+					{t('updates.title', 'App Updates')}
+				</h2>
+				<p className="text-sm text-base-content/60">
+					{t('updates.description', 'Check for and install the latest version of the application.')}
+				</p>
+			</div>
+
+			<div className="bg-base-50 border border-base-200 rounded-xl p-6">
+				{/* Version Display */}
+				<div className="flex items-center justify-between mb-6">
+					<div>
+						<span className="text-sm text-base-content/60">
+							{t('updates.currentVersionLabel', 'Current Version')}
+						</span>
+						<div className="text-lg font-semibold text-base-content mt-1">
+							{versionLoading ? (
+								<span className="text-base-content/40">{t('updates.loading')}</span>
+							) : appVersion ? (
+								appVersion
+							) : (
+								<span className="text-base-content/40">{t('updates.versionUnavailable')}</span>
+							)}
+						</div>
+					</div>
+					<div className="p-3 bg-primary/10 rounded-lg">
+						<svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+						</svg>
+					</div>
+				</div>
+
+				<div className="flex items-center gap-4">
+					<button
+						className="px-4 py-2 bg-primary text-primary-content rounded-lg font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+						onClick={checkForUpdates}
+						disabled={isChecking}
+						aria-label={t('updates.checkAriaLabel', 'Check for application updates')}
+						aria-busy={isChecking}
+					>
+						{isChecking ? (
+							<>
+								<span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+								{t('updates.checking', 'Checking...')}
+							</>
+						) : (
+							<>
+								<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+								</svg>
+								{t('updates.checkButton', 'Check for Updates')}
+							</>
+						)}
+					</button>
+				</div>
+
+				{updateMessage && (
+					<div className="flex items-start gap-3 p-4 bg-info/10 border border-info/20 rounded-lg mt-4" role="status">
+						<svg className="w-5 h-5 text-info shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						<span className="text-sm text-info">{updateMessage}</span>
+					</div>
+				)}
+
+				{updateError && (
+					<div className="flex items-start gap-3 p-4 bg-error/10 border border-error/20 rounded-lg mt-4" role="alert">
+						<svg className="w-5 h-5 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						<span className="text-sm text-error">{updateError}</span>
+					</div>
 				)}
 			</div>
-			
-			<div className="flex items-center gap-4">
-				<button
-					className="btn btn-primary"
-					onClick={checkForUpdates}
-					disabled={isChecking}
-					aria-label={t('updates.checkAriaLabel', 'Check for application updates')}
-					aria-busy={isChecking}
-				>
-					{isChecking ? (
-						<>
-							<span className="loading loading-spinner loading-sm"></span>
-							{t('updates.checking', 'Checking...')}
-						</>
-					) : (
-						t('updates.checkButton', 'Check for Updates')
-					)}
-				</button>
-			</div>
-
-			{updateMessage && (
-				<div className="alert alert-info" role="status">
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-					</svg>
-					<span>{updateMessage}</span>
-				</div>
-			)}
-
-			{updateError && (
-				<div className="alert alert-error" role="alert">
-					<svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-					</svg>
-					<span>{updateError}</span>
-				</div>
-			)}
 		</section>
 	);
 }

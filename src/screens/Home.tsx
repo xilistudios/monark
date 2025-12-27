@@ -275,13 +275,13 @@ function HomeScreen() {
             {vaultContent}
           </div>
         </div>
-        <div className="drawer-side">
+        <div className="drawer-side h-full">
           <label
             htmlFor="vault-drawer"
             aria-label="close sidebar"
             className="drawer-overlay"
           ></label>
-          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300 lg:w-80 md:w-64 sm:w-56 max-w-[80vw] overflow-y-auto">
+          <div className="menu p-4 w-80 h-full bg-base-100 text-base-content border-r border-base-300 lg:w-80 md:w-64 sm:w-56 max-w-[80vw] overflow-hidden flex flex-col">
             <VaultSelector
               onAddVault={() => openAddVaultModal()}
               onDeleteVault={handleDeleteVault}
