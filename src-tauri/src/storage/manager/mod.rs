@@ -15,6 +15,8 @@ pub struct StorageManager {
     vault_folder_cache: Arc<RwLock<HashMap<String, String>>>,
     /// Mutex to prevent concurrent folder creation operations per provider
     folder_creation_locks: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
+    /// Mutex to prevent concurrent token refresh operations per provider
+    refresh_locks: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
 }
 
 impl std::fmt::Debug for StorageManager {
@@ -44,11 +46,24 @@ impl StorageManager {
             config: Arc::new(RwLock::new(config)),
             vault_folder_cache: Arc::new(RwLock::new(HashMap::new())),
             folder_creation_locks: Arc::new(RwLock::new(HashMap::new())),
+            refresh_locks: Arc::new(RwLock::new(HashMap::new())),
         };
 
         // Initialize all configured providers
         manager.initialize_all_providers().await?;
         Ok(manager)
+    }
+
+    /// Get or create a refresh lock for a specific provider
+    pub async fn get_refresh_lock(&self, provider_name: &str) -> Arc<Mutex<()>> {
+        let actual_provider_name = self.map_provider_name(provider_name);
+
+        let mut locks = self.refresh_locks.write().await;
+        if !locks.contains_key(&actual_provider_name) {
+            locks.insert(actual_provider_name.clone(), Arc::new(Mutex::new(())));
+        }
+
+        locks.get(&actual_provider_name).unwrap().clone()
     }
 
     async fn initialize_all_providers(&self) -> StorageResult<()> {

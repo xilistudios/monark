@@ -13,6 +13,27 @@ use tauri_plugin_http::reqwest;
 const GOOGLE_DRIVE_API_BASE: &str = "https://www.googleapis.com/drive/v3";
 const GOOGLE_DRIVE_UPLOAD_API_BASE: &str = "https://www.googleapis.com/upload/drive/v3";
 
+/// Maximum number of retry attempts for token refresh
+const MAX_REFRESH_RETRIES: u32 = 3;
+/// Initial delay for exponential backoff (in milliseconds)
+const INITIAL_RETRY_DELAY_MS: u64 = 1000;
+/// Maximum delay for exponential backoff (in milliseconds)
+const MAX_RETRY_DELAY_MS: u64 = 10000;
+
+fn oauth_token_url() -> String {
+    // Test-only override for integration tests.
+    // Keeps production behavior stable while letting tests point the refresh flow
+    // at a local mock server.
+    #[cfg(test)]
+    {
+        if let Ok(url) = std::env::var("MONARK_GOOGLE_OAUTH_TOKEN_URL") {
+            return url;
+        }
+    }
+
+    "https://oauth2.googleapis.com/token".to_string()
+}
+
 // Static HTTP client for connection pooling and reuse
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
@@ -126,40 +147,192 @@ impl GoogleDriveProvider {
             ("grant_type", "refresh_token"),
         ];
 
+        let token_url = oauth_token_url();
+
+        let mut attempt = 0;
         let client = get_http_client();
-        let response = client
-            .post("https://oauth2.googleapis.com/token")
-            .form(&params)
-            .send()
-            .await
-            .map_err(|e| StorageError::network(format!("Failed to refresh token: {}", e)))?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let error_text = response
-                .text()
+        loop {
+            attempt += 1;
+            println!("[Google Drive] Token refresh triggered (attempt {}/{})", attempt, MAX_REFRESH_RETRIES);
+
+            match client
+                .post(&token_url)
+                .form(&params)
+                .send()
                 .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(StorageError::authentication(format!(
-                "Failed to refresh access token ({}): {}",
-                status, error_text
-            )));
+            {
+                Ok(response) => {
+                    let status = response.status();
+                    if !status.is_success() {
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        let error_msg = format!(
+                            "Failed to refresh access token ({}): {}",
+                            status, error_text
+                        );
+                        if attempt >= MAX_REFRESH_RETRIES {
+                            println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                            return Err(StorageError::authentication(error_msg));
+                        }
+                        println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                        let delay_ms = std::cmp::min(
+                            INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
+                            MAX_RETRY_DELAY_MS,
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
+
+                    match response.json::<OAuthTokenResponse>().await {
+                        Ok(token_response) => {
+                            self.config.access_token = Some(token_response.access_token.clone());
+                            self.config.token_expires_at =
+                                Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
+
+                            if let Some(refresh_token) = token_response.refresh_token {
+                                self.config.refresh_token = Some(refresh_token);
+                            }
+                            println!("[Google Drive] Token refresh succeeded");
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            let error_msg = format!("Failed to parse token response: {}", e);
+                            if attempt >= MAX_REFRESH_RETRIES {
+                                println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                                return Err(StorageError::network(error_msg));
+                            }
+                            println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                            let delay_ms = std::cmp::min(
+                                INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
+                                MAX_RETRY_DELAY_MS,
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                            continue;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let error_msg = format!("Network error during token refresh: {}", e);
+                    if attempt >= MAX_REFRESH_RETRIES {
+                        println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                        return Err(StorageError::network(error_msg));
+                    }
+                    println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                    let delay_ms = std::cmp::min(
+                        INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
+                        MAX_RETRY_DELAY_MS,
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    continue;
+                }
+            }
         }
+    }
 
-        let token_response: OAuthTokenResponse = response
-            .json()
-            .await
-            .map_err(|e| StorageError::network(format!("Failed to parse token response: {}", e)))?;
+    /// Refresh access token for a given config and return the updated config
+    /// This is used to ensure token refreshes are persisted even when providers are created per-operation
+    pub async fn refresh_access_token_for_config(
+        config: GoogleDriveConfig,
+    ) -> StorageResult<GoogleDriveConfig> {
+        let refresh_token = config
+            .refresh_token
+            .as_ref()
+            .ok_or_else(|| StorageError::authentication("No refresh token available"))?;
 
-        self.config.access_token = Some(token_response.access_token.clone());
-        self.config.token_expires_at =
-            Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
+        let params = [
+            ("client_id", config.client_id.as_str()),
+            ("client_secret", config.client_secret.as_str()),
+            ("refresh_token", refresh_token.as_str()),
+            ("grant_type", "refresh_token"),
+        ];
 
-        if let Some(refresh_token) = token_response.refresh_token {
-            self.config.refresh_token = Some(refresh_token);
+        let token_url = oauth_token_url();
+
+        let mut attempt = 0;
+        let client = get_http_client();
+
+        loop {
+            attempt += 1;
+            println!("[Google Drive] Token refresh triggered for config (attempt {}/{})", attempt, MAX_REFRESH_RETRIES);
+
+            match client
+                .post(&token_url)
+                .form(&params)
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    let status = response.status();
+                    if !status.is_success() {
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        let error_msg = format!(
+                            "Failed to refresh access token ({}): {}",
+                            status, error_text
+                        );
+                        if attempt >= MAX_REFRESH_RETRIES {
+                            println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                            return Err(StorageError::authentication(error_msg));
+                        }
+                        println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                        let delay_ms = std::cmp::min(
+                            INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
+                            MAX_RETRY_DELAY_MS,
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
+
+                    match response.json::<OAuthTokenResponse>().await {
+                        Ok(token_response) => {
+                            let mut new_config = config;
+                            new_config.access_token = Some(token_response.access_token);
+                            new_config.token_expires_at =
+                                Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
+
+                            if let Some(refresh_token) = token_response.refresh_token {
+                                new_config.refresh_token = Some(refresh_token);
+                            }
+                            println!("[Google Drive] Token refresh succeeded for config");
+                            return Ok(new_config);
+                        }
+                        Err(e) => {
+                            let error_msg = format!("Failed to parse token response: {}", e);
+                            if attempt >= MAX_REFRESH_RETRIES {
+                                println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                                return Err(StorageError::network(error_msg));
+                            }
+                            println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                            let delay_ms = std::cmp::min(
+                                INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
+                                MAX_RETRY_DELAY_MS,
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                            continue;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let error_msg = format!("Network error during token refresh: {}", e);
+                    if attempt >= MAX_REFRESH_RETRIES {
+                        println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                        return Err(StorageError::network(error_msg));
+                    }
+                    println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                    let delay_ms = std::cmp::min(
+                        INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
+                        MAX_RETRY_DELAY_MS,
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    continue;
+                }
+            }
         }
-
-        Ok(())
     }
 
     pub fn get_auth_headers(&self) -> StorageResult<HashMap<String, String>> {
