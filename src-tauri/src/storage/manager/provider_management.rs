@@ -247,7 +247,8 @@ impl StorageManager {
         let provider = GoogleDriveProvider::new(gd_config.clone());
         if provider.is_token_expired() {
             // Refresh token and get updated config
-            let updated_config = GoogleDriveProvider::refresh_access_token_for_config(gd_config).await?;
+            let updated_config =
+                GoogleDriveProvider::refresh_access_token_for_config(gd_config).await?;
 
             // Update the configuration
             self.update_google_drive_config(provider_name, updated_config.clone())
@@ -284,9 +285,7 @@ impl StorageManager {
 
 impl GoogleDriveConfig {
     pub fn is_token_expired(&self) -> bool {
-        if let (Some(_token), Some(expires_at)) =
-            (&self.access_token, &self.token_expires_at)
-        {
+        if let (Some(_token), Some(expires_at)) = (&self.access_token, &self.token_expires_at) {
             Utc::now() >= *expires_at - chrono::Duration::minutes(5)
         } else {
             true

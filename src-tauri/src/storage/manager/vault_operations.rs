@@ -178,7 +178,7 @@ impl StorageManager {
             // Use the provider's list_vaults method directly
             // This handles local vs cloud providers appropriately
             let vault_files = provider.list_vaults().await?;
-            
+
             println!(
                 "[StorageManager::list_vaults] Found {} vault files for provider '{}'",
                 vault_files.len(),

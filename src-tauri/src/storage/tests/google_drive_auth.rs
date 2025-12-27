@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod google_drive_auth_tests {
-    use crate::storage::{ProviderConfig, StorageConfig, StorageError, StorageManager};
     use crate::storage::providers::google_drive::GoogleDriveConfig;
+    use crate::storage::{ProviderConfig, StorageConfig, StorageError, StorageManager};
     use chrono::{Duration, Utc};
+    use mockito::Server;
     use std::sync::OnceLock;
     use std::time::Instant;
     use tempfile::TempDir;
-    use mockito::Server;
 
     static OAUTH_ENV_LOCK: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
 

@@ -154,14 +154,12 @@ impl GoogleDriveProvider {
 
         loop {
             attempt += 1;
-            println!("[Google Drive] Token refresh triggered (attempt {}/{})", attempt, MAX_REFRESH_RETRIES);
+            println!(
+                "[Google Drive] Token refresh triggered (attempt {}/{})",
+                attempt, MAX_REFRESH_RETRIES
+            );
 
-            match client
-                .post(&token_url)
-                .form(&params)
-                .send()
-                .await
-            {
+            match client.post(&token_url).form(&params).send().await {
                 Ok(response) => {
                     let status = response.status();
                     if !status.is_success() {
@@ -174,10 +172,16 @@ impl GoogleDriveProvider {
                             status, error_text
                         );
                         if attempt >= MAX_REFRESH_RETRIES {
-                            println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                            println!(
+                                "[Google Drive] Token refresh failed after {} attempts: {}",
+                                attempt, error_msg
+                            );
                             return Err(StorageError::authentication(error_msg));
                         }
-                        println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                        println!(
+                            "[Google Drive] Token refresh failed (attempt {}): {}",
+                            attempt, error_msg
+                        );
                         let delay_ms = std::cmp::min(
                             INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
                             MAX_RETRY_DELAY_MS,
@@ -189,8 +193,10 @@ impl GoogleDriveProvider {
                     match response.json::<OAuthTokenResponse>().await {
                         Ok(token_response) => {
                             self.config.access_token = Some(token_response.access_token.clone());
-                            self.config.token_expires_at =
-                                Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
+                            self.config.token_expires_at = Some(
+                                Utc::now()
+                                    + chrono::Duration::seconds(token_response.expires_in as i64),
+                            );
 
                             if let Some(refresh_token) = token_response.refresh_token {
                                 self.config.refresh_token = Some(refresh_token);
@@ -201,10 +207,16 @@ impl GoogleDriveProvider {
                         Err(e) => {
                             let error_msg = format!("Failed to parse token response: {}", e);
                             if attempt >= MAX_REFRESH_RETRIES {
-                                println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                                println!(
+                                    "[Google Drive] Token refresh failed after {} attempts: {}",
+                                    attempt, error_msg
+                                );
                                 return Err(StorageError::network(error_msg));
                             }
-                            println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                            println!(
+                                "[Google Drive] Token refresh failed (attempt {}): {}",
+                                attempt, error_msg
+                            );
                             let delay_ms = std::cmp::min(
                                 INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
                                 MAX_RETRY_DELAY_MS,
@@ -217,10 +229,16 @@ impl GoogleDriveProvider {
                 Err(e) => {
                     let error_msg = format!("Network error during token refresh: {}", e);
                     if attempt >= MAX_REFRESH_RETRIES {
-                        println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                        println!(
+                            "[Google Drive] Token refresh failed after {} attempts: {}",
+                            attempt, error_msg
+                        );
                         return Err(StorageError::network(error_msg));
                     }
-                    println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                    println!(
+                        "[Google Drive] Token refresh failed (attempt {}): {}",
+                        attempt, error_msg
+                    );
                     let delay_ms = std::cmp::min(
                         INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
                         MAX_RETRY_DELAY_MS,
@@ -256,14 +274,12 @@ impl GoogleDriveProvider {
 
         loop {
             attempt += 1;
-            println!("[Google Drive] Token refresh triggered for config (attempt {}/{})", attempt, MAX_REFRESH_RETRIES);
+            println!(
+                "[Google Drive] Token refresh triggered for config (attempt {}/{})",
+                attempt, MAX_REFRESH_RETRIES
+            );
 
-            match client
-                .post(&token_url)
-                .form(&params)
-                .send()
-                .await
-            {
+            match client.post(&token_url).form(&params).send().await {
                 Ok(response) => {
                     let status = response.status();
                     if !status.is_success() {
@@ -276,10 +292,16 @@ impl GoogleDriveProvider {
                             status, error_text
                         );
                         if attempt >= MAX_REFRESH_RETRIES {
-                            println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                            println!(
+                                "[Google Drive] Token refresh failed after {} attempts: {}",
+                                attempt, error_msg
+                            );
                             return Err(StorageError::authentication(error_msg));
                         }
-                        println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                        println!(
+                            "[Google Drive] Token refresh failed (attempt {}): {}",
+                            attempt, error_msg
+                        );
                         let delay_ms = std::cmp::min(
                             INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
                             MAX_RETRY_DELAY_MS,
@@ -292,8 +314,10 @@ impl GoogleDriveProvider {
                         Ok(token_response) => {
                             let mut new_config = config;
                             new_config.access_token = Some(token_response.access_token);
-                            new_config.token_expires_at =
-                                Some(Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64));
+                            new_config.token_expires_at = Some(
+                                Utc::now()
+                                    + chrono::Duration::seconds(token_response.expires_in as i64),
+                            );
 
                             if let Some(refresh_token) = token_response.refresh_token {
                                 new_config.refresh_token = Some(refresh_token);
@@ -304,10 +328,16 @@ impl GoogleDriveProvider {
                         Err(e) => {
                             let error_msg = format!("Failed to parse token response: {}", e);
                             if attempt >= MAX_REFRESH_RETRIES {
-                                println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                                println!(
+                                    "[Google Drive] Token refresh failed after {} attempts: {}",
+                                    attempt, error_msg
+                                );
                                 return Err(StorageError::network(error_msg));
                             }
-                            println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                            println!(
+                                "[Google Drive] Token refresh failed (attempt {}): {}",
+                                attempt, error_msg
+                            );
                             let delay_ms = std::cmp::min(
                                 INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
                                 MAX_RETRY_DELAY_MS,
@@ -320,10 +350,16 @@ impl GoogleDriveProvider {
                 Err(e) => {
                     let error_msg = format!("Network error during token refresh: {}", e);
                     if attempt >= MAX_REFRESH_RETRIES {
-                        println!("[Google Drive] Token refresh failed after {} attempts: {}", attempt, error_msg);
+                        println!(
+                            "[Google Drive] Token refresh failed after {} attempts: {}",
+                            attempt, error_msg
+                        );
                         return Err(StorageError::network(error_msg));
                     }
-                    println!("[Google Drive] Token refresh failed (attempt {}): {}", attempt, error_msg);
+                    println!(
+                        "[Google Drive] Token refresh failed (attempt {}): {}",
+                        attempt, error_msg
+                    );
                     let delay_ms = std::cmp::min(
                         INITIAL_RETRY_DELAY_MS * (2_u64.pow(attempt - 1)),
                         MAX_RETRY_DELAY_MS,
@@ -773,16 +809,22 @@ impl StorageProvider for GoogleDriveProvider {
             ])
             .send()
             .await
-            .map_err(|e| StorageError::network(format!("Failed to search for vault folder: {}", e)))?;
+            .map_err(|e| {
+                StorageError::network(format!("Failed to search for vault folder: {}", e))
+            })?;
 
         if !response.status().is_success() {
-            return Err(StorageError::operation_failed("Failed to search for vault folder"));
+            return Err(StorageError::operation_failed(
+                "Failed to search for vault folder",
+            ));
         }
 
-        let file_list: GoogleDriveFileList = response
-            .json()
-            .await
-            .map_err(|e| StorageError::network(format!("Failed to parse vault folder search results: {}", e)))?;
+        let file_list: GoogleDriveFileList = response.json().await.map_err(|e| {
+            StorageError::network(format!(
+                "Failed to parse vault folder search results: {}",
+                e
+            ))
+        })?;
 
         // If no vault folder found, return empty list
         let vault_folder_id = if let Some(folder) = file_list.files.first() {
@@ -793,10 +835,7 @@ impl StorageProvider for GoogleDriveProvider {
 
         // Now list files in the vault folder and filter by .monark extension in Rust
         // Note: Google Drive API doesn't support "ends with" operator, so we filter locally
-        let vault_query = format!(
-            "'{}' in parents and trashed=false",
-            vault_folder_id
-        );
+        let vault_query = format!("'{}' in parents and trashed=false", vault_folder_id);
 
         let response = client
             .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
@@ -816,10 +855,9 @@ impl StorageProvider for GoogleDriveProvider {
             return Err(StorageError::operation_failed("Failed to list vault files"));
         }
 
-        let file_list: GoogleDriveFileList = response
-            .json()
-            .await
-            .map_err(|e| StorageError::network(format!("Failed to parse vault files list: {}", e)))?;
+        let file_list: GoogleDriveFileList = response.json().await.map_err(|e| {
+            StorageError::network(format!("Failed to parse vault files list: {}", e))
+        })?;
 
         Ok(file_list
             .files

@@ -212,7 +212,9 @@ impl StorageProvider for LocalStorageProvider {
     /// This is a simple file listing - no cloud folder search logic
     async fn list_vaults(&mut self) -> StorageResult<Vec<StorageFile>> {
         let mut entries = Vec::new();
-        let mut read_dir = fs::read_dir(&self.base_path).await.map_err(StorageError::Io)?;
+        let mut read_dir = fs::read_dir(&self.base_path)
+            .await
+            .map_err(StorageError::Io)?;
 
         while let Some(entry) = read_dir.next_entry().await.map_err(StorageError::Io)? {
             let path = entry.path();

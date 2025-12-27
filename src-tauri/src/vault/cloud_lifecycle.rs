@@ -317,7 +317,7 @@ pub async fn change_cloud_vault_password(
 ) -> Result<(), CommandError> {
     let storage_manager = &state.manager;
     let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
-    
+
     // Read the existing vault file
     let vault_data = storage_manager
         .read_file(vault_id.clone(), provider_name.clone())

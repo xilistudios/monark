@@ -57,7 +57,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -101,7 +102,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -145,7 +147,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -189,7 +192,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -233,7 +237,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -277,7 +282,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -321,7 +327,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -365,7 +372,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
@@ -409,7 +417,8 @@ impl StorageManager {
 
         // Ensure Google Drive token is valid before operations
         if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str).await?;
+            self.ensure_google_drive_token_valid(&provider_name_str)
+                .await?;
         }
 
         let mut providers = self.providers.write().await;
