@@ -34,6 +34,13 @@ export interface Vault {
 
 // Types for vault entry operations - using the new unified structure
 
+export interface OAuthState {
+	providerName: string | null;
+	authUrl: string | null;
+	state: string | null;
+	isOpen: boolean;
+}
+
 export interface VaultState {
 	vaults: Vault[]
 	currentVaultId: string | null
@@ -43,6 +50,8 @@ export interface VaultState {
 	providers: StorageProvider[]
 	defaultProvider: string | null
 	providerStatus: Record<string, 'idle' | 'authenticating' | 'authenticated' | 'error'>
+	// OAuth state for deep link handling
+	oauthState: OAuthState;
 }
 
 /**
@@ -197,6 +206,12 @@ const initialState: VaultState = {
 	providers: [],
 	defaultProvider: null,
 	providerStatus: {},
+	oauthState: {
+		providerName: null,
+		authUrl: null,
+		state: null,
+		isOpen: false,
+	},
 }
 
 export const vaultSlice = createSlice({
@@ -306,6 +321,16 @@ export const vaultSlice = createSlice({
 				state.providerStatus = action.payload.providerStatus
 			} else {
 				state.providerStatus = {}
+			}
+			if (action.payload.oauthState) {
+				state.oauthState = action.payload.oauthState
+			} else {
+				state.oauthState = {
+					providerName: null,
+					authUrl: null,
+					state: null,
+					isOpen: false,
+				}
 			}
 			state.currentVaultId = null
 		},
@@ -538,6 +563,23 @@ export const vaultSlice = createSlice({
         );
 			}
 		},
+		/**
+		 * Set OAuth state for deep link handling
+		 */
+		setOAuthState: (state, action: PayloadAction<OAuthState>) => {
+			state.oauthState = action.payload;
+		},
+		/**
+		 * Clear OAuth state
+		 */
+		clearOAuthState: (state) => {
+			state.oauthState = {
+				providerName: null,
+				authUrl: null,
+				state: null,
+				isOpen: false,
+			};
+		},
 	},
 	extraReducers: (builder) => {
 		builder
@@ -604,6 +646,8 @@ export const {
 	setProviderStatus,
 	setCloudVaults,
 	syncCloudVault,
+	setOAuthState,
+	clearOAuthState,
 } = vaultSlice.actions
 
 /**

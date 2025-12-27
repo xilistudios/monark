@@ -48,3 +48,6 @@ export const selectProviderStatus = (state: RootState) =>
 
 export const selectVaultLoading = (state: RootState) =>
 	state.vault.loading
+
+export const selectOAuthState = (state: RootState) =>
+	state.vault.oauthState
