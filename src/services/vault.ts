@@ -747,15 +747,44 @@ export class VaultManager {
 
   /**
    * Refreshes cloud vault list in Redux state
+   * Only refreshes vaults from actual cloud providers (not local)
    */
   async refreshCloudVaults(): Promise<void> {
-    if (!this._dispatch) {
+    if (!this._dispatch || !this._getState) {
       throw new Error('VaultManager not initialized. Call initialize() first.');
     }
 
     try {
-      const vaults = await this.listCloudVaults();
-      this._dispatch(setCloudVaults(vaults));
+      // Get providers from state and filter only cloud providers
+      const state = this._getState();
+      if (!state?.vault?.providers) {
+        // No providers configured yet, that's okay
+        this._dispatch(setCloudVaults([]));
+        return;
+      }
+      
+      const cloudProviders = state.vault.providers.filter(
+        (p) => p.provider_type !== StorageProviderType.LOCAL
+      );
+
+      // Collect vaults from all cloud providers
+      const allCloudVaults: Vault[] = [];
+      
+      for (const provider of cloudProviders) {
+        try {
+          const providerVaults = await this.listCloudVaults(provider.name);
+          allCloudVaults.push(...providerVaults);
+        } catch (error) {
+          // Log but don't fail - one provider failure shouldn't block others
+          console.warn(
+            `Failed to refresh vaults for provider ${provider.name}:`,
+            error
+          );
+        }
+      }
+
+      // Update Redux state with collected cloud vaults
+      this._dispatch(setCloudVaults(allCloudVaults));
     } catch (error) {
       const errorMessage =
         (error as any)?.message ||

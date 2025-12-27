@@ -745,4 +745,87 @@ impl StorageProvider for GoogleDriveProvider {
             .map(|f| self.google_file_to_storage_file(f))
             .collect())
     }
+
+    async fn list_vaults(&mut self) -> StorageResult<Vec<StorageFile>> {
+        // For Google Drive, we need to find the vault folder first, then list files in it
+        // This uses the existing cloud logic for Google Drive
+        self.ensure_valid_token().await?;
+
+        let headers = self.get_auth_headers()?;
+
+        // Search for the vault folder
+        let vault_folder_name = "Monark"; // Default vault folder name
+        let search_query = format!(
+            "name = '{}' and mimeType = 'application/vnd.google-apps.folder' and trashed=false",
+            vault_folder_name
+        );
+
+        let client = get_http_client();
+        let response = client
+            .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
+            .header("Authorization", &headers["Authorization"])
+            .query(&[
+                ("q", search_query.as_str()),
+                (
+                    "fields",
+                    "files(id,name,parents,size,createdTime,modifiedTime,mimeType,kind)",
+                ),
+            ])
+            .send()
+            .await
+            .map_err(|e| StorageError::network(format!("Failed to search for vault folder: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(StorageError::operation_failed("Failed to search for vault folder"));
+        }
+
+        let file_list: GoogleDriveFileList = response
+            .json()
+            .await
+            .map_err(|e| StorageError::network(format!("Failed to parse vault folder search results: {}", e)))?;
+
+        // If no vault folder found, return empty list
+        let vault_folder_id = if let Some(folder) = file_list.files.first() {
+            folder.id.clone()
+        } else {
+            return Ok(Vec::new());
+        };
+
+        // Now list files in the vault folder and filter by .monark extension in Rust
+        // Note: Google Drive API doesn't support "ends with" operator, so we filter locally
+        let vault_query = format!(
+            "'{}' in parents and trashed=false",
+            vault_folder_id
+        );
+
+        let response = client
+            .get(&format!("{}/files", GOOGLE_DRIVE_API_BASE))
+            .header("Authorization", &headers["Authorization"])
+            .query(&[
+                ("q", vault_query.as_str()),
+                (
+                    "fields",
+                    "files(id,name,parents,size,createdTime,modifiedTime,mimeType,kind)",
+                ),
+            ])
+            .send()
+            .await
+            .map_err(|e| StorageError::network(format!("Failed to list vault files: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(StorageError::operation_failed("Failed to list vault files"));
+        }
+
+        let file_list: GoogleDriveFileList = response
+            .json()
+            .await
+            .map_err(|e| StorageError::network(format!("Failed to parse vault files list: {}", e)))?;
+
+        Ok(file_list
+            .files
+            .into_iter()
+            .filter(|f| f.name.ends_with(".monark"))
+            .map(|f| self.google_file_to_storage_file(f))
+            .collect())
+    }
 }
