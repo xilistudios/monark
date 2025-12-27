@@ -39,7 +39,7 @@ const THEME_EXPIRATION_DAYS = 365;
 
 export default function ThemeSwitcher() {
 	const [currentTheme, setCurrentTheme] = useState<DaisyUITheme>("light");
-	const [isSystemPreferredDark, setIsSystemPreferredDark] = useState(false);
+	const [_isSystemPreferredDark, setIsSystemPreferredDark] = useState(false);
 
 	// Initialize theme from storage or system preference
 	useEffect(() => {

@@ -24,7 +24,7 @@ pub struct Argon2Params {
     pub iterations: u32, // Renamed from t_cost
     #[serde(rename = "p_cost")] // Match spec JSON key
     pub parallelism: u32, // Renamed from p_cost
-    // hash_length_bytes is determined by the crypto implementation (e.g., 32 bytes for XChaCha20)
+                      // hash_length_bytes is determined by the crypto implementation (e.g., 32 bytes for XChaCha20)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
@@ -49,8 +49,6 @@ pub struct Vault {
     pub entries: Vec<Entry>,
 }
 
-
-
 // Section 4.1: Entry enum with Group/Data variants
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -60,7 +58,7 @@ pub enum Entry {
         id: Uuid,
         name: String,
         data_type: String,
-        children: Vec<Uuid>,
+        children: Vec<Entry>,
     },
     #[serde(rename = "entry")]
     Data {
@@ -89,10 +87,10 @@ pub struct EntryEncryption {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "snake_case")]
 pub struct Field {
-    pub title: String, // e.g., "Username", "Password", "URL"
+    pub title: String,    // e.g., "Username", "Password", "URL"
     pub property: String, // e.g., "username", "password", "url", "note" - determines indexability
-    pub value: String, // The actual data, zeroized on drop
-    pub secret: bool, // Indicates if the field is considered secret (e.g., password)
+    pub value: String,    // The actual data, zeroized on drop
+    pub secret: bool,     // Indicates if the field is considered secret (e.g., password)
 }
 
 // Section 6: Command Interface Types for TypeScript Integration
@@ -139,7 +137,7 @@ impl From<Vault> for DecryptedVault {
 
 impl TryFrom<DecryptedVault> for Vault {
     type Error = chrono::ParseError;
-    
+
     fn try_from(decrypted: DecryptedVault) -> Result<Self, Self::Error> {
         Ok(Vault {
             updated_at: chrono::DateTime::parse_from_rfc3339(&decrypted.updated_at)?

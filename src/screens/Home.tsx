@@ -1,425 +1,318 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useDispatch, useSelector } from "react-redux";
-import { AddEntryModal } from "../components/Vault/AddEntryModal";
-import { AddGroupModal } from "../components/Vault/AddGroupModal";
-import { EditEntryModal } from "../components/Vault/EditEntryModal";
-import { EditGroupModal } from "../components/Vault/EditGroupModal";
-import { EntryDetailsModal } from "../components/Vault/EntryDetailsModal";
-import VaultSelector from "../components/Vault/VaultSelector";
-import VaultTree from "../components/Vault/VaultTree";
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+import VaultSelector from '../components/Vault/VaultSelector';
+import { AddEntryModal } from '../components/Vault/Modals/AddEntryModal';
+import { AddGroupModal } from '../components/Vault/Modals/AddGroupModal';
+import { EditEntryModal } from '../components/Vault/Modals/EditEntryModal';
+import { EditGroupModal } from '../components/Vault/Modals/EditGroupModal';
+import { EntryDetailsModal } from '../components/Vault/Modals/EntryDetailsModal';
+import { ImportCsvModal } from '../components/Vault/Modals/ImportCsvModal';
+import { AddVaultModal } from '../components/Vault/Modals/AddVaultModal';
+import { EditVaultModal } from '../components/Vault/Modals/EditVaultModal';
+import { DeleteVaultModal } from '../components/Vault/Modals/DeleteVaultModal';
+import { AddProviderModal } from '../components/Vault/Modals/AddProviderModal';
+import { deleteVault, type Vault, isCloudVault } from '../redux/actions/vault';
+import { isVaultLocked } from '../services/vaultState';
+import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
 import {
-	type DataEntry,
-	type Entry,
-	type GroupEntry,
-	isDataEntry,
-	isGroupEntry,
-} from "../interfaces/vault.interface";
+  lockVault,
+  setNavigationPath,
+  setVaultLocked,
+} from '../redux/actions/vault';
+import { VaultManager } from '../services/vault';
+import { store } from '../redux/store';
+import type { AppDispatch, RootState } from '../redux/store';
+import { useContext } from 'react';
+import { VaultModalContext } from '../components/Vault/VaultContext';
 import {
-	lockVault,
-	readVault,
-	setNavigationPath,
-	setVaultCredential,
-} from "../redux/actions/vault";
-import type { AppDispatch, RootState } from "../redux/store";
+  parseNavigationPath,
+  getCurrentEntries,
+} from '../utils/vaultNavigation';
+import UnlockedVaultView from '../components/Vault/UnlockedVaultView';
+import { LockedVaultView } from '../components/Vault/LockedVaultView';
 
-const HomeScreen = () => {
-	const { t } = useTranslation("home");
-	const dispatch = useDispatch<AppDispatch>();
-	const { currentVault, vaultState, loading, error } = useSelector(
-		(state: RootState) => state.vault,
-	);
-	const navigationPath = useSelector(
-		(state: RootState) => state.vault.currentVault?.data?.navigationPath || "/",
-	);
+function HomeScreen() {
+  const { t } = useTranslation('home');
+  const dispatch = useDispatch<AppDispatch>();
+  const vaults = useSelector((state: RootState) => state.vault.vaults);
+  const currentVaultId = useSelector(
+    (state: RootState) => state.vault.currentVaultId
+  );
+  const error = useSelector((state: RootState) => state.vault.error);
+  const currentVault = vaults.find((v) => v.id === currentVaultId) ?? null;
+  const navigationPath = currentVault?.volatile?.navigationPath || '/';
+  const effectiveLocked = currentVault ? isVaultLocked(currentVault) : true;
 
-	const [password, setPassword] = useState("");
-	const [unlockError, setUnlockError] = useState("");
-	const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
-	const [addEntryParentId, setAddEntryParentId] = useState<string | null>(null);
-	const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
-	const [addGroupParentId, setAddGroupParentId] = useState<string | null>(null);
-	const [selectedEntry, setSelectedEntry] = useState<
-		DataEntry | GroupEntry | null
-	>(null);
-	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-	const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
-	const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [unlockError, setUnlockError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [cloudUnlockMessage, setCloudUnlockMessage] = useState('');
 
-	const getCurrentParentId = () => {
-		const pathParts = navigationPath.split("/").filter(Boolean);
-		return pathParts.length > 0 ? pathParts[pathParts.length - 1] : null;
-	};
+  const context = useContext(VaultModalContext);
+  if (!context)
+    throw new Error(
+      'VaultModalContext must be used within a VaultModalProvider'
+    );
+  const {
+    selectedEntry,
+    isAddVaultModalOpen,
+    openAddVaultModal,
+    closeAddVaultModal,
+    isAddProviderModalOpen,
+    closeAddProviderModal,
+  } = context;
 
-	const getCurrentEntries = (entries: Entry[], parentId: string | null) => {
-		if (!parentId) {
-			const allChildren = new Set<string>();
-			entries.forEach((e) => {
-				if (isGroupEntry(e)) {
-					e.children.forEach((c) => allChildren.add(c));
-				}
-			});
-			return entries.filter((e) => !allChildren.has(e.id));
-		} else {
-			const parent = entries.find((e) => e.id === parentId);
-			if (!parent || !isGroupEntry(parent)) return [];
-			return parent.children
-				.map((childId) => entries.find((e) => e.id === childId))
-				.filter(Boolean) as Entry[];
-		}
-	};
+  // Initialize VaultManager and load providers on app start
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        const vaultManager = VaultManager.getInstance();
+        
+        // Initialize VaultManager with Redux dispatch and getState
+        vaultManager.initialize(dispatch, () => store.getState());
+        
+        // Load storage providers
+        await vaultManager.loadProviders();
+        
+        // Refresh cloud vaults
+        await vaultManager.refreshCloudVaults();
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+      }
+    };
 
-	const handleNavigate = (groupId: string) => {
-		const newPath = `${navigationPath === "/" ? "" : navigationPath}/${groupId}`;
-		dispatch(setNavigationPath(newPath));
-	};
+    initializeApp();
+  }, [dispatch]);
 
-	const renderBreadcrumbs = () => {
-		const parts = navigationPath.split("/").filter(Boolean);
-		return (
-			<div className="breadcrumbs text-sm p-4 border-b border-base-300">
-				<ul>
-					<li>
-						<a onClick={() => dispatch(setNavigationPath("/"))}>/</a>
-					</li>
-					{parts.map((id, index) => {
-						const entry = vaultState.entries.find((e) => e.id === id);
-						if (!entry) return null;
-						const pathUpTo = "/" + parts.slice(0, index + 1).join("/");
-						return (
-							<li key={id}>
-								<a onClick={() => dispatch(setNavigationPath(pathUpTo))}>
-									{entry.name}
-								</a>
-							</li>
-						);
-					})}
-				</ul>
-			</div>
-		);
-	};
+  // Set up periodic cloud vault refresh (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const vaultManager = VaultManager.getInstance();
+        await vaultManager.refreshCloudVaults();
+      } catch (error) {
+        console.error('Failed to refresh cloud vaults:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
-	const handleUnlockVault = async () => {
-		if (!currentVault || !password.trim()) {
-			setUnlockError(t("errors.missingFields"));
-			return;
-		}
+    return () => clearInterval(interval);
+  }, []);
 
-		setUnlockError("");
-		try {
-			await dispatch(
-				readVault({
-					password: password.trim(),
-					filePath: currentVault.path,
-				}),
-			).unwrap();
+  const currentPath = parseNavigationPath(navigationPath);
 
-			dispatch(setVaultCredential(password.trim()));
-			dispatch(setNavigationPath("/"));
-			setPassword("");
-		} catch (err) {
-			setUnlockError(t("errors.unlockFailed"));
-		}
-	};
+  const handleNavigate = (path: string[]) => {
+    const newPath = path.length > 0 ? `/${path.join('/')}` : '/';
+    if (currentVault) {
+      dispatch(
+        setNavigationPath({ vaultId: currentVault.id, navigationPath: newPath })
+      );
+    }
+  };
 
-	const handleLockVault = () => {
-		dispatch(lockVault());
-		setPassword("");
-		setUnlockError("");
-	};
+  const handleUnlockVault = async () => {
+    if (!currentVault || !password.trim()) {
+      setUnlockError(t('errors.missingFields'));
+      return;
+    }
+    setLoading(true);
+    setUnlockError('');
+    
+    // Show cloud-specific message if it's a cloud vault
+    if (isCloudVault(currentVault)) {
+      setCloudUnlockMessage(t('vaultSelector.downloadingFromCloud'));
+    }
+    
+    try {
+      const vaultInstance = VaultManager.getInstance().getInstance(
+        currentVault.id
+      );
+      if (vaultInstance) {
+        await vaultInstance.unlock(password.trim());
+        dispatch(setVaultLocked({ vaultId: currentVault.id, isLocked: false }));
+        dispatch(
+          setNavigationPath({ vaultId: currentVault.id, navigationPath: '/' })
+        );
+      }
+      setPassword('');
+      setCloudUnlockMessage('');
+    } catch (err) {
+      setUnlockError(t('errors.unlockFailed'));
+      setCloudUnlockMessage('');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	const handleEntryClick = (entry: Entry) => {
-		// Future: Navigate to entry details
-		console.log("Entry clicked:", entry);
-	};
+  /**
+   * Handles vault locking by dispatching the lockVault action.
+   * Clears password and unlock error states after locking.
+   *
+   * @returns {void}
+   * @throws {Error} When vault locking fails
+   */
+  const handleLockVault = () => {
+    if (!currentVault) {
+      console.error('Cannot lock vault: no current vault selected');
+      return;
+    }
 
-	const renderVaultContent = () => {
-		if (!currentVault) {
-			return (
-				<div className="flex items-center justify-center h-full">
-					<div className="text-center">
-						<h2 className="text-2xl font-bold mb-4">
-							{t("vault.manager.noVaultSelected")}
-						</h2>
-						<p className="text-base-content/60">
-							{t("vault.manager.selectVaultToStart")}
-						</p>
-					</div>
-				</div>
-			);
-		}
+    try {
+      dispatch(lockVault(currentVault.id));
+      setPassword('');
+      setUnlockError('');
+    } catch (error) {
+      console.error('Failed to lock vault:', error);
+      setUnlockError(t('errors.lockFailed'));
+    }
+  };
 
-		if (vaultState.isLocked) {
-			return (
-				<div className="flex items-center justify-center h-full">
-					<div className="card w-96 bg-base-100 shadow-xl">
-						<div className="card-body">
-							<h2 className="card-title justify-center mb-4">
-								<svg
-									className="w-6 h-6 mr-2"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-									/>
-								</svg>
-								{t("vault.unlock.title")}
-							</h2>
+  const handleDeleteVault = (vault: Vault) => {
+    setVaultToDelete(vault);
+    setDeleteModalOpen(true);
+  };
 
-							<div className="form-control">
-								<label className="label">
-									<span className="label-text">
-										{t("vault.unlock.password")}
-									</span>
-								</label>
-								<input
-									type="password"
-									placeholder={t("vault.unlock.passwordPlaceholder")}
-									className="input input-bordered"
-									value={password}
-									onChange={(e) => setPassword(e.target.value)}
-									onKeyPress={(e) => e.key === "Enter" && handleUnlockVault()}
-								/>
-							</div>
+  const handleConfirmDelete = async (deleteFile: boolean) => {
+    if (!vaultToDelete) return;
 
-							{(unlockError || error) && (
-								<div className="alert alert-error mt-4">
-									<span>
-										{unlockError ||
-											(typeof error === "string"
-												? error
-												: JSON.stringify(error))}
-									</span>
-								</div>
-							)}
+    setDeleting(true);
+    try {
+      await dispatch(deleteVault(vaultToDelete.id, deleteFile) as any);
+      setDeleteModalOpen(false);
+    } catch (error) {
+      console.error('Failed to delete vault:', error);
+      alert(t('vault.delete.error', 'Failed to delete vault'));
+    } finally {
+      setDeleting(false);
+      setVaultToDelete(null);
+    }
+  };
 
-							<div className="card-actions justify-end mt-4">
-								<button
-									className="btn btn-primary"
-									onClick={handleUnlockVault}
-									disabled={loading || !password.trim()}
-								>
-									{loading ? (
-										<>
-											<span className="loading loading-spinner loading-sm"></span>
-											{t("vault.unlock.unlocking")}
-										</>
-									) : (
-										t("vault.unlock.unlockButton")
-									)}
-								</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			);
-		}
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setVaultToDelete(null);
+  };
 
-		// Unlocked vault manager
-		return (
-			<div className="h-full flex flex-col">
-				{/* Header with actions */}
-				<div className="p-4 border-b border-base-300">
-					<div className="flex justify-between items-center">
-						<h2 className="text-2xl font-bold">{currentVault.name}</h2>
-						<div className="flex gap-2">
-							<button
-								className="btn btn-primary btn-sm"
-								onClick={() => {
-									setAddEntryParentId(getCurrentParentId());
-									setIsAddEntryModalOpen(true);
-								}}
-							>
-								<svg
-									className="w-4 h-4 mr-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
-								{t("vault.manager.addEntry")}
-							</button>
-							<button
-								className="btn btn-outline btn-sm"
-								onClick={() => {
-									setAddGroupParentId(getCurrentParentId());
-									setIsAddGroupModalOpen(true);
-								}}
-							>
-								<svg
-									className="w-4 h-4 mr-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
-								{t("vault.manager.addGroup")}
-							</button>
-							<button
-								className="btn btn-ghost btn-sm"
-								onClick={handleLockVault}
-							>
-								<svg
-									className="w-4 h-4 mr-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-									/>
-								</svg>
-								Lock
-							</button>
-						</div>
-					</div>
-				</div>
+  const entries = getCurrentEntries(
+    currentVault?.volatile?.entries ?? [],
+    currentPath
+  );
 
-				{/* Content area */}
-				<div className="flex-1 overflow-auto">
-					{renderBreadcrumbs()}
-					<div className="p-4">
-						{getCurrentEntries(vaultState.entries, getCurrentParentId())
-							.length === 0 ? (
-							<div className="text-center py-12">
-								<div className="text-base-content/60 mb-4">
-									<svg
-										className="w-16 h-16 mx-auto mb-4"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={1}
-											d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-										/>
-									</svg>
-									<p className="text-lg">{t("vault.manager.emptyVault")}</p>
-								</div>
-							</div>
-						) : (
-							<VaultTree
-								entries={getCurrentEntries(
-									vaultState.entries,
-									getCurrentParentId(),
-								)}
-								onAddEntry={(parentId) => {
-									setAddEntryParentId(parentId);
-									setIsAddEntryModalOpen(true);
-								}}
-								onAddGroup={(parentId) => {
-									setAddGroupParentId(parentId);
-									setIsAddGroupModalOpen(true);
-								}}
-								onView={(entry: Entry) => {
-									if (isDataEntry(entry)) {
-										setSelectedEntry(entry);
-										setIsDetailsModalOpen(true);
-									}
-								}}
-								onEdit={(entry: Entry) => {
-									setSelectedEntry(entry);
-									if (isGroupEntry(entry)) {
-										setIsEditGroupModalOpen(true);
-									} else if (isDataEntry(entry)) {
-										setIsEditEntryModalOpen(true);
-									}
-								}}
-								onNavigate={handleNavigate}
-							/>
-						)}
-					</div>
-				</div>
-			</div>
-		);
-	};
+  let vaultContent;
+  if (!currentVault) {
+    vaultContent = (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">
+            {t('vault.manager.noVaultSelected')}
+          </h2>
+          <p className="text-base-content/60">
+            {t('vault.manager.selectVaultToStart')}
+          </p>
+        </div>
+      </div>
+    );
+  } else if (effectiveLocked) {
+    vaultContent = (
+      <LockedVaultView
+        currentVault={{
+          id: currentVault.id,
+          name: currentVault.name,
+          isCloudVault: isCloudVault(currentVault),
+        }}
+        password={password}
+        setPassword={setPassword}
+        handleUnlockVault={handleUnlockVault}
+        unlockError={unlockError || (typeof error === 'string' ? error : '')}
+        loading={loading}
+        cloudUnlockMessage={cloudUnlockMessage}
+        t={t}
+      />
+    );
+  } else {
+    vaultContent = (
+      <UnlockedVaultView
+        currentVault={currentVault}
+        currentPath={currentPath}
+        entries={entries}
+        handleNavigate={handleNavigate}
+        handleLockVault={handleLockVault}
+        t={t}
+      />
+    );
+  }
 
-	return (
-		<div className="flex h-screen w-screen">
-			<div className="vault-selector w-1/5 h-full border-r border-base-300">
-				<VaultSelector />
-			</div>
-			<div className="vault-content w-4/5 h-full">{renderVaultContent()}</div>
-
-			{/* Add Entry Modal */}
-			<AddEntryModal
-				isOpen={isAddEntryModalOpen}
-				onClose={() => setIsAddEntryModalOpen(false)}
-				onSuccess={() => setIsAddEntryModalOpen(false)}
-				parentId={addEntryParentId}
-			/>
-			<AddGroupModal
-				isOpen={isAddGroupModalOpen}
-				onClose={() => setIsAddGroupModalOpen(false)}
-				onSuccess={() => setIsAddGroupModalOpen(false)}
-				parentId={addGroupParentId}
-			/>
-			{selectedEntry && isDataEntry(selectedEntry) && (
-				<EntryDetailsModal
-					isOpen={isDetailsModalOpen}
-					onClose={() => {
-						setIsDetailsModalOpen(false);
-						setSelectedEntry(null);
-					}}
-					entry={selectedEntry}
-					onEdit={() => {
-						setIsDetailsModalOpen(false);
-						setIsEditEntryModalOpen(true);
-					}}
-				/>
-			)}
-			{selectedEntry && isDataEntry(selectedEntry) && (
-				<EditEntryModal
-					isOpen={isEditEntryModalOpen}
-					onClose={() => {
-						setIsEditEntryModalOpen(false);
-						setSelectedEntry(null);
-					}}
-					onSuccess={() => {
-						setIsEditEntryModalOpen(false);
-						setSelectedEntry(null);
-					}}
-					entry={selectedEntry}
-				/>
-			)}
-			{selectedEntry && isGroupEntry(selectedEntry) && (
-				<EditGroupModal
-					isOpen={isEditGroupModalOpen}
-					onClose={() => {
-						setIsEditGroupModalOpen(false);
-						setSelectedEntry(null);
-					}}
-					onSuccess={() => {
-						setIsEditGroupModalOpen(false);
-						setSelectedEntry(null);
-					}}
-					entry={selectedEntry}
-				/>
-			)}
-		</div>
-	);
-};
+  return (
+    <div className="flex h-[100vh] w-screen overflow-hidden">
+      <div className="drawer lg:drawer-open">
+        <input id="vault-drawer" type="checkbox" className="drawer-toggle" />
+        <div className="drawer-content flex flex-col">
+          <div className="w-full px-4 py-2 bg-base-200 border-b border-base-300">
+            <label
+              htmlFor="vault-drawer"
+              className="btn btn-ghost btn-sm lg:hidden"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </label>
+          </div>
+          <div className="vault-content flex-1 overflow-hidden">
+            {vaultContent}
+          </div>
+        </div>
+        <div className="drawer-side h-full">
+          <label
+            htmlFor="vault-drawer"
+            aria-label="close sidebar"
+            className="drawer-overlay"
+          ></label>
+          <div className="menu p-4 w-80 h-full bg-base-100 text-base-content border-r border-base-300 lg:w-80 md:w-64 sm:w-56 max-w-[80vw] overflow-hidden flex flex-col">
+            <VaultSelector
+              onAddVault={() => openAddVaultModal()}
+              onDeleteVault={handleDeleteVault}
+            />
+          </div>
+        </div>
+      </div>
+      <AddEntryModal />
+      <AddGroupModal />
+      <ImportCsvModal />
+      {selectedEntry && isDataEntry(selectedEntry) && <EntryDetailsModal />}
+      {selectedEntry && isDataEntry(selectedEntry) && <EditEntryModal />}
+      {selectedEntry && isGroupEntry(selectedEntry) && <EditGroupModal />}
+      <AddVaultModal
+        isOpen={isAddVaultModalOpen}
+        onClose={() => closeAddVaultModal()}
+      />
+      <EditVaultModal />
+      <DeleteVaultModal
+        isOpen={deleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        vault={vaultToDelete}
+        onConfirm={handleConfirmDelete}
+        deleting={deleting}
+      />
+      <AddProviderModal
+        isOpen={isAddProviderModalOpen}
+        onClose={() => closeAddProviderModal()}
+      />
+    </div>
+  );
+}
 
 export default HomeScreen;

@@ -1,134 +1,454 @@
 {
-	"settings": {
-		"title": "Configuración",
-		"language": "Idioma",
-		"theme": "Tema",
-		"resetButton": "Restablecer valores",
-		"backButton": "Volver al inicio",
-		"clearDataButton": "Borrar todos los datos de la app",
-		"clearDataButtonAria": "Borrar todos los datos de la app",
-		"clearDataConfirmTitle": "¿Borrar todos los datos de la app?",
-		"clearDataConfirmDesc": "Esto eliminará todos los datos de la aplicación. Esta acción no se puede deshacer.",
-		"clearDataConfirmYes": "Sí, borrar",
-		"clearDataConfirmNo": "Cancelar",
-		"clearDataLoading": "Borrando...",
-		"clearDataSuccess": "Datos de la aplicación borrados exitosamente.",
-		"clearDataError": "Error al borrar los datos de la aplicación",
-		"errors": {
-			"invalidLanguage": "Selección de idioma inválida"
-		},
-		"themes": {
-			"light": "Claro",
-			"dark": "Oscuro",
-			"cupcake": "Cupcake",
-			"bumblebee": "Abeja",
-			"emerald": "Esmeralda",
-			"corporate": "Corporativo",
-			"synthwave": "Synthwave",
-			"retro": "Retro",
-			"cyberpunk": "Cyberpunk",
-			"valentine": "San Valentín",
-			"halloween": "Halloween",
-			"garden": "Jardín",
-			"forest": "Bosque",
-			"aqua": "Aqua",
-			"lofi": "Lofi",
-			"pastel": "Pastel",
-			"fantasy": "Fantasía",
-			"wireframe": "Wireframe",
-			"black": "Negro",
-			"luxury": "Lujo",
-			"dracula": "Drácula",
-			"cmyk": "CMYK",
-			"autumn": "Otoño",
-			"business": "Negocios",
-			"acid": "Ácido",
-			"lemonade": "Limonada",
-			"night": "Noche",
-			"coffee": "Café",
-			"winter": "Invierno"
-		}
-	},
-	"home": {
-		"vaultSelector": {
-			"title": "Seleccionar Bóveda",
-			"createNew": "Crear Nueva Bóveda",
-			"importExisting": "Importar Bóveda Existente",
-			"addVault": "Agregar Bóveda",
-			"settings": "Configuración",
-			"noVaults": "No se encontraron bóvedas",
-			"emptyState": "Crea una nueva bóveda para comenzar",
-			"lastAccessed": "Último acceso",
-			"never": "Nunca",
-			"locked": "Bloqueada",
-			"unlocked": "Desbloqueada"
-		},
-		"addVault": {
-			"title": "Crear Nueva Bóveda",
-			"name": "Nombre de la Bóveda",
-			"namePlaceholder": "Ingresa el nombre de la bóveda",
-			"filePath": "Ruta del Archivo",
-			"filePathPlaceholder": "Selecciona una carpeta",
-			"password": "Contraseña",
-			"passwordPlaceholder": "Ingresa la contraseña",
-			"createVault": "Crear Bóveda",
-			"creating": "Creando...",
-			"browse": "Examinar",
-			"cancel": "Cancelar",
-			"errors": {
-				"fileDialog": "Error al abrir el diálogo de archivos"
-			}
-		},
-		"importVault": {
-			"title": "Importar Bóveda Existente",
-			"name": "Nombre de la Bóveda (Opcional)",
-			"namePlaceholder": "Ingresa el nombre de la bóveda (opcional)",
-			"fileHelp": "Deja vacío para usar el nombre del archivo",
-			"vaultFile": "Archivo de Bóveda",
-			"vaultFilePlaceholder": "Selecciona un archivo de bóveda",
-			"password": "Contraseña",
-			"passwordPlaceholder": "Ingresa la contraseña",
-			"importVault": "Importar Bóveda",
-			"importing": "Importando...",
-			"browse": "Examinar",
-			"cancel": "Cancelar",
-			"errors": {
-				"fileDialog": "Error al abrir el diálogo de archivos",
-				"importVault": "Error al importar la bóveda"
-			}
-		},
-		"errors": {
-			"missingFields": "Por favor, completa todos los campos",
-			"invalidPassword": "Contraseña inválida"
-		}
-	},
-	"vault": {
-		"unlock": {
-			"title": "Desbloquear Bóveda",
-			"password": "Contraseña",
-			"passwordPlaceholder": "Ingresa la contraseña de la bóveda",
-			"unlockButton": "Desbloquear",
-			"unlocking": "Desbloqueando..."
-		},
-		"manager": {
-			"addEntry": "Agregar Entrada",
-			"addGroup": "Agregar Grupo",
-			"entries": "Entradas",
-			"groups": "Grupos",
-			"noEntries": "No se encontraron entradas",
-			"noGroups": "No se encontraron grupos",
-			"emptyVault": "Tu bóveda está vacía. Agrega algunas entradas para comenzar.",
-			"noVaultSelected": "No se ha seleccionado bóveda",
-			"selectVaultToStart": "Selecciona una bóveda del panel lateral para comenzar"
-		},
-		"tree": {
-			"noEntries": "No hay entradas",
-			"addEntry": "+ Entrada",
-			"addGroup": "+ Grupo",
-			"edit": "Editar",
-			"delete": "Eliminar",
-			"deleting": "Eliminando...",
-			"deleteConfirm": "¿Estás seguro de que quieres eliminar esta entrada? Esta acción no se puede deshacer."
-		}
-	}
+  "hide": "Ocultar",
+  "show": "Mostrar",
+  "copy": "Copiar",
+  "edit": "Editar",
+  "close": "Cerrar",
+  "delete": "Eliminar",
+  "vault": {
+    "delete": {
+      "confirmTitle": "Eliminar Bóveda",
+      "confirmMessage": "¿Está seguro de que desea eliminar la bóveda \"{{name}}\"?",
+      "deleteFileOption": "También eliminar el archivo de la bóveda del disco",
+      "warning": "Advertencia: Esta acción no se puede deshacer. Si elige eliminar el archivo, todos los datos se perderán permanentemente.",
+      "lockedWarning": "Esta bóveda está actualmente bloqueada. Debe desbloquearla antes de eliminar el archivo.",
+      "deleting": "Eliminando...",
+      "error": "Error al eliminar la bóveda"
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "language": "Idioma",
+    "theme": "Tema",
+    "general": "General",
+    "appearance": "Apariencia",
+    "navigation": "Navegación de configuración",
+    "resetButton": "Restablecer valores predeterminados",
+    "backButton": "Volver al inicio",
+    "clearDataButton": "Borrar todos los datos de la aplicación",
+    "clearDataButtonAria": "Borrar todos los datos de la aplicación",
+    "clearDataConfirmTitle": "¿Borrar todos los datos de la aplicación?",
+    "clearDataConfirmDesc": "Esto borrará todos los datos de la aplicación. Esta acción no se puede deshacer.",
+    "clearDataConfirmYes": "Sí, borrar",
+    "clearDataConfirmNo": "Cancelar",
+    "clearDataLoading": "Borrando...",
+    "clearDataSuccess": "Datos de la aplicación borrados correctamente.",
+    "clearDataError": "Error al borrar los datos de la aplicación",
+    "errors": {
+      "invalidLanguage": "Selección de idioma no válida",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "passwordChangeFailed": "Error al cambiar la contraseña de la bóveda"
+    },
+    "themes": {
+      "light": "Claro",
+      "dark": "Oscuro",
+      "cupcake": "Cupcake",
+      "bumblebee": "Bumblebee",
+      "emerald": "Esmeralda",
+      "corporate": "Corporativo",
+      "synthwave": "Synthwave",
+      "retro": "Retro",
+      "cyberpunk": "Cyberpunk",
+      "valentine": "Valentín",
+      "halloween": "Halloween",
+      "garden": "Jardín",
+      "forest": "Bosque",
+      "aqua": "Aqua",
+      "lofi": "LoFi",
+      "pastel": "Pastel",
+      "fantasy": "Fantasía",
+      "wireframe": "Wireframe",
+      "black": "Negro",
+      "luxury": "Lujo",
+      "dracula": "Drácula",
+      "cmyk": "CMYK",
+      "autumn": "Otoño",
+      "business": "Negocios",
+      "acid": "Ácido",
+      "lemonade": "Limonada",
+      "night": "Noche",
+      "coffee": "Café",
+      "winter": "Invierno"
+    },
+    "cloudStorage": {
+      "title": "Almacenamiento en la Nube",
+      "description": "Gestiona tus proveedores de almacenamiento en la nube",
+      "addProvider": "Agregar Proveedor",
+      "noProviders": "No hay proveedores de almacenamiento en la nube configurados",
+      "googleDrive": "Google Drive",
+      "authenticated": "Autenticado",
+      "reAuthenticate": "Re-authenticate",
+      "notAuthenticated": "No Autenticado",
+      "authenticating": "Autenticando...",
+      "setAsDefault": "Establecer como Predeterminado",
+      "remove": "Eliminar",
+      "authenticate": "Autenticar",
+      "defaultProvider": "Proveedor Predeterminado",
+      "confirmRemove": "¿Está seguro de que desea eliminar este proveedor?",
+      "addProviderHint": "Agrega un proveedor para comenzar a usar el almacenamiento en la nube para tus bóvedas",
+      "error": "Error",
+      "oauth": {
+        "title": "Autenticar {{provider}}",
+        "description": "Sigue estos pasos para autenticar tu proveedor de almacenamiento en la nube:",
+        "stepsTitle": "Pasos de Autenticación:",
+        "step1": "Haz clic en el botón de abajo para abrir la página de autenticación en tu navegador",
+        "step2": "Inicia sesión con tu cuenta de {{provider}}",
+        "step3": "Otorga permiso para acceder a tus archivos",
+        "step4": "Serás redirigido automáticamente de vuelta a la aplicación",
+        "openBrowser": "Abrir Página de Autenticación",
+        "opening": "Abriendo navegador...",
+        "copyUrl": "Copiar URL",
+        "cancel": "Cancelar",
+        "browserOpened": "Navegador abierto",
+        "waitForRedirect": "Completa la autenticación en tu navegador. Serás redirigido automáticamente.",
+        "browserError": "Error al abrir el navegador",
+        "orUseCredentials": "O usar credenciales",
+        "pasteCredentials": "Pegar Credenciales Base64",
+        "base64Credentials": "Credenciales Base64",
+        "base64Placeholder": "Pega las credenciales codificadas en base64 aquí...",
+        "importCredentials": "Importar y Autenticar",
+        "base64Help": "Pega las credenciales que copiaste de la página de autenticación",
+        "emptyBase64": "Por favor pega las credenciales base64",
+        "invalidBase64": "Formato de credenciales base64 inválido",
+        "troubleshooting": "Solución de Problemas",
+        "troubleshooting1": "Si el navegador no se abre automáticamente, copia la URL y pégala manualmente.",
+        "troubleshooting2": "Asegúrate de que las ventanas emergentes estén permitidas para esta aplicación.",
+        "troubleshooting3": "Si la autenticación falla, inténtalo de nuevo o contacta soporte."
+      },
+      "help": {
+        "title": "Ayuda y Documentación",
+        "gettingStarted": "Comenzando",
+        "gettingStartedText": "Para usar el almacenamiento en la nube, necesitas configurar las credenciales OAuth para tu proveedor en la nube.",
+        "googleDrive": "Configuración de Google Drive",
+        "googleStep1": "Ve a la Consola de Google Cloud",
+        "googleStep2": "Crea un nuevo proyecto o selecciona uno existente",
+        "googleStep3": "Habilita la API de Google Drive",
+        "googleStep4": "Crea credenciales OAuth 2.0",
+        "googleStep5": "Agrega la URI de redirección a tu pantalla de consentimiento OAuth",
+        "security": "Notas de Seguridad",
+        "securityText": "Tus credenciales se almacenan localmente y están encriptadas. Nunca compartas tus secretos de cliente con otros."
+      }
+    },
+    "vaultSelector": {
+      "autoStorageNote": "Las bóvedas se almacenarán automáticamente en la carpeta \"Monark\" en tu almacenamiento en la nube."
+    },
+    "addProvider": {
+      "title": "Agregar Proveedor de Almacenamiento",
+      "providerName": "Nombre del Proveedor",
+      "providerNamePlaceholder": "Mi Google Drive",
+      "providerType": "Tipo de Proveedor",
+      "clientId": "ID de Cliente",
+      "clientIdPlaceholder": "Tu ID de Cliente OAuth de Google",
+      "clientSecret": "Secreto de Cliente",
+      "clientSecretPlaceholder": "Tu Secreto de Cliente OAuth de Google",
+      "redirectUri": "URI de Redirección",
+      "redirectUriHelp": "Esta URI debe estar configurada en tu Consola de Google Cloud",
+      "add": "Agregar Proveedor",
+      "adding": "Agregando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "providerNameRequired": "El nombre del proveedor es obligatorio",
+        "clientIdRequired": "El ID de Cliente es obligatorio",
+        "clientSecretRequired": "El Secreto de Cliente es obligatorio",
+        "redirectUriRequired": "La URI de Redirección es obligatoria",
+        "addFailed": "Error al agregar el proveedor. Por favor verifica tus credenciales."
+      }
+    },
+    "updates": {
+      "title": "Actualizaciones",
+      "description": "Busca e instala la última versión de la aplicación.",
+      "currentVersion": "Versión actual: {{version}}",
+      "checkButton": "Buscar Actualizaciones",
+      "checkAriaLabel": "Buscar actualizaciones de la aplicación",
+      "checking": "Buscando...",
+      "updateAvailable": "Actualización disponible: {{version}}",
+      "downloading": "Descargando actualización...",
+      "downloadingProgress": "Descargando actualización: {{progress}}%",
+      "downloadedSuccessfully": "Actualización descargada correctamente. Reiniciando...",
+      "noUpdatesAvailable": "No hay actualizaciones disponibles. Estás en la última versión.",
+      "errorCheck": "Error al buscar actualizaciones: {{message}}",
+      "loading": "Cargando...",
+      "versionUnavailable": "Versión no disponible"
+    }
+  },
+  "home": {
+    "vaultSelector": {
+      "title": "Seleccionar Bóveda",
+      "createNew": "Crear Nueva Bóveda",
+      "importExisting": "Importar Bóveda Existente",
+      "addVault": "Agregar Bóveda",
+      "settings": "Configuración",
+      "noVaults": "No se encontraron bóvedas",
+      "emptyState": "Crea una nueva bóveda para comenzar",
+      "lastAccessed": "Último acceso",
+      "never": "Nunca",
+      "locked": "Bloqueado",
+      "unlocked": "Desbloqueado",
+      "storageLocation": "Ubicación de Almacenamiento",
+      "local": "Almacenamiento Local",
+      "cloud": "Almacenamiento en la Nube",
+      "selectProvider": "Seleccionar Proveedor",
+      "noProvidersConfigured": "No hay proveedores de almacenamiento en la nube configurados",
+      "goToSettings": "Ir a Configuración",
+      "cloudVaultName": "Nombre de la Bóveda en la Nube",
+      "importSource": "Fuente de Importación",
+      "selectCloudVault": "Seleccionar Bóveda en la Nube",
+      "loadingVaults": "Cargando bóvedas en la nube...",
+      "noCloudVaults": "No se encontraron bóvedas en el almacenamiento en la nube",
+      "localFile": "Archivo Local",
+      "cloudStorage": "Almacenamiento en la Nube",
+      "missingProvider": "Por favor seleccione un proveedor de almacenamiento en la nube",
+      "cloudVault": "Bóveda en la Nube",
+      "localVault": "Bóveda Local",
+      "provider": "Proveedor",
+      "lastSync": "Última Sincronización",
+      "syncNow": "Sincronizar Ahora",
+      "syncing": "Sincronizando...",
+      "syncFailed": "Error de Sincronización",
+      "migrateToCloud": "Migrar a la Nube",
+      "migrateToLocal": "Migrar a Local",
+      "loadingCloudVaults": "Cargando bóvedas en la nube...",
+      "refreshVaults": "Actualizar Bóvedas",
+      "downloadingFromCloud": "Descargando de la nube...",
+      "destinationFolder": "Carpeta de Destino",
+      "selectFolder": "Seleccionar una carpeta",
+      "failedToLoadFolders": "Error al cargar carpetas",
+      "rootFolder": "Carpeta Raíz",
+      "selectedFolder": "Carpeta Seleccionada",
+      "selectButton": "Seleccionar",
+      "noFolders": "No se encontraron carpetas",
+      "selectCurrentFolder": "Usar Esta Carpeta",
+      "providerNotAuthenticated": "El proveedor no está autenticado. Por favor autentíquese en Configuración.",
+      "authCheckFailed": "Error al verificar el estado de autenticación.",
+      "authenticationExpired": "La autenticación ha expirado. Por favor vuelva a autenticarse en Configuración.",
+      "insufficientPermissions": "Permisos insuficientes. Por favor verifique los permisos de su almacenamiento en la nube.",
+      "storageQuotaExceeded": "Cuota de almacenamiento excedida. Por favor libere espacio."
+    },
+    "addVault": {
+      "title": "Crear Nueva Bóveda",
+      "name": "Nombre de la Bóveda",
+      "namePlaceholder": "Ingrese el nombre de la bóveda",
+      "filePath": "Ruta del Archivo",
+      "filePathPlaceholder": "Seleccione una carpeta",
+      "password": "Contraseña",
+      "passwordPlaceholder": "Ingrese la contraseña",
+      "confirmPassword": "Confirmar Contraseña",
+      "confirmPasswordPlaceholder": "Confirme la contraseña",
+      "success": "Bóveda creada correctamente",
+      "createVault": "Crear Bóveda",
+      "creating": "Creando...",
+      "browse": "Examinar",
+      "cancel": "Cancelar",
+      "errors": {
+        "fileDialog": "Error al abrir el diálogo de archivos"
+      }
+    },
+    "editVault": {
+      "title": "Editar Bóveda",
+      "name": "Nombre de la Bóveda",
+      "namePlaceholder": "Ingrese el nombre de la bóveda",
+      "filePath": "Ruta del Archivo",
+      "filePathPlaceholder": "Ruta del archivo de la bóveda",
+      "filePathHelp": "La ruta del archivo no se puede cambiar para bóvedas existentes",
+      "newPassword": "Nueva Contraseña",
+      "newPasswordPlaceholder": "Ingrese nueva contraseña (deje vacío para mantener la actual)",
+      "confirmNewPassword": "Confirmar Nueva Contraseña",
+      "confirmNewPasswordPlaceholder": "Confirme la nueva contraseña",
+      "passwordHelp": "Deje vacío para mantener la contraseña actual",
+      "save": "Guardar Cambios",
+      "saving": "Guardando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "vaultNotFound": "Bóveda no encontrada",
+        "updateFailed": "Error al actualizar la bóveda",
+        "vaultLocked": "No se puede actualizar la contraseña: la bóveda está bloqueada. Desbloquee la bóveda primero."
+      }
+    },
+    "addGroup": {
+      "title": "Agregar Grupo",
+      "name": "Nombre del Grupo",
+      "namePlaceholder": "Ingrese el nombre del grupo",
+      "addGroup": "Agregar Grupo",
+      "adding": "Agregando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "nameRequired": "El nombre del grupo es obligatorio"
+      }
+    },
+    "importVault": {
+      "title": "Importar Bóveda Existente",
+      "name": "Nombre de la Bóveda (Opcional)",
+      "namePlaceholder": "Ingrese el nombre de la bóveda (opcional)",
+      "fileHelp": "Deje vacío para usar el nombre del archivo",
+      "vaultFile": "Archivo de Bóveda",
+      "vaultFilePlaceholder": "Seleccione un archivo de bóveda",
+      "password": "Contraseña",
+      "passwordPlaceholder": "Ingrese la contraseña",
+      "importVault": "Importar Bóveda",
+      "importing": "Importando...",
+      "browse": "Examinar",
+      "cancel": "Cancelar",
+      "errors": {
+        "fileDialog": "Error al abrir el diálogo de archivos",
+        "importVault": "Error al importar la bóveda",
+        "invalidPassword": "Contraseña inválida o error al acceder a la bóveda en la nube"
+      }
+    },
+    "addEntry": {
+      "title": "Agregar Nueva Entrada",
+      "entryTitle": "Título de la Entrada",
+      "entryTitlePlaceholder": "Ingrese el título de la entrada",
+      "fields": "Campos",
+      "fieldTitle": "Nombre del campo",
+      "fieldProperty": "Propiedad",
+      "fieldValue": "Valor",
+      "secret": "Secreto",
+      "addField": "Agregar Campo",
+      "tags": "Etiquetas",
+      "tagPlaceholder": "Ingrese etiqueta",
+      "addTag": "Agregar Etiqueta",
+      "addEntry": "Agregar Entrada",
+      "adding": "Agregando...",
+      "cancel": "Cancelar",
+      "errors": {
+        "titleRequired": "El título de la entrada es obligatorio",
+        "fieldsRequired": "Se requiere al menos un campo",
+        "addFailed": "Error al agregar la entrada"
+      }
+    },
+    "importCsv": {
+      "parserSelector": "Formato de Importación",
+      "parserSelector.auto": "Detección automática",
+      "title": "Importar Archivo CSV",
+      "csvFile": "Archivo CSV",
+      "csvFilePlaceholder": "Seleccione un archivo CSV",
+      "browse": "Examinar",
+      "clear": "Limpiar",
+      "import": "Importar",
+      "importing": "Importando...",
+      "cancel": "Cancelar",
+      "help": {
+        "title": "Requisitos del Formato CSV",
+        "description": "Su archivo CSV debe tener estas columnas:",
+        "specialFields": "!type, !group_id, !group_name, !group_parent (para estructura)",
+        "typeField": "!type debe ser 'group' o 'entry'",
+        "regularFields": "Todas las demás columnas se convierten en campos de entrada (admite contenido multilínea entre comillas)"
+      },
+      "preview": {
+        "title": "Vista Previa de Importación",
+        "button": "Vista Previa de Importación",
+        "selectDifferentFile": "Seleccionar Archivo Diferente",
+        "groups": "Grupos",
+        "entries": "Entradas",
+        "groupType": "Grupo",
+        "entryType": "Entrada",
+        "fieldsCount": "{{count}} campos",
+        "andMore": "...y {{count}} más"
+      },
+      "errors": {
+        "fileSelection": "Error al seleccionar el archivo",
+        "noData": "No hay datos para importar",
+        "importFailed": "Error al importar datos CSV"
+      }
+    },
+    "vault": {
+      "unlock": {
+        "title": "Desbloquear Bóveda",
+        "description": "Ingrese la contraseña para desbloquear {name}",
+        "password": "Contraseña",
+        "passwordPlaceholder": "Ingrese la contraseña de la bóveda",
+        "unlockButton": "Desbloquear",
+        "unlocking": "Desbloqueando...",
+        "cloudVaultNotice": "Esta bóveda está almacenada en la nube. Se descargará cuando se desbloquee."
+      },
+      "manager": {
+        "addEntry": "Agregar Entrada",
+        "addGroup": "Agregar Grupo",
+        "importCsv": "Importar CSV",
+        "entries": "Entradas",
+        "groups": "Grupos",
+        "lock": "Bloquear",
+        "unlock": "Desbloquear",
+        "search": "Buscar",
+        "noEntries": "No se encontraron entradas",
+        "noGroups": "No se encontraron grupos",
+        "emptyVault": "Su bóveda está vacía. Agregue algunas entradas para comenzar.",
+        "noVaultSelected": "Ninguna Bóveda Seleccionada",
+        "selectVaultToStart": "Seleccione una bóveda de la barra lateral para comenzar",
+        "copied": "¡Copiado al portapapeles!",
+        "copyFailed": "Error al copiar al portapapeles.",
+        "noDescription": "Sin descripción",
+        "noSearchResults": "Ninguna entrada coincide con su búsqueda"
+      },
+      "tree": {
+        "noEntries": "Sin entradas",
+        "addEntry": "+ Entrada",
+        "addGroup": "+ Grupo",
+        "edit": "Editar",
+        "delete": "Eliminar",
+        "deleting": "Eliminando...",
+        "tree": {
+          "edit": "Editar",
+          "delete": "Eliminar"
+        },
+        "deleteConfirm": "¿Está seguro de que desea eliminar esta entrada? Esta acción no se puede deshacer."
+      },
+      "fields": {
+        "title": "Campos",
+        "titleLabel": "Título",
+        "propertyLabel": "Propiedad",
+        "valueLabel": "Valor",
+        "addButton": "Agregar Campo",
+        "titlePlaceholder": "Ingrese el nombre del campo",
+        "propertyPlaceholder": "Ingrese el nombre de la propiedad",
+        "valuePlaceholder": "Ingrese el valor",
+        "hideButton": "Ocultar",
+        "showButton": "Mostrar",
+        "copyButton": "Copiar",
+        "secretLabel": "Secreto",
+        "removeButton": "Eliminar"
+      },
+      "tags": {
+        "title": "Etiquetas",
+        "noTags": "Sin Etiquetas",
+        "addPlaceholder": "Ingrese etiqueta",
+        "addButton": "Agregar Etiqueta"
+      },
+      "entry": {
+        "dataType": "Tipo de Datos",
+        "createdAt": "Creado En",
+        "updatedAt": "Actualizado En",
+        "tags": "Etiquetas",
+        "noTags": "Sin Etiquetas",
+        "fields": "Campos",
+        "type": {
+          "entry": "Entrada",
+          "group": "Grupo"
+        },
+        "name": "Nombre"
+      },
+      "basicInfo": {
+        "title": "Información Básica"
+      },
+      "sidebar": {
+        "empty": {
+          "title": "Ninguna Bóveda Seleccionada",
+          "description": "Seleccione una bóveda de la barra lateral para comenzar"
+        }
+      }
+    },
+    "errors": {
+      "missingFields": "Por favor complete todos los campos",
+      "invalidPassword": "Contraseña no válida",
+      "unlockFailed": "Error al desbloquear la bóveda"
+    },
+    "editEntry": {
+      "title": "Editar Entrada",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "editGroup": {
+      "title": "Editar Grupo"
+    }
+  }
 }

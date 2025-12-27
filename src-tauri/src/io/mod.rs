@@ -1,5 +1,5 @@
-pub mod signature;
 pub mod error;
 pub mod fs;
-pub mod vault;
+pub mod signature;
 mod tests;
+pub mod vault;

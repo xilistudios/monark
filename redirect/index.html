@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Monark Password Manager - Authentication</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		:root {
+			--primary: #0f172a;
+			--primary-light: #1e293b;
+			--accent: #3b82f6;
+			--accent-hover: #2563eb;
+			--success: #10b981;
+			--success-hover: #059669;
+			--error: #ef4444;
+			--warning: #f59e0b;
+			--text-primary: #0f172a;
+			--text-secondary: #64748b;
+			--text-muted: #94a3b8;
+			--bg-primary: #f8fafc;
+			--bg-card: #ffffff;
+			--border: #e2e8f0;
+			--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+			--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+			--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+			--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+		}
+
+		body {
+			font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			background: var(--bg-primary);
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 24px;
+			color: var(--text-primary);
+			line-height: 1.6;
+		}
+
+		.container {
+			background: var(--bg-card);
+			border-radius: 16px;
+			padding: 48px 40px;
+			max-width: 520px;
+			width: 100%;
+			box-shadow: var(--shadow-xl);
+			text-align: center;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.container::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 4px;
+			background: linear-gradient(90deg, var(--accent) 0%, #8b5cf6 100%);
+		}
+
+		.logo {
+			width: 64px;
+			height: 64px;
+			margin: 0 auto 24px;
+			background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+			border-radius: 16px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 32px;
+			color: white;
+			font-weight: 700;
+			box-shadow: var(--shadow-md);
+		}
+
+		.logo.animate {
+			animation: pulse 2s ease-in-out infinite;
+		}
+
+		@keyframes pulse {
+			0%, 100% {
+				transform: scale(1);
+				box-shadow: var(--shadow-md);
+			}
+			50% {
+				transform: scale(1.05);
+				box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.1);
+			}
+		}
+
+		h1 {
+			color: var(--text-primary);
+			font-size: 24px;
+			font-weight: 700;
+			margin-bottom: 12px;
+			letter-spacing: -0.025em;
+		}
+
+		p {
+			color: var(--text-secondary);
+			font-size: 15px;
+			line-height: 1.6;
+			margin-bottom: 24px;
+		}
+
+		.status {
+			background: var(--bg-primary);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 16px 20px;
+			margin-bottom: 24px;
+			font-size: 14px;
+			color: var(--text-secondary);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+		}
+
+		.status::before {
+			content: '';
+			width: 8px;
+			height: 8px;
+			background: var(--accent);
+			border-radius: 50%;
+			animation: blink 1.5s ease-in-out infinite;
+		}
+
+		@keyframes blink {
+			0%, 100% {
+				opacity: 1;
+			}
+			50% {
+				opacity: 0.4;
+			}
+		}
+
+		.status-centered {
+			justify-content: center;
+		}
+
+		.button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			background: var(--accent);
+			color: white;
+			padding: 14px 28px;
+			border-radius: 10px;
+			text-decoration: none;
+			font-weight: 600;
+			font-size: 15px;
+			transition: all 0.2s ease;
+			border: none;
+			cursor: pointer;
+			box-shadow: var(--shadow-sm);
+		}
+
+		.button:hover {
+			background: var(--accent-hover);
+			transform: translateY(-1px);
+			box-shadow: var(--shadow-md);
+		}
+
+		.button:active {
+			transform: translateY(0);
+		}
+
+		.button:disabled {
+			background: var(--text-muted);
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.button-secondary {
+			background: white;
+			color: var(--text-secondary);
+			border: 1px solid var(--border);
+		}
+
+		.button-secondary:hover {
+			background: var(--bg-primary);
+			color: var(--text-primary);
+		}
+
+		.error {
+			color: var(--error);
+		}
+
+		.success {
+			color: var(--success);
+		}
+
+		.spinner {
+			width: 48px;
+			height: 48px;
+			margin: 0 auto 24px;
+			position: relative;
+		}
+
+		.spinner::before {
+			content: '';
+			position: absolute;
+			inset: 0;
+			border: 3px solid var(--border);
+			border-radius: 50%;
+			border-top-color: var(--accent);
+			animation: spin 0.8s linear infinite;
+		}
+
+		@keyframes spin {
+			to {
+				transform: rotate(360deg);
+			}
+		}
+
+		.credentials-section {
+			background: var(--bg-primary);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 24px;
+			margin: 20px 0;
+			text-align: left;
+		}
+
+		.credentials-section h3 {
+			font-size: 14px;
+			font-weight: 600;
+			color: var(--text-primary);
+			margin-bottom: 8px;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+
+		.credentials-section p {
+			font-size: 13px;
+			color: var(--text-secondary);
+			margin-bottom: 16px;
+		}
+
+		.alert {
+			background: #eff6ff;
+			border: 1px solid #dbeafe;
+			border-radius: 10px;
+			padding: 16px;
+			margin-top: 20px;
+			text-align: left;
+		}
+
+		.alert-info {
+			background: #eff6ff;
+			border-color: #dbeafe;
+		}
+
+		.alert-info h4 {
+			font-size: 13px;
+			font-weight: 600;
+			color: #1e40af;
+			margin-bottom: 8px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+
+		.alert-info p {
+			font-size: 13px;
+			color: #1e3a8a;
+			margin: 0;
+			line-height: 1.7;
+		}
+
+		.alert-info ol {
+			margin: 8px 0 0 20px;
+			font-size: 13px;
+			color: #1e3a8a;
+			line-height: 1.7;
+		}
+
+		.alert-info li {
+			margin-bottom: 4px;
+		}
+
+		.copy-feedback {
+			margin-top: 12px;
+			font-size: 13px;
+			color: var(--success);
+			display: none;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+			font-weight: 500;
+		}
+
+		.copy-feedback.show {
+			display: flex;
+		}
+
+		.icon-large {
+			font-size: 56px;
+			margin-bottom: 20px;
+		}
+
+		.divider {
+			height: 1px;
+			background: var(--border);
+			margin: 24px 0;
+		}
+
+		.footer-text {
+			font-size: 12px;
+			color: var(--text-muted);
+			margin-top: 20px;
+		}
+
+		@media (max-width: 480px) {
+			.container {
+				padding: 32px 24px;
+			}
+
+			h1 {
+				font-size: 20px;
+			}
+
+			.button {
+				width: 100%;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.status::before {
+				animation: none;
+				opacity: 0.7;
+			}
+
+			.logo.animate {
+				animation: none;
+			}
+
+			.spinner::before {
+				animation: spin 2s linear infinite;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<div id="content">
+			<div class="logo animate">M</div>
+			<div class="spinner"></div>
+			<h1>Authenticating...</h1>
+			<p>Please wait while we complete your authentication.</p>
+			<div class="status" id="status" role="status" aria-live="polite">Processing OAuth callback</div>
+		</div>
+	</div>
+
+	<script>
+		// Parse URL parameters
+		const urlParams = new URLSearchParams(window.location.search);
+		const code = urlParams.get('code');
+		const state = urlParams.get('state');
+		const error = urlParams.get('error');
+		const errorDescription = urlParams.get('error_description');
+
+		const statusEl = document.getElementById('status');
+		const contentEl = document.getElementById('content');
+
+		// Constants
+		const DEEP_LINK_DELAY = 500;
+		const IFRAME_REMOVAL_DELAY = 1000;
+		const BUTTON_RESET_DELAY = 3000;
+
+		// Store credentials globally for the copy function
+		let authCode = null;
+		let authState = null;
+
+		function copyCredentialsAsBase64(event) {
+			try {
+				// Create credentials object
+				const credentials = {
+					code: authCode,
+					state: authState
+				};
+
+				// Convert to JSON and then to base64
+				const jsonString = JSON.stringify(credentials);
+				const base64 = btoa(jsonString);
+
+				// Copy to clipboard
+				navigator.clipboard.writeText(base64).then(() => {
+					// Show feedback
+					const feedback = document.getElementById('copy-feedback');
+					if (feedback) {
+						feedback.classList.add('show');
+					}
+
+					// Change button text temporarily
+					const button = event ? event.target : document.querySelector('.copy-button');
+					if (button) {
+						const originalText = button.innerHTML;
+						button.innerHTML = '<span>✓</span> Copied!';
+						button.disabled = true;
+
+						setTimeout(() => {
+							button.innerHTML = originalText;
+							button.disabled = false;
+						}, BUTTON_RESET_DELAY);
+					}
+				}).catch(err => {
+					console.error('Failed to copy:', err);
+					alert('Failed to copy credentials. Please try again.');
+				});
+			} catch (error) {
+				console.error('Error creating base64:', error);
+				alert('Failed to create credentials. Please try again.');
+			}
+		}
+
+		function updateStatus(message, isError = false) {
+			statusEl.textContent = message;
+			statusEl.style.color = isError ? 'var(--error)' : 'var(--text-secondary)';
+			statusEl.style.borderColor = isError ? 'var(--error)' : 'var(--border)';
+		}
+
+		function isValidOAuthParam(param) {
+			return param && param.trim().length > 0;
+		}
+
+		function showError(title, message) {
+			contentEl.innerHTML = `
+				<div class="icon-large error">⚠️</div>
+				<h1>${title}</h1>
+				<p>${message}</p>
+				<div class="status error status-centered">${errorDescription || error || 'Unknown error'}</div>
+				<button class="button button-secondary" onclick="window.close()" aria-label="Close window">Close Window</button>
+			`;
+		}
+
+		function showSuccess(deepLink) {
+			contentEl.innerHTML = `
+				<div class="icon-large success">✓</div>
+				<h1>Authentication Successful</h1>
+				<p>Complete the authentication in the Monark app by copying the credentials below.</p>
+				
+				<div class="credentials-section">
+					<h3>
+						<span>🔐</span>
+						Copy Credentials
+					</h3>
+					<p>Copy these credentials and paste them in the Monark app to complete authentication.</p>
+					<button class="button copy-button" onclick="copyCredentialsAsBase64(event)" aria-label="Copy credentials as Base64">
+						<span aria-hidden="true">📋</span>
+						Copy Credentials as Base64
+					</button>
+					<div id="copy-feedback" class="copy-feedback">
+						<span>✓</span>
+						Credentials copied! Paste them in the Monark app.
+					</div>
+				</div>
+
+				<div class="alert alert-info">
+					<h4>
+						<span>ℹ️</span>
+						Instructions
+					</h4>
+					<ol>
+						<li>Click the "Copy Credentials" button above</li>
+						<li>Go back to the Monark app</li>
+						<li>In the authentication modal, click "Paste Base64 Credentials"</li>
+						<li>Paste and click "Import & Authenticate"</li>
+					</ol>
+				</div>
+
+				<div class="divider"></div>
+				<p class="footer-text">You can close this window after copying the credentials.</p>
+			`;
+		}
+
+		// Main logic
+		if (error) {
+			console.error('OAuth error:', error, errorDescription);
+			showError('Authentication Failed', 'There was an error during authentication.');
+		} else if (!isValidOAuthParam(code) || !isValidOAuthParam(state)) {
+			showError('Invalid Callback', 'Missing required parameters (code or state).');
+		} else {
+			// Store credentials globally
+			authCode = code;
+			authState = state;
+
+			// Build the deep link URL
+			const deepLink = `monark://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+
+			console.log('Deep link:', deepLink);
+			updateStatus('Authentication successful');
+
+			// Try to open the deep link (but expect it to fail in browser)
+			setTimeout(() => {
+				try {
+					// Create an invisible iframe to attempt deep link without navigation error
+					const iframe = document.createElement('iframe');
+					iframe.style.display = 'none';
+					iframe.src = deepLink;
+					document.body.appendChild(iframe);
+
+					// Remove iframe after a short delay
+					setTimeout(() => {
+						document.body.removeChild(iframe);
+					}, IFRAME_REMOVAL_DELAY);
+				} catch (e) {
+					console.log('Deep link attempt (expected to fail in browser):', e);
+				}
+
+				// Show success message immediately
+				showSuccess(deepLink);
+			}, DEEP_LINK_DELAY);
+		}
+
+		// Log for debugging
+		console.log('OAuth Redirect Handler');
+		console.log('Code:', code ? code.substring(0, 20) + '...' : 'missing');
+		console.log('State:', state);
+		console.log('Error:', error);
+	</script>
+</body>
+
+</html>

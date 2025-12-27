@@ -1,6 +1,6 @@
-use rand::{rngs::OsRng as RandOsRng, RngCore};
+use crate::crypto::constants::{KEY_LEN, NONCE_LEN, SALT_LEN};
 use crate::crypto::error::CryptoError;
-use crate::crypto::constants::{SALT_LEN, KEY_LEN, NONCE_LEN};
+use rand::{rngs::OsRng as RandOsRng, RngCore};
 
 // --- Random Data Generation ---
 

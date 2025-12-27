@@ -1,7 +1,7 @@
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use crate::crypto::error::CryptoError;
-use hmac::digest::KeyInit as HmacKeyInit; // Import alias if needed
+use hmac::digest::KeyInit as HmacKeyInit;
+use hmac::{Hmac, Mac};
+use sha2::Sha256; // Import alias if needed
 
 // --- HMAC-SHA256 Calculation ---
 

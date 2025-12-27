@@ -1,46 +1,54 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { AddVaultForm } from "./AddVaultForm";
-import { ImportVaultForm } from "./ImportVaultForm";
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useSelector } from 'react-redux'
+import { AddVaultForm } from './Forms/AddVaultForm'
+import { ImportVaultForm } from './Forms/ImportVaultForm'
+import { selectCurrentVaultId } from '../../redux/selectors/vaultSelectors'
 
 interface VaultTabsProps {
-	onSuccess: () => void;
-	onCancel: () => void;
+	onSuccess: () => void
+	onCancel: () => void
 }
 
+type TabType = 'create' | 'import'
+
 export const VaultTabs = ({ onSuccess, onCancel }: VaultTabsProps) => {
-	const [activeTab, setActiveTab] = useState<"create" | "import">("create");
-	const { t } = useTranslation("home");
+	const { t } = useTranslation('home')
+	const currentVaultId = useSelector(selectCurrentVaultId)
+	const [activeTabs, setActiveTabs] = useState<Record<string, TabType>>({})
+
+	const handleTabChange = (vaultId: string, tab: TabType) => {
+		setActiveTabs(prev => ({ ...prev, [vaultId]: tab }))
+	}
 
 	return (
 		<div className="w-full">
-			{/* Tab Navigation */}
+			{/* Tab Navigation for current vault */}
 			<div role="tablist" className="tabs tabs-boxed mb-6">
 				<button
 					role="tab"
-					className={`tab ${activeTab === "create" ? "tab-active" : ""}`}
-					onClick={() => setActiveTab("create")}
+					className={`tab ${(activeTabs[currentVaultId!] || 'create') === 'create' ? 'tab-active' : ''}`}
+					onClick={() => handleTabChange(currentVaultId!, 'create')}
 				>
-					{t("vaultSelector.createNew")}
+					{t('vaultSelector.createNew')}
 				</button>
 				<button
 					role="tab"
-					className={`tab ${activeTab === "import" ? "tab-active" : ""}`}
-					onClick={() => setActiveTab("import")}
+					className={`tab ${(activeTabs[currentVaultId!] || 'create') === 'import' ? 'tab-active' : ''}`}
+					onClick={() => handleTabChange(currentVaultId!, 'import')}
 				>
-					{t("vaultSelector.importExisting")}
+					{t('vaultSelector.importExisting')}
 				</button>
 			</div>
-
 			{/* Tab Content */}
 			<div className="mt-6">
-				{activeTab === "create" && (
+				{(activeTabs[currentVaultId!] || 'create') === 'create' && (
 					<AddVaultForm onSuccess={onSuccess} onCancel={onCancel} />
 				)}
-				{activeTab === "import" && (
+				{(activeTabs[currentVaultId!] || 'create') === 'import' && (
 					<ImportVaultForm onSuccess={onSuccess} onCancel={onCancel} />
 				)}
 			</div>
 		</div>
-	);
-};
+	)
+}

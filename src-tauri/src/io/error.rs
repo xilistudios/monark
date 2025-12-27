@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Write};
+use std::io;
 
 #[derive(Debug)]
 pub enum IoError {
@@ -19,4 +19,3 @@ impl fmt::Display for IoError {
 }
 
 impl std::error::Error for IoError {}
-

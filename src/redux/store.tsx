@@ -8,6 +8,7 @@ import vault, {
 	loadVaultStateFromSettings,
 	restoreVaultState,
 } from "./actions/vault";
+import { VaultManager } from "../services/vault";
 
 export const store = configureStore({
 	reducer: {
@@ -15,6 +16,9 @@ export const store = configureStore({
 		preferences,
 	},
 });
+
+// Initialize VaultManager with store context
+VaultManager.getInstance().initialize(store.dispatch, store.getState);
 
 // Initialize vault state from settings store
 export const initializeVaultState = async () => {

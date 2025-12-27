@@ -1,5 +1,5 @@
-use argon2::{self, Argon2};
 use crate::crypto::error::CryptoError;
+use argon2::{self, Argon2};
 
 // --- Argon2id Key Derivation ---
 

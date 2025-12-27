@@ -1,7 +1,7 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use crate::models;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
-pub  const SIGNATURE: &str = "p->monark/";
+pub const SIGNATURE: &str = "p->monark/";
 pub struct Signature {
     pub signature: String,
     pub content: String,

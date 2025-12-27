@@ -1,6 +1,6 @@
+use crate::commands::errors::CommandError;
 use crate::io;
 use crate::models::VaultFile;
-use crate::commands::errors::CommandError;
 use base64::Engine;
 
 pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
@@ -20,7 +20,9 @@ pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
     // 4. Base64 decode the content
     let decoded_content = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(&parsed_content.content)
-        .map_err(|e| CommandError::Crypto(format!("Failed to base64 decode vault content: {}", e)))?;
+        .map_err(|e| {
+            CommandError::Crypto(format!("Failed to base64 decode vault content: {}", e))
+        })?;
 
     // 5. Deserialize into VaultFile
     let vault_file: VaultFile = serde_json::from_slice(&decoded_content)
@@ -31,6 +33,15 @@ pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
 }
 
 pub fn write_vault(file_path: String, vault_file: &VaultFile) -> Result<(), CommandError> {
+    use std::fs;
+    use std::path::Path;
+
+    let path = Path::new(&file_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| CommandError::Io(format!("Failed to create parent directories: {}", e)))?;
+    }
+
     let signed_vault = io::signature::sign_vault(&vault_file);
     io::fs::write_file(&file_path, &signed_vault)
         .map_err(|e| CommandError::Io(format!("Failed to write vault file: {}", e)))?;
