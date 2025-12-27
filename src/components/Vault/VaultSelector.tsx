@@ -157,8 +157,8 @@ const VaultSelector = ({
   }
 
   return (
-    <div className="h-full w-full">
-      <div className="flex p-2 justify-between items-center">
+    <div className="h-full w-full flex flex-col">
+      <div className="flex p-2 justify-between items-center flex-shrink-0">
         <div className="dropdown">
           <div
             tabIndex={0}
@@ -238,107 +238,71 @@ const VaultSelector = ({
           </div>
         </div>
       )}
-      <ul className="menu rounded-box h-full w-full p-2 overflow-y-auto">
+      <ul className="menu rounded-box flex-1 w-full p-2 overflow-y-auto min-h-0">
         {vaults.map((vault) => (
-          <li key={vault.id} className="w-full">
+          <li key={vault.id} className="w-full mb-1">
             <div className="flex items-center justify-between w-full gap-1">
               <a
-                className={`flex-1 flex flex-col items-start p-3 min-w-0 ${
+                className={`flex-1 flex flex-col items-start p-3 min-w-0 gap-1.5 ${
                   currentVaultId === vault.id ? 'menu-active' : ''
                 }`}
                 onClick={() => handleVaultSelect(vault)}
               >
-                <div className="flex items-center justify-between w-full min-w-0">
-                  <span className="font-medium truncate flex-1 mr-2">
+                {/* Vault name with status icons on same row */}
+                <div className="flex items-center justify-between w-full gap-2">
+                  <span
+                    className="font-semibold truncate flex-1 min-w-0"
+                    title={vault.name}
+                  >
                     {vault.name}
                   </span>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* Cloud/Local indicator */}
-                    <CloudVaultIndicator
-                      vault={vault}
-                      showTooltip={false}
-                      className="hidden sm:flex"
-                    />
-
-                    {/* Lock status */}
-                    {isVaultLocked(vault) ? (
-                      <span
-                        className="flex items-center gap-1"
-                        aria-label={t('vaultSelector.locked', 'Locked')}
-                      >
-                        <svg
-                          className="w-4 h-4 text-warning"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                          />
-                        </svg>
-                        <span className="text-warning text-xs hidden sm:inline">
-                          {t('vaultSelector.locked', 'Locked')}
-                        </span>
-                      </span>
-                    ) : (
-                      <span
-                        className="flex items-center gap-1"
-                        aria-label={t('vaultSelector.unlocked', 'Unlocked')}
-                      >
-                        <svg
-                          className="w-4 h-4 text-success"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        <span className="text-success text-xs hidden sm:inline">
-                          {t('vaultSelector.unlocked', 'Unlocked')}
-                        </span>
-                      </span>
-                    )}
-                  </div>
+                  {/* Lock status icon only */}
+                  {isVaultLocked(vault) ? (
+                    <svg
+                      className="w-4 h-4 text-warning flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-label={t('vaultSelector.locked', 'Locked')}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="w-4 h-4 text-success flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-label={t('vaultSelector.unlocked', 'Unlocked')}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  )}
                 </div>
 
-                {/* Cloud/Local indicator for mobile */}
-                <div className="flex items-center gap-2 mt-1">
+                {/* Info row: Cloud indicator */}
+                <div className="w-full">
                   <CloudVaultIndicator
                     vault={vault}
                     showTooltip={false}
-                    className="sm:hidden"
                   />
-                  <div className="text-xs text-base-content/60">
-                    {t('vaultSelector.lastAccessed')}:{' '}
-                    {formatLastAccessed(vault.lastAccessed)}
-                  </div>
                 </div>
 
-                {/* Path display */}
-                <div
-                  className="text-xs text-base-content/60 truncate w-full mt-1"
-                  title={vault.path}
-                >
-                  {isCloudVault(vault)
-                    ? vault.cloudMetadata?.provider
-                    : vault.path}
+                {/* Last accessed */}
+                <div className="w-full text-[10px] opacity-70 truncate">
+                  {t('vaultSelector.lastAccessed')}:{' '}
+                  {formatLastAccessed(vault.lastAccessed)}
                 </div>
-
-                {/* Sync status for cloud vaults */}
-                {isCloudVault(vault) && vault.cloudMetadata?.lastSync && (
-                  <div className="text-xs text-base-content/60 truncate w-full">
-                    {t('vaultSelector.lastSync')}:{' '}
-                    {formatLastAccessed(vault.cloudMetadata.lastSync)}
-                  </div>
-                )}
               </a>
 
               <div className="dropdown dropdown-end">

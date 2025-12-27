@@ -7,10 +7,10 @@ export interface ModalProps {
 export const Modal = ({ isOpen, onClose, children, className }: ModalProps) => {
 	return (
 		<dialog className={`modal ${isOpen ? "modal-open" : ""} ${className}`}>
-			<div className="modal-box">
+			<div className="modal-box max-h-[85vh] overflow-y-auto">
 				<form method="dialog">
 					<button
-						className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+						className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"
 						onClick={onClose}
 					>
 						✕

@@ -56,7 +56,7 @@ export const CloudVaultIndicator = ({
           {/* Provider badge */}
           {provider && (
             <span
-              className="badge badge-sm badge-info text-xs"
+              className="badge badge-sm badge-info text-xs whitespace-nowrap"
               title={t('vaultSelector.provider')}
             >
               {provider.provider_type === StorageProviderType.GOOGLE_DRIVE
