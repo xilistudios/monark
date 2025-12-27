@@ -147,6 +147,10 @@
 			}
 		}
 
+		.status-centered {
+			justify-content: center;
+		}
+
 		.button {
 			display: inline-flex;
 			align-items: center;
@@ -335,6 +339,21 @@
 				width: 100%;
 			}
 		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.status::before {
+				animation: none;
+				opacity: 0.7;
+			}
+
+			.logo.animate {
+				animation: none;
+			}
+
+			.spinner::before {
+				animation: spin 2s linear infinite;
+			}
+		}
 	</style>
 </head>
 
@@ -344,8 +363,8 @@
 			<div class="logo animate">M</div>
 			<div class="spinner"></div>
 			<h1>Authenticating...</h1>
-			p>Please wait while we complete your authentication.</p>
-			<div class="status" id="status">Processing OAuth callback</div>
+			<p>Please wait while we complete your authentication.</p>
+			<div class="status" id="status" role="status" aria-live="polite">Processing OAuth callback</div>
 		</div>
 	</div>
 
@@ -359,6 +378,11 @@
 
 		const statusEl = document.getElementById('status');
 		const contentEl = document.getElementById('content');
+
+		// Constants
+		const DEEP_LINK_DELAY = 500;
+		const IFRAME_REMOVAL_DELAY = 1000;
+		const BUTTON_RESET_DELAY = 3000;
 
 		// Store credentials globally for the copy function
 		let authCode = null;
@@ -394,7 +418,7 @@
 						setTimeout(() => {
 							button.innerHTML = originalText;
 							button.disabled = false;
-						}, 3000);
+						}, BUTTON_RESET_DELAY);
 					}
 				}).catch(err => {
 					console.error('Failed to copy:', err);
@@ -412,13 +436,17 @@
 			statusEl.style.borderColor = isError ? 'var(--error)' : 'var(--border)';
 		}
 
+		function isValidOAuthParam(param) {
+			return param && param.trim().length > 0;
+		}
+
 		function showError(title, message) {
 			contentEl.innerHTML = `
 				<div class="icon-large error">⚠️</div>
 				<h1>${title}</h1>
 				<p>${message}</p>
-				<div class="status error" style="justify-content: center;">${errorDescription || error || 'Unknown error'}</div>
-				<button class="button button-secondary" onclick="window.close()">Close Window</button>
+				<div class="status error status-centered">${errorDescription || error || 'Unknown error'}</div>
+				<button class="button button-secondary" onclick="window.close()" aria-label="Close window">Close Window</button>
 			`;
 		}
 
@@ -426,7 +454,7 @@
 			contentEl.innerHTML = `
 				<div class="icon-large success">✓</div>
 				<h1>Authentication Successful</h1>
-				p>Complete the authentication in the Monark app by copying the credentials below.</p>
+				<p>Complete the authentication in the Monark app by copying the credentials below.</p>
 				
 				<div class="credentials-section">
 					<h3>
@@ -434,8 +462,8 @@
 						Copy Credentials
 					</h3>
 					<p>Copy these credentials and paste them in the Monark app to complete authentication.</p>
-					<button class="button copy-button" onclick="copyCredentialsAsBase64(event)">
-						<span>📋</span>
+					<button class="button copy-button" onclick="copyCredentialsAsBase64(event)" aria-label="Copy credentials as Base64">
+						<span aria-hidden="true">📋</span>
 						Copy Credentials as Base64
 					</button>
 					<div id="copy-feedback" class="copy-feedback">
@@ -466,7 +494,7 @@
 		if (error) {
 			console.error('OAuth error:', error, errorDescription);
 			showError('Authentication Failed', 'There was an error during authentication.');
-		} else if (!code || !state) {
+		} else if (!isValidOAuthParam(code) || !isValidOAuthParam(state)) {
 			showError('Invalid Callback', 'Missing required parameters (code or state).');
 		} else {
 			// Store credentials globally
@@ -491,14 +519,14 @@
 					// Remove iframe after a short delay
 					setTimeout(() => {
 						document.body.removeChild(iframe);
-					}, 1000);
+					}, IFRAME_REMOVAL_DELAY);
 				} catch (e) {
 					console.log('Deep link attempt (expected to fail in browser):', e);
 				}
 
 				// Show success message immediately
 				showSuccess(deepLink);
-			}, 500);
+			}, DEEP_LINK_DELAY);
 		}
 
 		// Log for debugging
