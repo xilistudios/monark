@@ -22,6 +22,7 @@ class DeepLinkService {
 	private dispatch: AppDispatch | null = null;
 	private getState: (() => RootState) | null = null;
 	private unlistenDeepLink: (() => void) | null = null;
+	private handleMessage: ((event: MessageEvent) => void) | null = null;
 	private isInitialized = false;
 
 	/**
@@ -78,7 +79,7 @@ class DeepLinkService {
 	private setupWindowMessageListener(): void {
 		console.log('[DeepLinkService] Setting up window message listener as fallback');
 
-		const handleMessage = (event: MessageEvent) => {
+		this.handleMessage = (event: MessageEvent) => {
 			console.log('[DeepLinkService] Window message received:', event.data);
 
 			if (event.data?.type === 'oauth_callback') {
@@ -89,7 +90,7 @@ class DeepLinkService {
 			}
 		};
 
-		window.addEventListener('message', handleMessage);
+		window.addEventListener('message', this.handleMessage);
 		console.log('[DeepLinkService] Window message listener registered successfully');
 	}
 
@@ -243,6 +244,12 @@ class DeepLinkService {
 			this.unlistenDeepLink();
 			this.unlistenDeepLink = null;
 			console.log('[DeepLinkService] Tauri onOpenUrl listener unregistered');
+		}
+
+		if (this.handleMessage) {
+			window.removeEventListener('message', this.handleMessage);
+			this.handleMessage = null;
+			console.log('[DeepLinkService] Window message listener removed');
 		}
 
 		this.dispatch = null;
