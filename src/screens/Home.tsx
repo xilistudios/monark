@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import VaultSelector from '../components/Vault/VaultSelector';
+import { Toast } from '../components/UI/Toast';
 import { AddEntryModal } from '../components/Vault/Modals/AddEntryModal';
 import { AddGroupModal } from '../components/Vault/Modals/AddGroupModal';
 import { EditEntryModal } from '../components/Vault/Modals/EditEntryModal';
@@ -51,6 +52,9 @@ function HomeScreen() {
   const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [cloudUnlockMessage, setCloudUnlockMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
 
   const context = useContext(VaultModalContext);
   if (!context)
@@ -176,19 +180,21 @@ function HomeScreen() {
   };
 
   const handleConfirmDelete = async (deleteFile: boolean) => {
-    if (!vaultToDelete) return;
-
-    setDeleting(true);
-    try {
-      await dispatch(deleteVault(vaultToDelete.id, deleteFile) as any);
-      setDeleteModalOpen(false);
-    } catch (error) {
-      console.error('Failed to delete vault:', error);
-      alert(t('vault.delete.error', 'Failed to delete vault'));
-    } finally {
-      setDeleting(false);
-      setVaultToDelete(null);
-    }
+  	if (!vaultToDelete) return;
+ 
+  	setDeleting(true);
+  	try {
+  		await dispatch(deleteVault(vaultToDelete.id, deleteFile) as any);
+  		setDeleteModalOpen(false);
+  	} catch (error) {
+  		console.error('Failed to delete vault:', error);
+  		setToastMessage(t('vault.delete.error', 'Failed to delete vault'));
+  		setToastType('error');
+  		setShowToast(true);
+  	} finally {
+  		setDeleting(false);
+  		setVaultToDelete(null);
+  	}
   };
 
   const handleCloseDeleteModal = () => {
@@ -310,6 +316,12 @@ function HomeScreen() {
       <AddProviderModal
         isOpen={isAddProviderModalOpen}
         onClose={() => closeAddProviderModal()}
+      />
+      <Toast
+        message={toastMessage}
+        isVisible={showToast}
+        onHide={() => setShowToast(false)}
+        type={toastType}
       />
     </div>
   );
