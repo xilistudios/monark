@@ -31,10 +31,10 @@ function GeneralSettings() {
 		<section>
 			<div className="mb-6">
 				<h2 className="text-xl font-semibold text-base-content mb-2">
-					{t('general', 'General')}
+					{t("general", "General")}
 				</h2>
 				<p className="text-sm text-base-content/60">
-					{t('general.description', 'Manage your application preferences')}
+					{t("general.description", "Manage your application preferences")}
 				</p>
 			</div>
 
@@ -47,7 +47,10 @@ function GeneralSettings() {
 					tabIndex={0}
 				>
 					<div>
-						<label htmlFor="language" className="block text-sm font-medium text-base-content mb-2">
+						<label
+							htmlFor="language"
+							className="block text-sm font-medium text-base-content mb-2"
+						>
 							{t("language")}
 						</label>
 						<div className="relative">
@@ -57,7 +60,10 @@ function GeneralSettings() {
 								value={language}
 								onChange={(e) => dispatch(setLanguage(e.target.value))}
 								disabled={loading}
-								aria-label={t("general.languageAriaLabel", "Application language")}
+								aria-label={t(
+									"general.languageAriaLabel",
+									"Application language",
+								)}
 								aria-invalid={!!error}
 								aria-describedby="languageError"
 							>
@@ -68,8 +74,18 @@ function GeneralSettings() {
 								))}
 							</select>
 							<div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-base-content/50">
-								<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+								<svg
+									className="w-5 h-5"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M19 9l-7 7-7-7"
+									/>
 								</svg>
 							</div>
 						</div>
@@ -78,8 +94,18 @@ function GeneralSettings() {
 					<div id="languageError" role="alert">
 						{error && (
 							<div className="flex items-start gap-3 p-4 bg-error/10 border border-error/20 rounded-lg">
-								<svg className="w-5 h-5 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+								<svg
+									className="w-5 h-5 text-error shrink-0 mt-0.5"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+									/>
 								</svg>
 								<span className="text-sm text-error">{error}</span>
 							</div>

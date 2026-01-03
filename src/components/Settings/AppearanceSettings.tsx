@@ -17,10 +17,13 @@ function AppearanceSettings() {
 		<section>
 			<div className="mb-6">
 				<h2 className="text-xl font-semibold text-base-content mb-2">
-					{t('appearance', 'Appearance')}
+					{t("appearance", "Appearance")}
 				</h2>
 				<p className="text-sm text-base-content/60">
-					{t('appearance.description', 'Customize the look and feel of the application')}
+					{t(
+						"appearance.description",
+						"Customize the look and feel of the application",
+					)}
 				</p>
 			</div>
 

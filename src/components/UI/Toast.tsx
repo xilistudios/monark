@@ -52,7 +52,7 @@ export function Toast({
 		}
 	};
 
-	const getIcon = (): JSX.Element => {
+	const getIcon = (): React.ReactNode => {
 		switch (type) {
 			case "error":
 				return (
