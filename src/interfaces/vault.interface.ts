@@ -1,7 +1,13 @@
 export type EntryType = "group" | "entry";
 
 // Field types for vault entries
-export type FieldType = 'text' | 'url' | 'note' | 'otp' | 'password' | 'ssh key';
+export type FieldType =
+	| "text"
+	| "url"
+	| "note"
+	| "otp"
+	| "password"
+	| "ssh key";
 
 // Base interface for all vault items
 export interface BaseEntry {
@@ -59,14 +65,17 @@ export interface EntryPath {
 }
 
 // Helper function to find entry by path
-export function findEntryByPath(entries: Entry[], path: string[]): Entry | null {
+export function findEntryByPath(
+	entries: Entry[],
+	path: string[],
+): Entry | null {
 	if (path.length === 0) return null;
 
 	let currentEntries = entries;
 	let foundEntry: Entry | null = null;
 
 	for (const id of path) {
-		foundEntry = currentEntries.find(entry => entry.id === id) || null;
+		foundEntry = currentEntries.find((entry) => entry.id === id) || null;
 		if (!foundEntry) return null;
 
 		if (isGroupEntry(foundEntry)) {
@@ -99,7 +108,11 @@ export function flattenEntries(entries: Entry[]): Entry[] {
 
 // Helper function to get entry depth
 export function getEntryDepth(entries: Entry[], targetId: string): number {
-	function findDepth(entryList: Entry[], id: string, currentDepth: number): number {
+	function findDepth(
+		entryList: Entry[],
+		id: string,
+		currentDepth: number,
+	): number {
 		for (const entry of entryList) {
 			if (entry.id === id) {
 				return currentDepth;
@@ -119,7 +132,11 @@ export function getEntryDepth(entries: Entry[], targetId: string): number {
 export function getParentPath(entryId: string, entries: Entry[]): string[] {
 	const path: string[] = [];
 
-	function findPath(entryList: Entry[], id: string, currentPath: string[]): boolean {
+	function findPath(
+		entryList: Entry[],
+		id: string,
+		currentPath: string[],
+	): boolean {
 		for (const entry of entryList) {
 			if (entry.id === id) {
 				path.push(...currentPath);

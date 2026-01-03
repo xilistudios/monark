@@ -10,7 +10,7 @@ export interface UpdateInfo {
 }
 
 export interface UpdateProgressEvent {
-	event: 'Started' | 'Progress' | 'Finished';
+	event: "Started" | "Progress" | "Finished";
 	data: {
 		contentLength?: number;
 		chunkLength?: number;
@@ -21,5 +21,7 @@ export interface Update {
 	version: string;
 	date: string;
 	body: string;
-	downloadAndInstall: (onProgress?: (event: UpdateProgressEvent) => void) => Promise<void>;
+	downloadAndInstall: (
+		onProgress?: (event: UpdateProgressEvent) => void,
+	) => Promise<void>;
 }

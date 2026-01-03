@@ -1,4 +1,4 @@
-import { Entry, isGroupEntry } from '../interfaces/vault.interface';
+import { type Entry, isGroupEntry } from "../interfaces/vault.interface";
 
 /**
  * Parses a navigation path string into an array of path segments, filtering out empty segments.
@@ -6,7 +6,7 @@ import { Entry, isGroupEntry } from '../interfaces/vault.interface';
  * @returns An array of path segments.
  */
 export const parseNavigationPath = (navigationPath: string): string[] => {
-  return navigationPath.split('/').filter((segment) => segment !== '');
+	return navigationPath.split("/").filter((segment) => segment !== "");
 };
 
 /**
@@ -17,25 +17,25 @@ export const parseNavigationPath = (navigationPath: string): string[] => {
  * @returns The path to the entry as an array of IDs, or an empty array if not found.
  */
 export const findPathById = (
-  entries: Entry[],
-  targetId: string,
-  currentPath: string[] = []
+	entries: Entry[],
+	targetId: string,
+	currentPath: string[] = [],
 ): string[] => {
-  for (const entry of entries) {
-    const newPath = [...currentPath, entry.id];
+	for (const entry of entries) {
+		const newPath = [...currentPath, entry.id];
 
-    if (entry.id === targetId) {
-      return newPath;
-    }
+		if (entry.id === targetId) {
+			return newPath;
+		}
 
-    if (isGroupEntry(entry) && entry.children) {
-      const childPath = findPathById(entry.children, targetId, newPath);
-      if (childPath.length > 0) {
-        return childPath;
-      }
-    }
-  }
-  return [];
+		if (isGroupEntry(entry) && entry.children) {
+			const childPath = findPathById(entry.children, targetId, newPath);
+			if (childPath.length > 0) {
+				return childPath;
+			}
+		}
+	}
+	return [];
 };
 
 /**
@@ -45,21 +45,21 @@ export const findPathById = (
  * @returns The entries at the specified path, or an empty array if the path is invalid.
  */
 export const getCurrentEntries = (
-  entries: Entry[],
-  path: string[]
+	entries: Entry[],
+	path: string[],
 ): Entry[] => {
-  if (path.length === 0) {
-    return entries;
-  }
+	if (path.length === 0) {
+		return entries;
+	}
 
-  let currentLevel = entries;
-  for (const id of path) {
-    const parentEntry = currentLevel.find((e) => e.id === id);
-    if (parentEntry && isGroupEntry(parentEntry) && parentEntry.children) {
-      currentLevel = parentEntry.children;
-    } else {
-      return [];
-    }
-  }
-  return currentLevel;
+	let currentLevel = entries;
+	for (const id of path) {
+		const parentEntry = currentLevel.find((e) => e.id === id);
+		if (parentEntry && isGroupEntry(parentEntry) && parentEntry.children) {
+			currentLevel = parentEntry.children;
+		} else {
+			return [];
+		}
+	}
+	return currentLevel;
 };

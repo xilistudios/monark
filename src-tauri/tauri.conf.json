@@ -1,58 +1,60 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Monark",
-  "version": "0.1.2",
-  "identifier": "com.monark.app",
-  "build": {
-    "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "Monark Password Manager",
-        "width": 1200,
-        "height": 1000
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "createUpdaterArtifacts": true,
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
-  },
-  "plugins": {
-    "deep-link": {
-      "desktop": [
-        {
-          "schemes": ["monark"],
-          "name": "Monark OAuth Callback",
-          "role": "Viewer"
-        }
-      ],
-      "mobile": [
-        {
-          "schemes": ["monark"],
-          "host": "oauth",
-          "name": "Monark OAuth Callback"
-        }
-      ]
-    },
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM3OEI0NTY0MUZFQUI4QTIKUldTaXVPb2ZaRVdMeCtCa1BqM240RlNOSmo5enRRUzBOcCtBTThPT1ZQSmQwSDFVbE5VRENhU2kK",
-      "endpoints": ["https://github.com/xilistudios/monark/releases/latest/download/latest.json"]
-    }
-  }
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Monark",
+	"version": "0.1.2",
+	"identifier": "com.monark.app",
+	"build": {
+		"beforeDevCommand": "bun run dev",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "bun run build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "Monark Password Manager",
+				"width": 1200,
+				"height": 1000
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"createUpdaterArtifacts": true,
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	},
+	"plugins": {
+		"deep-link": {
+			"desktop": [
+				{
+					"schemes": ["monark"],
+					"name": "Monark OAuth Callback",
+					"role": "Viewer"
+				}
+			],
+			"mobile": [
+				{
+					"schemes": ["monark"],
+					"host": "oauth",
+					"name": "Monark OAuth Callback"
+				}
+			]
+		},
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM3OEI0NTY0MUZFQUI4QTIKUldTaXVPb2ZaRVdMeCtCa1BqM240RlNOSmo5enRRUzBOcCtBTThPT1ZQSmQwSDFVbE5VRENhU2kK",
+			"endpoints": [
+				"https://github.com/xilistudios/monark/releases/latest/download/latest.json"
+			]
+		}
+	}
 }

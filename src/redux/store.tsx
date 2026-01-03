@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { VaultManager } from "../services/vault";
 import { settingsStore } from "../store/settings";
 import preferences, {
 	loadPreferencesFromSettings,
@@ -8,7 +9,6 @@ import vault, {
 	loadVaultStateFromSettings,
 	restoreVaultState,
 } from "./actions/vault";
-import { VaultManager } from "../services/vault";
 
 export const store = configureStore({
 	reducer: {

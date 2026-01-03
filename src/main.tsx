@@ -19,12 +19,12 @@ declare module "@tanstack/react-router" {
 // Initialize vault state from settings store
 initializeVaultState().then(() => {
 	// Initialize global deep link service
-	console.log('[Main] Initializing global deep link service');
+	console.log("[Main] Initializing global deep link service");
 	deepLinkService.initialize({
 		dispatch: store.dispatch,
 		getState: store.getState,
 	});
-	console.log('[Main] Global deep link service initialized');
+	console.log("[Main] Global deep link service initialized");
 
 	ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 		<React.StrictMode>

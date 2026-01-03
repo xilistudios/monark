@@ -1,53 +1,47 @@
-import { createSelector } from 'reselect'
-import { VaultState } from '../actions/vault'
-import { Vault } from '../actions/vault'
-import { Entry } from '../../interfaces/vault.interface'
+import { createSelector } from "reselect";
+import type { Entry } from "../../interfaces/vault.interface";
+import type { Vault, VaultState } from "../actions/vault";
 
-type RootState = { vault: VaultState }
+type RootState = { vault: VaultState };
 
 // Current vaultId selector
 export const selectCurrentVaultId = (state: RootState): string | null =>
-	state.vault.currentVaultId
+	state.vault.currentVaultId;
 
 // Vaults selector
-export const selectVaults = (state: RootState): Vault[] =>
-	state.vault.vaults
+export const selectVaults = (state: RootState): Vault[] => state.vault.vaults;
 
 // Current vault selector (memoized)
 export const selectCurrentVault = createSelector(
 	[selectVaults, selectCurrentVaultId],
 	(vaults, currentVaultId) =>
-		vaults.find((vault) => vault.id === currentVaultId) ?? null
-)
+		vaults.find((vault) => vault.id === currentVaultId) ?? null,
+);
 
 // Memoized entries selector
 export const selectVaultEntries = createSelector(
 	[selectCurrentVault],
-	(currentVault): Entry[] =>
-		currentVault?.volatile?.entries ?? []
-)
+	(currentVault): Entry[] => currentVault?.volatile?.entries ?? [],
+);
 
 // Vault loading/error status
 export const selectVaultStatus = createSelector(
 	[(state: RootState) => state.vault],
 	(vaultState) => ({
 		loading: vaultState.loading,
-		error: vaultState.error
-	})
-)
+		error: vaultState.error,
+	}),
+);
 
 // Cloud storage selectors
-export const selectProviders = (state: RootState) =>
-	state.vault.providers
+export const selectProviders = (state: RootState) => state.vault.providers;
 
 export const selectDefaultProvider = (state: RootState) =>
-	state.vault.defaultProvider
+	state.vault.defaultProvider;
 
 export const selectProviderStatus = (state: RootState) =>
-	state.vault.providerStatus
+	state.vault.providerStatus;
 
-export const selectVaultLoading = (state: RootState) =>
-	state.vault.loading
+export const selectVaultLoading = (state: RootState) => state.vault.loading;
 
-export const selectOAuthState = (state: RootState) =>
-	state.vault.oauthState
+export const selectOAuthState = (state: RootState) => state.vault.oauthState;

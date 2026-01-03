@@ -11,17 +11,17 @@
  * Matches Rust StorageProviderType enum
  */
 export enum StorageProviderType {
-	LOCAL = 'local',
-	GOOGLE_DRIVE = 'google_drive'
+	LOCAL = "local",
+	GOOGLE_DRIVE = "google_drive",
 }
 
 /**
  * Storage provider information matching Rust ProviderInfo struct
  */
 export interface StorageProvider {
-  name: string;
-  provider_type: StorageProviderType;
-  is_default: boolean;
+	name: string;
+	provider_type: StorageProviderType;
+	is_default: boolean;
 }
 
 /**
@@ -47,8 +47,8 @@ export interface LocalStorageConfig {
  * Union type for provider configurations matching Rust ProviderConfig enum
  */
 export type ProviderConfig =
-  | { type: StorageProviderType.LOCAL; basePath: string }
-  | { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig };
+	| { type: StorageProviderType.LOCAL; basePath: string }
+	| { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig };
 
 /**
  * Request to add a new storage provider matching Rust AddProviderRequest
@@ -136,13 +136,13 @@ export interface CloudVaultOperation {
  * Request to create a new cloud vault
  */
 export interface CreateCloudVaultRequest extends CloudVaultOperation {
-  vaultName: string;
-  vaultContent: {
-    updatedAt: string;
-    hmac: string;
-    entries: any[];
-  };
-  parentId?: string;
+	vaultName: string;
+	vaultContent: {
+		updatedAt: string;
+		hmac: string;
+		entries: any[];
+	};
+	parentId?: string;
 }
 
 /**
@@ -235,7 +235,7 @@ export interface ProviderListResponse {
  */
 export interface FileOperationResponse {
 	file: StorageFile;
-	operation: 'create' | 'update' | 'delete';
+	operation: "create" | "update" | "delete";
 }
 
 /**
@@ -243,7 +243,7 @@ export interface FileOperationResponse {
  */
 export interface BatchFileOperation {
 	operations: Array<{
-		type: 'create' | 'update' | 'delete';
+		type: "create" | "update" | "delete";
 		request: CreateFileRequest | UpdateFileRequest | { id: string };
 	}>;
 	providerName?: string;
@@ -269,7 +269,7 @@ export interface CloudStorageStats {
 export interface CloudSyncStatus {
 	vaultId: string;
 	providerName: string;
-	status: 'synced' | 'syncing' | 'error' | 'pending';
+	status: "synced" | "syncing" | "error" | "pending";
 	lastSync?: string;
 	error?: string;
 }
@@ -278,15 +278,15 @@ export interface CloudSyncStatus {
  * Cloud storage error types
  */
 export enum CloudStorageErrorType {
-	AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
-	TOKEN_EXPIRED = 'TOKEN_EXPIRED',
-	NETWORK_ERROR = 'NETWORK_ERROR',
-	QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
-	VAULT_NOT_FOUND = 'VAULT_NOT_FOUND',
-	PERMISSION_DENIED = 'PERMISSION_DENIED',
-	PROVIDER_NOT_CONFIGURED = 'PROVIDER_NOT_CONFIGURED',
-	INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
-	OPERATION_FAILED = 'OPERATION_FAILED'
+	AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED",
+	TOKEN_EXPIRED = "TOKEN_EXPIRED",
+	NETWORK_ERROR = "NETWORK_ERROR",
+	QUOTA_EXCEEDED = "QUOTA_EXCEEDED",
+	VAULT_NOT_FOUND = "VAULT_NOT_FOUND",
+	PERMISSION_DENIED = "PERMISSION_DENIED",
+	PROVIDER_NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED",
+	INVALID_CREDENTIALS = "INVALID_CREDENTIALS",
+	OPERATION_FAILED = "OPERATION_FAILED",
 }
 
 /**

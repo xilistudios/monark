@@ -1,9 +1,9 @@
-import { platform } from '@tauri-apps/plugin-os';
+import { platform } from "@tauri-apps/plugin-os";
 
-const MOBILE_PLATFORMS = ['android', 'ios'];
+const MOBILE_PLATFORMS = ["android", "ios"];
 
 export function isMobile() {
-  const currentPlatform = platform();
+	const currentPlatform = platform();
 
-  return MOBILE_PLATFORMS.includes(currentPlatform);
+	return MOBILE_PLATFORMS.includes(currentPlatform);
 }
