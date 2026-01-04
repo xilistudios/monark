@@ -245,10 +245,10 @@ function HomeScreen() {
 
   return (
     <div className="flex h-[100vh] w-screen overflow-hidden">
-      <div className="drawer lg:drawer-open">
+      <div className="drawer lg:drawer-open h-full">
         <input id="vault-drawer" type="checkbox" className="drawer-toggle" />
         <div className="drawer-content flex flex-col h-full min-h-0">
-          <div className="w-full px-4 py-2 bg-base-200 border-b border-base-300">
+          <div className="w-full px-4 py-2 bg-base-200 border-b border-base-300 lg:hidden">
             <label
               htmlFor="vault-drawer"
               className="btn btn-ghost btn-sm lg:hidden"
@@ -277,9 +277,9 @@ function HomeScreen() {
           <label
             htmlFor="vault-drawer"
             aria-label="close sidebar"
-            className="drawer-overlay"
+            className="drawer-overlay overflow-hidden"
           ></label>
-          <div className="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300 lg:w-80 md:w-64 sm:w-56 max-w-[80vw] overflow-y-auto">
+          <div className="menu p-4 w-80 h-full max-h-full bg-base-100 text-base-content border-r border-base-300 max-w-[80vw] overflow-y-auto">
             <VaultSelector
               onAddVault={() => openAddVaultModal()}
               onDeleteVault={handleDeleteVault}

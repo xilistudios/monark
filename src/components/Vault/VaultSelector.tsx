@@ -13,6 +13,7 @@ import { useContext } from 'react';
 import { VaultModalContext } from './VaultContext';
 import { CloudVaultIndicator } from './CloudVaultIndicator';
 import { VaultManager } from '../../services/vault';
+import { formatLastSync } from '../../utils/dateFormatter';
 
 const VaultSelector = ({
   onAddVault,
@@ -237,7 +238,7 @@ const VaultSelector = ({
           </div>
         </div>
       )}
-      <ul className="menu rounded-box h-full w-full p-2 overflow-y-auto">
+      <ul className="menu rounded-box flex-1 w-full p-2 overflow-y-auto">
         {vaults.map((vault) => (
           <li key={vault.id} className="w-full">
             <div className="flex items-center justify-between w-full gap-1">
@@ -253,7 +254,7 @@ const VaultSelector = ({
                     <CloudVaultIndicator
                       vault={vault}
                       showTooltip={false}
-                      className="hidden sm:flex"
+                      className="hidden lg:flex"
                     />
                     <span className="font-medium truncate flex-1 mr-2">
                       {vault.name}
@@ -277,7 +278,7 @@ const VaultSelector = ({
                             d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                           />
                         </svg>
-                        <span className="text-warning text-xs hidden sm:inline">
+                        <span className="text-warning text-xs hidden lg:inline">
                           {t('vaultSelector.locked', 'Locked')}
                         </span>
                       </span>
@@ -299,7 +300,7 @@ const VaultSelector = ({
                             d="M5 13l4 4L19 7"
                           />
                         </svg>
-                        <span className="text-success text-xs hidden sm:inline">
+                        <span className="text-success text-xs hidden lg:inline">
                           {t('vaultSelector.unlocked', 'Unlocked')}
                         </span>
                       </span>
@@ -312,13 +313,21 @@ const VaultSelector = ({
                   <CloudVaultIndicator
                     vault={vault}
                     showTooltip={false}
-                    className="sm:hidden"
+                    className="lg:hidden"
                   />
                   <div className="text-xs text-base-content/60">
                     {t('vaultSelector.lastAccessed')}:{' '}
                     {formatLastAccessed(vault.lastAccessed)}
                   </div>
                 </div>
+
+                {/* Sync status for cloud vaults */}
+                {isCloudVault(vault) && vault.cloudMetadata?.lastSync && (
+                  <div className="text-xs text-base-content/60 truncate w-full">
+                    {t('vaultSelector.lastSync')}:{' '}
+                    {formatLastSync(vault.cloudMetadata.lastSync, t)}
+                  </div>
+                )}
 
                 {/* Path display */}
                 <div
@@ -330,13 +339,6 @@ const VaultSelector = ({
                     : vault.path}
                 </div>
 
-                {/* Sync status for cloud vaults */}
-                {isCloudVault(vault) && vault.cloudMetadata?.lastSync && (
-                  <div className="text-xs text-base-content/60 truncate w-full">
-                    {t('vaultSelector.lastSync')}:{' '}
-                    {formatLastAccessed(vault.cloudMetadata.lastSync)}
-                  </div>
-                )}
               </a>
 
               <div className="dropdown dropdown-end">

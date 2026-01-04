@@ -4,6 +4,7 @@ import type { Vault } from '../../redux/actions/vault';
 import { getVaultProvider } from '../../redux/actions/vault';
 import type { RootState } from '../../redux/store';
 import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
+import { formatLastSync } from '../../utils/dateFormatter';
 
 interface CloudVaultIndicatorProps {
   vault: Vault;
@@ -21,23 +22,6 @@ export const CloudVaultIndicator = ({
 
   const isCloud = vault.storageType === 'cloud';
   const provider = getVaultProvider(vault, providers);
-
-  const formatLastSync = (dateStr?: string) => {
-    if (!dateStr) return t('vaultSelector.never');
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return t('vaultSelector.never');
-    if (diffMins < 60)
-      return `${diffMins} ${t('vaultSelector.minutesAgo', 'minutes ago')}`;
-    if (diffHours < 24)
-      return `${diffHours} ${t('vaultSelector.hoursAgo', 'hours ago')}`;
-    return `${diffDays} ${t('vaultSelector.daysAgo', 'days ago')}`;
-  };
 
   const indicatorContent = (
     <div className={`flex items-center gap-1 ${className}`}>
@@ -64,16 +48,6 @@ export const CloudVaultIndicator = ({
                 : provider.provider_type === StorageProviderType.LOCAL
                   ? 'Local'
                   : provider.name}
-            </span>
-          )}
-
-          {/* Last sync info */}
-          {vault.cloudMetadata?.lastSync && (
-            <span className="text-xs text-base-content/60 hidden sm:inline">
-              <span>{`${t('vaultSelector.lastSync')}:`}</span>
-              <span className="ml-1">
-                {formatLastSync(vault.cloudMetadata.lastSync)}
-              </span>
             </span>
           )}
         </>
@@ -114,7 +88,7 @@ export const CloudVaultIndicator = ({
         <div>
           <span>{`${t('vaultSelector.lastSync')}:`}</span>
           <span className="ml-1">
-            {formatLastSync(vault.cloudMetadata.lastSync)}
+            {formatLastSync(vault.cloudMetadata.lastSync, t)}
           </span>
         </div>
       )}
