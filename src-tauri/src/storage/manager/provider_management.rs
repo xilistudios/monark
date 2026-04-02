@@ -35,10 +35,16 @@ impl StorageManager {
         config.clone()
     }
 
-    pub async fn remove_provider(&self, name: &str) -> StorageResult<()> {
-        {
-            let config = self.config.read().await;
-            if config.default_provider == name {
+	pub async fn remove_provider(&self, name: &str) -> StorageResult<()> {
+		if name == "local" {
+			return Err(StorageError::invalid_configuration(
+				"Cannot remove the local provider",
+			));
+		}
+
+		{
+			let config = self.config.read().await;
+			if config.default_provider == name {
                 return Err(StorageError::invalid_configuration(
                     "Cannot remove the default provider",
                 ));

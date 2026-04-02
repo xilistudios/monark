@@ -8,16 +8,27 @@ import { useTranslation } from "react-i18next";
 
 interface ProviderStatusBadgeProps {
 	status: "idle" | "authenticating" | "authenticated" | "expired" | "error";
+	providerType?: string;
 	className?: string;
 }
 
 export const ProviderStatusBadge = ({
 	status,
+	providerType,
 	className = "",
 }: ProviderStatusBadgeProps) => {
 	const { t } = useTranslation("settings");
+	const isLocalProvider = providerType === "local";
 
 	const getStatusConfig = () => {
+		if (isLocalProvider) {
+			return {
+				badgeClass: "badge-ghost",
+				icon: "",
+				text: t("cloudStorage.local", "Local"),
+			};
+		}
+
 		switch (status) {
 			case "authenticated":
 				return {

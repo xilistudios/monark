@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { VaultManager } from "../services/vault";
 import { settingsStore } from "../store/settings";
 import preferences, {
 	loadPreferencesFromSettings,
@@ -8,7 +9,6 @@ import vault, {
 	loadVaultStateFromSettings,
 	restoreVaultState,
 } from "./actions/vault";
-import { VaultManager } from "../services/vault";
 
 export const store = configureStore({
 	reducer: {
@@ -25,6 +25,12 @@ export const initializeVaultState = async () => {
 	try {
 		await settingsStore.init();
 		const savedState = await loadVaultStateFromSettings();
+		if (
+			!savedState.defaultProvider &&
+			savedState.providers?.some((provider) => provider.name === "local")
+		) {
+			savedState.defaultProvider = "local";
+		}
 		if (Object.keys(savedState).length > 0) {
 			store.dispatch(restoreVaultState(savedState));
 		}

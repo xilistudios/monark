@@ -84,11 +84,8 @@ const persistVaultState = async (
 
 const normalizeProviderStatus = (
 	statusMap?: Record<string, string>,
+	providers: StorageProvider[] = [],
 ): VaultState["providerStatus"] => {
-	if (!statusMap) {
-		return {};
-	}
-
 	const allowedStatuses: VaultState["providerStatus"][string][] = [
 		"idle",
 		"authenticating",
@@ -97,17 +94,41 @@ const normalizeProviderStatus = (
 		"error",
 	];
 
-	return Object.entries(statusMap).reduce(
-		(acc, [providerId, status]) => {
-			if ((allowedStatuses as string[]).includes(status)) {
-				acc[providerId] = status as VaultState["providerStatus"][string];
+	return providers.reduce(
+		(acc, provider) => {
+			if (provider.provider_type === StorageProviderType.LOCAL) {
+				acc[provider.name] = "idle";
+				return acc;
+			}
+
+			const status = statusMap?.[provider.name];
+			if (status && (allowedStatuses as string[]).includes(status)) {
+				acc[provider.name] = status as VaultState["providerStatus"][string];
 			} else {
-				acc[providerId] = "idle";
+				acc[provider.name] = "idle";
 			}
 			return acc;
 		},
 		{} as VaultState["providerStatus"],
 	);
+};
+
+const resolveDefaultProvider = (
+	providers: StorageProvider[],
+	preferredProvider?: string | null,
+): string | null => {
+	if (providers.some((provider) => provider.name === "local")) {
+		return "local";
+	}
+
+	if (
+		preferredProvider &&
+		providers.some((provider) => provider.name === preferredProvider)
+	) {
+		return preferredProvider;
+	}
+
+	return providers[0]?.name ?? "local";
 };
 
 /**
@@ -181,8 +202,14 @@ export const loadVaultStateFromSettings = async (): Promise<
 			vaults: loadedVaults,
 			currentVaultId: null,
 			providers: persistedProviders,
-			defaultProvider: persistedState.defaultProvider || null,
-			providerStatus: normalizeProviderStatus(persistedState.providerStatus),
+			defaultProvider: resolveDefaultProvider(
+				persistedProviders,
+				persistedState.defaultProvider || null,
+			),
+			providerStatus: normalizeProviderStatus(
+				persistedState.providerStatus,
+				persistedProviders,
+			),
 		};
 	} catch (error) {
 		console.error("Error loading vaults from settings:", error);
@@ -310,16 +337,14 @@ export const vaultSlice = createSlice({
 			} else {
 				state.providers = [];
 			}
-			if (action.payload.defaultProvider) {
-				state.defaultProvider = action.payload.defaultProvider;
-			} else {
-				state.defaultProvider = null;
-			}
-			if (action.payload.providerStatus) {
-				state.providerStatus = action.payload.providerStatus;
-			} else {
-				state.providerStatus = {};
-			}
+			state.defaultProvider = resolveDefaultProvider(
+				state.providers,
+				action.payload.defaultProvider ?? state.defaultProvider,
+			);
+			state.providerStatus = normalizeProviderStatus(
+				action.payload.providerStatus,
+				state.providers,
+			);
 			if (action.payload.oauthState) {
 				state.oauthState = action.payload.oauthState;
 			} else {
@@ -451,6 +476,14 @@ export const vaultSlice = createSlice({
 		 */
 		setStorageProviders: (state, action: PayloadAction<StorageProvider[]>) => {
 			state.providers = action.payload;
+			state.defaultProvider = resolveDefaultProvider(
+				state.providers,
+				state.defaultProvider,
+			);
+			state.providerStatus = normalizeProviderStatus(
+				state.providerStatus,
+				state.providers,
+			);
 			void persistVaultState(
 				state.vaults,
 				state.providers,
@@ -477,6 +510,10 @@ export const vaultSlice = createSlice({
 			state.providers = state.providers.filter(
 				(p) => p.name !== action.payload,
 			);
+			state.defaultProvider = resolveDefaultProvider(
+				state.providers,
+				state.defaultProvider,
+			);
 			// Update vaults that use this provider
 			state.vaults.forEach((vault) => {
 				if (vault.providerId === action.payload) {
@@ -487,11 +524,10 @@ export const vaultSlice = createSlice({
 			});
 			// Clear provider status
 			delete state.providerStatus[action.payload];
-			// Update default provider if necessary
-			if (state.defaultProvider === action.payload) {
-				state.defaultProvider =
-					state.providers.length > 0 ? state.providers[0].name : null;
-			}
+			state.providerStatus = normalizeProviderStatus(
+				state.providerStatus,
+				state.providers,
+			);
 			void persistVaultState(
 				state.vaults,
 				state.providers,
@@ -526,7 +562,13 @@ export const vaultSlice = createSlice({
 					| "error";
 			}>,
 		) => {
-			state.providerStatus[action.payload.providerId] = action.payload.status;
+			const provider = state.providers.find(
+				(p) => p.name === action.payload.providerId,
+			);
+			state.providerStatus[action.payload.providerId] =
+				provider?.provider_type === StorageProviderType.LOCAL
+					? "idle"
+					: action.payload.status;
 			void persistVaultState(
 				state.vaults,
 				state.providers,
@@ -544,9 +586,14 @@ export const vaultSlice = createSlice({
 					(v) => v.id === cloudVault.id,
 				);
 				if (existingIndex !== -1) {
+					const existingVault = state.vaults[existingIndex];
 					state.vaults[existingIndex] = {
-						...state.vaults[existingIndex],
 						...cloudVault,
+						...existingVault,
+						cloudMetadata:
+							cloudVault.cloudMetadata ?? existingVault.cloudMetadata,
+						volatile: existingVault.volatile ?? cloudVault.volatile,
+						isLocked: existingVault.isLocked,
 					};
 				} else {
 					state.vaults.push(cloudVault);

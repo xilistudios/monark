@@ -115,6 +115,9 @@ export class CloudStorageCommands {
 	 * @returns Promise resolving to boolean indicating if provider is authenticated
 	 */
 	static async checkProviderAuthStatus(providerName: string): Promise<boolean> {
+		if (providerName === "local") {
+			return true;
+		}
 		try {
 			return await invoke<boolean>("check_provider_auth_status", {
 				providerName,
@@ -133,6 +136,12 @@ export class CloudStorageCommands {
 		authenticated: boolean;
 		token_expires_at?: string | null;
 	}> {
+		if (providerName === "local") {
+			return {
+				authenticated: true,
+				token_expires_at: null,
+			};
+		}
 		try {
 			return await invoke<{
 				authenticated: boolean;

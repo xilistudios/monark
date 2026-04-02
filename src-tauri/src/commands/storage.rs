@@ -141,6 +141,12 @@ pub async fn remove_provider(
     name: String,
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
+    if name == "local" {
+        return Err(CommandError::Io(
+            "Cannot remove the local provider".to_string(),
+        ));
+    }
+
     state
         .manager
         .remove_provider(&name)

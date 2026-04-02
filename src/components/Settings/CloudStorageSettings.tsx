@@ -118,6 +118,9 @@ export const CloudStorageSettings = () => {
 	};
 
 	const handleRemoveProvider = (providerName: string) => {
+		if (providerName === "local") {
+			return;
+		}
 		setConfirmRemove({ isOpen: true, providerName });
 	};
 
@@ -219,6 +222,8 @@ export const CloudStorageSettings = () => {
 					{providers.map((provider) => {
 						const status = (providerStatus[provider.name] ||
 							"idle") as ProviderStatus;
+						const isLocalProvider =
+							provider.provider_type === StorageProviderType.LOCAL;
 						const isExpired = status === "expired";
 						const isDefault = provider.name === defaultProvider;
 						const isAuthenticating = authenticatingProvider === provider.name;
@@ -234,6 +239,11 @@ export const CloudStorageSettings = () => {
 											<h3 className="text-lg font-semibold text-base-content truncate">
 												{provider.name}
 											</h3>
+											{isLocalProvider && (
+												<span className="px-2.5 py-1 bg-base-200 text-base-content text-xs font-medium rounded-full">
+													{t("cloudStorage.local", "Local")}
+												</span>
+											)}
 											{isDefault && (
 												<span className="px-2.5 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
 													{t("cloudStorage.defaultProvider", "Default")}
@@ -245,9 +255,11 @@ export const CloudStorageSettings = () => {
 											<span className="text-sm text-base-content/60">
 												{getProviderTypeLabel(provider.provider_type)}
 											</span>
-											<ProviderStatusBadge status={status} />
+											{!isLocalProvider && (
+												<ProviderStatusBadge status={status} />
+											)}
 										</div>
-										{isExpired && (
+										{!isLocalProvider && isExpired && (
 											<div className="mt-3 alert alert-warning py-2 px-3 text-sm">
 												<span>
 													{t(
@@ -260,7 +272,7 @@ export const CloudStorageSettings = () => {
 									</div>
 
 									<div className="flex flex-wrap gap-2 shrink-0">
-										{(status === "idle" || isExpired) && (
+										{!isLocalProvider && (status === "idle" || isExpired) && (
 											<button
 												className="px-3 py-2 bg-base-100 border border-base-300 text-base-content rounded-lg text-sm font-medium hover:bg-base-200 hover:border-base-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 												onClick={() => handleAuthenticate(provider)}
@@ -282,7 +294,8 @@ export const CloudStorageSettings = () => {
 											</button>
 										)}
 
-										{status === "authenticated" &&
+										{!isLocalProvider &&
+											status === "authenticated" &&
 											provider.provider_type ===
 												StorageProviderType.GOOGLE_DRIVE && (
 												<button
@@ -304,20 +317,22 @@ export const CloudStorageSettings = () => {
 												</button>
 											)}
 
-										{status === "authenticated" && !isDefault && (
-											<button
-												className="px-3 py-2 bg-base-100 border border-base-300 text-base-content rounded-lg text-sm font-medium hover:bg-base-200 hover:border-base-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-												onClick={() => handleSetAsDefault(provider.name)}
-												disabled={loading}
-											>
-												{t("cloudStorage.setAsDefault", "Set as Default")}
-											</button>
-										)}
+										{!isLocalProvider &&
+											status === "authenticated" &&
+											!isDefault && (
+												<button
+													className="px-3 py-2 bg-base-100 border border-base-300 text-base-content rounded-lg text-sm font-medium hover:bg-base-200 hover:border-base-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+													onClick={() => handleSetAsDefault(provider.name)}
+													disabled={loading}
+												>
+													{t("cloudStorage.setAsDefault", "Set as Default")}
+												</button>
+											)}
 
 										<button
 											className="px-3 py-2 bg-error/10 border border-error/20 text-error rounded-lg text-sm font-medium hover:bg-error/20 hover:border-error/30 focus:outline-none focus:ring-2 focus:ring-error/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 											onClick={() => handleRemoveProvider(provider.name)}
-											disabled={loading || isDefault}
+											disabled={loading || isDefault || isLocalProvider}
 										>
 											{t("cloudStorage.remove", "Remove")}
 										</button>
