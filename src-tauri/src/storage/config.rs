@@ -3,6 +3,17 @@ use super::{StorageProviderType, StorageResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+static STORAGE_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_storage_config_path(path: PathBuf) {
+    let _ = STORAGE_CONFIG_PATH.set(path);
+}
+
+pub fn reset_storage_config_path() {
+    let _ = STORAGE_CONFIG_PATH.get();
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
@@ -67,10 +78,12 @@ impl StorageConfig {
 
     /// Get the path to the config file
     fn config_file_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("monark")
-            .join("storage_config.json")
+        STORAGE_CONFIG_PATH.get().cloned().unwrap_or_else(|| {
+            dirs::data_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("monark")
+                .join("storage_config.json")
+        })
     }
 
     /// Load configuration from disk

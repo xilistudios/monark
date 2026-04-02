@@ -7,6 +7,8 @@ pub mod providers;
 mod tests;
 
 pub use config::{ProviderConfig, StorageConfig};
+pub use config::set_storage_config_path;
+pub use config::reset_storage_config_path;
 pub use error::{StorageError, StorageResult};
 pub use manager::StorageManager;
 pub use providers::{StorageProvider, StorageProviderType};
