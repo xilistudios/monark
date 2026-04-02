@@ -386,7 +386,7 @@ impl GoogleDriveProvider {
         Ok(headers)
     }
 
-    pub fn google_file_to_storage_file(&self, google_file: GoogleDriveFile) -> StorageFile {
+    fn google_file_to_storage_file(&self, google_file: GoogleDriveFile) -> StorageFile {
         let is_folder = google_file
             .mime_type
             .as_ref()

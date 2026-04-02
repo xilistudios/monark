@@ -1,5 +1,4 @@
 use commands::storage::StorageState;
-use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
 use tauri::path::BaseDirectory;
@@ -79,7 +78,8 @@ fn build_app() {
             let storage_manager = tauri::async_runtime::block_on(storage::init_storage_manager());
 
             #[cfg(desktop)]
-            app.handle()
+            let _ = app
+                .handle()
                 .plugin(tauri_plugin_updater::Builder::new().build());
 
             app.manage(StorageState {

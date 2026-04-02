@@ -2,7 +2,7 @@ use crate::crypto::constants::{KEY_LEN, NONCE_LEN};
 use crate::crypto::error::CryptoError;
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
-    Key as ChaChaKey, XChaCha20Poly1305, XNonce,
+    XChaCha20Poly1305,
 };
 
 // --- XChaCha20Poly1305 Encryption/Decryption ---
@@ -28,9 +28,14 @@ pub fn encrypt_xchacha20poly1305(
         });
     }
 
-    let key = ChaChaKey::from_slice(key_bytes);
-    let nonce = XNonce::from_slice(nonce_bytes);
-    let cipher = XChaCha20Poly1305::new(key);
+    let key_bytes: [u8; KEY_LEN] = key_bytes.try_into().expect("key length validated above");
+    let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes
+        .try_into()
+        .expect("nonce length validated above");
+
+    let key = key_bytes.into();
+    let nonce = (&nonce_bytes).into();
+    let cipher = XChaCha20Poly1305::new(&key);
 
     cipher.encrypt(nonce, plaintext).map_err(CryptoError::Aead)
 }
@@ -56,9 +61,14 @@ pub fn decrypt_xchacha20poly1305(
         });
     }
 
-    let key = ChaChaKey::from_slice(key_bytes);
-    let nonce = XNonce::from_slice(nonce_bytes);
-    let cipher = XChaCha20Poly1305::new(key);
+    let key_bytes: [u8; KEY_LEN] = key_bytes.try_into().expect("key length validated above");
+    let nonce_bytes: [u8; NONCE_LEN] = nonce_bytes
+        .try_into()
+        .expect("nonce length validated above");
+
+    let key = key_bytes.into();
+    let nonce = (&nonce_bytes).into();
+    let cipher = XChaCha20Poly1305::new(&key);
 
     cipher.decrypt(nonce, ciphertext).map_err(CryptoError::Aead)
 }
