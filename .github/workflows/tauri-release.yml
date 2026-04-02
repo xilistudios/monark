@@ -115,24 +115,21 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v5
         with:
           java-version: "17"
           distribution: temurin
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.2.12479018
+        uses: android-actions/setup-android@v3
 
-      - name: Configure Android environment
-        run: |
-          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" >> "$GITHUB_ENV"
-          for ndk in "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/ndk/*; do
-            echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
-            break
-          done
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+          link-to-sdk: true
 
       - name: Setup Android signing
         working-directory: src-tauri/gen/android
@@ -154,14 +151,13 @@ jobs:
           workspaces: |
             src-tauri -> target
 
-      - name: Build and upload Tauri artifacts
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri Project
+        uses: tauri-apps/tauri-action@ca517bcbe58fd7012408d7ddfaeff950428bdeb1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri v1 compatibility
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          # Tauri v2 (Required for signing updater artifacts)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -171,5 +167,6 @@ jobs:
             Automated release for Monark v__VERSION__. See attached assets for platform installers.
           releaseDraft: true
           prerelease: false
-          tauriScript: bun run tauri
+          args: --apk true --target aarch64
           mobile: android
+          tauriScript: bun tauri
