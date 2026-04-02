@@ -3,6 +3,5 @@
 
 #[tokio::main]
 async fn main() {
-    let storage_manager = monark_lib::storage::init_storage_manager().await;
-    monark_lib::run(storage_manager)
+    monark_lib::run();
 }

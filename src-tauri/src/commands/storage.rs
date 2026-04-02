@@ -52,6 +52,10 @@ pub struct CreateFolderRequestDto {
     pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
+fn effective_google_drive_redirect_uri(config: &GoogleDriveConfig) -> String {
+    config.redirect_uri.clone()
+}
+
 impl From<CreateFileRequestDto> for CreateFileRequest {
     fn from(dto: CreateFileRequestDto) -> Self {
         Self {
@@ -415,9 +419,11 @@ pub async fn handle_google_drive_oauth_callback(
         }
     };
 
+    let redirect_uri = effective_google_drive_redirect_uri(&gd_config);
+
     println!(
         "Exchanging code for tokens with redirect_uri: {}",
-        gd_config.redirect_uri
+        redirect_uri
     );
 
     // Exchange authorization code for tokens
@@ -426,7 +432,7 @@ pub async fn handle_google_drive_oauth_callback(
         ("client_id", gd_config.client_id.as_str()),
         ("client_secret", gd_config.client_secret.as_str()),
         ("code", request.code.as_str()),
-        ("redirect_uri", gd_config.redirect_uri.as_str()),
+        ("redirect_uri", redirect_uri.as_str()),
         ("grant_type", "authorization_code"),
     ];
 
@@ -476,7 +482,7 @@ pub async fn handle_google_drive_oauth_callback(
     let new_config = GoogleDriveConfig {
         client_id: gd_config.client_id,
         client_secret: gd_config.client_secret,
-        redirect_uri: gd_config.redirect_uri,
+        redirect_uri,
         access_token: Some(token_response.access_token),
         refresh_token: token_response.refresh_token,
         token_expires_at: Some(

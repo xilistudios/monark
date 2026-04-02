@@ -2,8 +2,7 @@ use commands::storage::StorageState;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
-#[cfg(mobile)]
-use tokio::runtime::Builder;
+use tauri::path::BaseDirectory;
 
 pub mod commands;
 pub mod crypto;
@@ -13,59 +12,57 @@ pub mod state;
 pub mod storage;
 pub mod vault;
 
-pub fn run(storage_manager: Arc<storage::StorageManager>) {
-    build_app(storage_manager);
+pub fn run() {
+    build_app();
 }
 
 #[cfg(mobile)]
 #[tauri::mobile_entry_point]
 pub fn mobile_main() {
-    let runtime = Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to start Tokio runtime");
-    // Tauri mobile entry point cannot be async, so we bootstrap storage before launching the app.
-    let storage_manager = runtime.block_on(storage::init_storage_manager());
-    build_app(storage_manager);
+    build_app();
 }
 
-fn build_app(storage_manager: Arc<storage::StorageManager>) {
+fn build_app() {
     let vault_state_manager = state::VaultStateManager::new();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            // Prevent multiple instances and focus the existing window for deep-link scenarios
-            println!("Second instance attempted, focusing existing window");
+    let builder = tauri::Builder::default();
 
-            // Forward args to frontend for deep-link handling
-            let _ = app.emit("single-instance-args", args);
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        // Prevent multiple instances and focus the existing window for deep-link scenarios
+        println!("Second instance attempted, focusing existing window");
 
-            // Try to focus the main window or any existing window
-            if let Some(window) = app.get_webview_window("main") {
+        // Forward args to frontend for deep-link handling
+        let _ = app.emit("single-instance-args", args);
+
+        // Try to focus the main window or any existing window
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            if let Err(e) = window.set_focus() {
+                println!("Failed to focus main window: {}", e);
+            }
+        } else if let Some(window) = app.get_webview_window("core") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            if let Err(e) = window.set_focus() {
+                println!("Failed to focus core window: {}", e);
+            }
+        } else {
+            // Fallback: try to focus the first available window
+            if let Some(window) = app.webview_windows().values().next() {
                 let _ = window.unminimize();
                 let _ = window.show();
                 if let Err(e) = window.set_focus() {
-                    println!("Failed to focus main window: {}", e);
-                }
-            } else if let Some(window) = app.get_webview_window("core") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                if let Err(e) = window.set_focus() {
-                    println!("Failed to focus core window: {}", e);
+                    println!("Failed to focus fallback window: {}", e);
                 }
             } else {
-                // Fallback: try to focus the first available window
-                if let Some(window) = app.webview_windows().values().next() {
-                    let _ = window.unminimize();
-                    let _ = window.show();
-                    if let Err(e) = window.set_focus() {
-                        println!("Failed to focus fallback window: {}", e);
-                    }
-                } else {
-                    println!("No windows found to focus");
-                }
+                println!("No windows found to focus");
             }
-        }))
+        }
+    }));
+
+    builder
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -74,10 +71,23 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(StorageState {
-            manager: storage_manager,
+        .setup(move |app| {
+            let config_path = app
+                .path()
+                .resolve("storage_config.json", BaseDirectory::AppData)?;
+            storage::set_storage_config_path(config_path);
+            let storage_manager = tauri::async_runtime::block_on(storage::init_storage_manager());
+
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build());
+
+            app.manage(StorageState {
+                manager: storage_manager,
+            });
+            app.manage(state::ManagedVaultState::new(vault_state_manager));
+            Ok(())
         })
-        .manage(state::ManagedVaultState::new(vault_state_manager))
         .invoke_handler(tauri::generate_handler![
             vault::lifecycle::write_vault,
             vault::lifecycle::read_vault,
@@ -110,12 +120,6 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
             state::load_vault_state,
             state::save_vault_state,
         ])
-        .setup(|app| {
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build());
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
