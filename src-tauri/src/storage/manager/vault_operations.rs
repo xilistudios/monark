@@ -21,7 +21,7 @@ impl StorageManager {
             provider_name_str
         );
 
-        let actual_provider_name = self.map_provider_name(&provider_name_str);
+        let actual_provider_name = self.resolve_provider_key(&provider_name_str).await;
 
         // Check if provider is local - local storage doesn't need a vault folder
         {
@@ -171,7 +171,7 @@ impl StorageManager {
             provider_name_str
         );
 
-        let actual_provider_name = self.map_provider_name(&provider_name_str);
+        let actual_provider_name = self.resolve_provider_key(&provider_name_str).await;
 
         let mut providers = self.providers.write().await;
         if let Some(provider) = providers.get_mut(&actual_provider_name) {

@@ -13,10 +13,10 @@ impl StorageManager {
         provider_config: ProviderConfig,
     ) -> StorageResult<()> {
         let provider = self.create_provider_from_config(&provider_config)?;
+        let actual_name = self.resolve_provider_key(&name).await;
 
         {
             let mut providers = self.providers.write().await;
-            let actual_name = self.map_provider_name(&name);
             providers.insert(actual_name, provider);
         }
 
@@ -51,7 +51,7 @@ impl StorageManager {
             }
         }
 
-        let actual_name = self.map_provider_name(name);
+		let actual_name = self.resolve_provider_key(name).await;
 
         {
             let mut providers = self.providers.write().await;
@@ -98,14 +98,14 @@ impl StorageManager {
         &self,
         name: Option<String>,
     ) -> StorageResult<Arc<dyn StorageProvider>> {
-        let provider_name = if let Some(name) = name {
-            name
-        } else {
-            let config = self.config.read().await;
-            config.default_provider.clone()
-        };
+		let provider_name = if let Some(name) = name {
+			name
+		} else {
+			let config = self.config.read().await;
+			config.default_provider.clone()
+		};
 
-        let actual_provider_name = self.map_provider_name(&provider_name);
+		let actual_provider_name = self.resolve_provider_key(&provider_name).await;
 
         let providers = self.providers.read().await;
 
@@ -126,18 +126,18 @@ impl StorageManager {
         &self,
         name: Option<String>,
     ) -> StorageResult<Box<dyn StorageProvider>> {
-        let provider_name = if let Some(name) = name {
+		let provider_name = if let Some(name) = name {
             name
         } else {
             let config = self.config.read().await;
             config.default_provider.clone()
-        };
+		};
 
-        let config = self.config.read().await;
-        if let Some(provider_config) = config.get_provider_config(&provider_name) {
-            let provider = self.create_provider_from_config(provider_config)?;
-            return Ok(provider);
-        }
+		let config = self.config.read().await;
+		if let Some(provider_config) = config.get_provider_config(&provider_name) {
+			let provider = self.create_provider_from_config(provider_config)?;
+			return Ok(provider);
+		}
 
         Err(StorageError::provider_not_supported(provider_name))
     }
@@ -186,9 +186,9 @@ impl StorageManager {
             new_config.access_token.is_some()
         );
 
-        {
-            let mut config = self.config.write().await;
-            if let Some(provider_config) = config.providers.get_mut(provider_name) {
+		{
+			let mut config = self.config.write().await;
+			if let Some(provider_config) = config.providers.get_mut(provider_name) {
                 if let ProviderConfig::GoogleDrive { config } = provider_config {
                     println!("Updating GoogleDrive config in memory");
                     *config = new_config.clone();
@@ -197,23 +197,23 @@ impl StorageManager {
                         "Provider is not Google Drive",
                     ));
                 }
-            } else {
-                return Err(StorageError::provider_not_supported(
-                    provider_name.to_string(),
-                ));
-            }
+			} else {
+				return Err(StorageError::provider_not_supported(
+					provider_name.to_string(),
+				));
+			}
             println!("Saving config to disk...");
             config.save()?;
             println!("Config saved successfully");
         }
 
-        {
-            let mut providers = self.providers.write().await;
-            let actual_name = self.map_provider_name(provider_name);
-            if let Some(provider) = providers.get_mut(&actual_name) {
-                *provider = Box::new(GoogleDriveProvider::new(new_config));
-            }
-        }
+		{
+			let mut providers = self.providers.write().await;
+			let actual_name = self.resolve_provider_key(provider_name).await;
+			if let Some(provider) = providers.get_mut(&actual_name) {
+				*provider = Box::new(GoogleDriveProvider::new(new_config));
+			}
+		}
 
         Ok(())
     }
@@ -223,10 +223,10 @@ impl StorageManager {
         &self,
         provider_name: &str,
     ) -> StorageResult<GoogleDriveConfig> {
-        let _actual_provider_name = self.map_provider_name(provider_name);
+        let actual_provider_name = self.resolve_provider_key(provider_name).await;
 
         // Get refresh lock to prevent concurrent refreshes
-        let refresh_lock = self.get_refresh_lock(provider_name).await;
+        let refresh_lock = self.get_refresh_lock(&actual_provider_name).await;
         let _guard = refresh_lock.lock().await;
 
         // Get current config.
@@ -236,8 +236,8 @@ impl StorageManager {
         let gd_config = {
             let config = self.config.read().await;
             let provider_config = config
-                .get_provider_config(provider_name)
-                .ok_or_else(|| StorageError::provider_not_supported(provider_name.to_string()))?;
+                .get_provider_config(&actual_provider_name)
+                .ok_or_else(|| StorageError::provider_not_supported(actual_provider_name.clone()))?;
 
             match provider_config {
                 ProviderConfig::GoogleDrive { config } => config.clone(),
@@ -257,7 +257,7 @@ impl StorageManager {
                 GoogleDriveProvider::refresh_access_token_for_config(gd_config).await?;
 
             // Update the configuration
-            self.update_google_drive_config(provider_name, updated_config.clone())
+            self.update_google_drive_config(&actual_provider_name, updated_config.clone())
                 .await?;
 
             Ok(updated_config)
@@ -271,10 +271,11 @@ impl StorageManager {
         &self,
         provider_name: &str,
     ) -> StorageResult<(bool, Option<DateTime<Utc>>)> {
+        let actual_provider_name = self.resolve_provider_key(provider_name).await;
         let config = self.config.read().await;
         let provider_config = config
-            .get_provider_config(provider_name)
-            .ok_or_else(|| StorageError::provider_not_supported(provider_name.to_string()))?;
+            .get_provider_config(&actual_provider_name)
+            .ok_or_else(|| StorageError::provider_not_supported(actual_provider_name))?;
 
         match provider_config {
             ProviderConfig::GoogleDrive { config } => {

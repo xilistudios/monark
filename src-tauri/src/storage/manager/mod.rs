@@ -31,13 +31,30 @@ impl std::fmt::Debug for StorageManager {
 }
 
 impl StorageManager {
-    /// Helper function to handle provider name mapping (e.g., "Drive" -> "google_drive")
-    fn map_provider_name(&self, provider_name: &str) -> String {
-        if provider_name == "Drive" {
+    fn normalize_provider_name(provider_name: &str) -> String {
+        let normalized = provider_name.trim().to_lowercase().replace([' ', '-'], "_");
+
+        if normalized == "drive" || normalized == "google_drive" {
             "google_drive".to_string()
         } else {
             provider_name.to_string()
         }
+    }
+
+    /// Resolve a provider alias to the stored config key when possible.
+    pub async fn resolve_provider_key(&self, provider_name: &str) -> String {
+        let config = self.config.read().await;
+        if config.providers.contains_key(provider_name) {
+            return provider_name.to_string();
+        }
+
+        let normalized = Self::normalize_provider_name(provider_name);
+        config
+            .providers
+            .keys()
+            .find(|name| Self::normalize_provider_name(name) == normalized)
+            .cloned()
+            .unwrap_or_else(|| provider_name.to_string())
     }
 
     pub async fn new(config: StorageConfig) -> StorageResult<Self> {
@@ -56,7 +73,7 @@ impl StorageManager {
 
     /// Get or create a refresh lock for a specific provider
     pub async fn get_refresh_lock(&self, provider_name: &str) -> Arc<Mutex<()>> {
-        let actual_provider_name = self.map_provider_name(provider_name);
+        let actual_provider_name = self.resolve_provider_key(provider_name).await;
 
         let mut locks = self.refresh_locks.write().await;
         if !locks.contains_key(&actual_provider_name) {
@@ -72,8 +89,7 @@ impl StorageManager {
 
         for (name, provider_config) in &config.providers {
             let provider = self.create_provider_from_config(provider_config)?;
-            let actual_name = self.map_provider_name(name.as_str());
-            providers.insert(actual_name, provider);
+            providers.insert(name.clone(), provider);
         }
 
         Ok(())

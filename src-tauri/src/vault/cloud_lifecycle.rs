@@ -79,7 +79,9 @@ fn load_cached_vault(provider: &str, vault_id: &str) -> Result<Vec<u8>, CommandE
 }
 
 fn map_provider_name_for_cache(provider_name: &str) -> String {
-    if provider_name == "Drive" {
+    let normalized = provider_name.trim().to_lowercase().replace([' ', '-'], "_");
+
+    if normalized == "drive" || normalized == "google_drive" {
         "google_drive".to_string()
     } else {
         provider_name.to_string()
