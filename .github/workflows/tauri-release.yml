@@ -167,6 +167,6 @@ jobs:
             Automated release for Monark v__VERSION__. See attached assets for platform installers.
           releaseDraft: true
           prerelease: false
-          args: --apk true --target aarch64
+          args: --apk --target aarch64
           mobile: android
           tauriScript: bun tauri
