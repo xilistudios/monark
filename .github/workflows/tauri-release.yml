@@ -124,11 +124,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            platforms;android-34
-            build-tools;34.0.0
-            ndk;27.0.12077973
+          packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.2.12479018
 
       - name: Configure Android environment
         run: |
