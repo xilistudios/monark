@@ -1,912 +1,1103 @@
-import type { Vault } from "../redux/actions/vault"
-import type { Entry } from "../interfaces/vault.interface"
 import type {
-  CloudVaultMetadata,
-  ProviderConfig,
-} from '../interfaces/cloud-storage.interface';
-import { StorageProviderType } from "../interfaces/cloud-storage.interface"
-import VaultCommands from "./commands"
-import {CloudStorageCommands} from "./cloudStorage"
-import type { AppDispatch } from "../redux/store"
-import type { RootState } from "../redux/store"
+	CloudVaultMetadata,
+	ProviderConfig,
+} from "../interfaces/cloud-storage.interface";
+import { StorageProviderType } from "../interfaces/cloud-storage.interface";
+import type { Entry, VaultContent } from "../interfaces/vault.interface";
+import { findEntryByPath, isGroupEntry } from "../interfaces/vault.interface";
+import type { Vault } from "../redux/actions/vault";
 import {
-  setVaultCredential,
-  setVaultEntries,
-  lockVault,
-  syncCloudVault,
-  setStorageProviders,
-  removeStorageProvider,
-  setDefaultStorageProvider,
-  setProviderStatus,
-  setCloudVaults,
-  addVault,
-  setVaultLocked,
-} from '../redux/actions/vault';
-import { findEntryByPath, isGroupEntry } from "../interfaces/vault.interface"
+	addVault,
+	lockVault,
+	removeStorageProvider,
+	setCloudVaults,
+	setDefaultStorageProvider,
+	setOAuthState,
+	setProviderStatus,
+	setStorageProviders,
+	setVaultCredential,
+	setVaultEntries,
+	setVaultLocked,
+	syncCloudVault,
+} from "../redux/actions/vault";
+import type { AppDispatch, RootState } from "../redux/store";
+import { CloudStorageCommands } from "./cloudStorage";
+import VaultCommands from "./commands";
+
+const isAuthRelatedCloudError = (error: unknown): boolean => {
+	const message =
+		(error as any)?.message ||
+		(error instanceof Error ? error.message : String(error));
+
+	return /token.*expired|expired.*token|access token has expired|authentication failed|unauthorized|invalid credentials|reauthenticate/i.test(
+		message,
+	);
+};
+
+const isTokenExpired = (tokenExpiresAt?: string | null): boolean => {
+	if (!tokenExpiresAt) {
+		return false;
+	}
+
+	const expiresAt = new Date(tokenExpiresAt).getTime();
+	return Number.isNaN(expiresAt) ? false : Date.now() >= expiresAt;
+};
 
 export class VaultInstance {
-  public readonly id: string;
-  private vault: Vault;
-  private dispatch: AppDispatch;
-  private getState: () => RootState;
+	public readonly id: string;
+	private vault: Vault;
+	private dispatch: AppDispatch;
+	private getState: () => RootState;
 
-  constructor(vault: Vault, dispatch: AppDispatch, getState: () => RootState) {
-    this.id = vault.id;
-    this.vault = vault;
-    this.dispatch = dispatch;
-    this.getState = getState;
-  }
+	constructor(vault: Vault, dispatch: AppDispatch, getState: () => RootState) {
+		this.id = vault.id;
+		this.vault = vault;
+		this.dispatch = dispatch;
+		this.getState = getState;
+	}
 
-  /**
-   * Unlocks the vault using the provided password
-   * Supports both local and cloud vaults
-   * @param password - The password to unlock the vault
-   * @throws Error if unlock fails
-   */
-  async unlock(password: string): Promise<void> {
-    try {
-      let vaultContent;
+	private async promptProviderReauth(providerName: string): Promise<void> {
+		const state = this.getState();
+		const oauthState = state.vault.oauthState;
+		const currentStatus = state.vault.providerStatus[providerName];
 
-      // Check if this is a cloud vault
-      if (this.vault.storageType === 'cloud' && this.vault.providerId) {
-        // Use cloud storage commands for cloud vaults
-        const cloudFileId = this.vault.cloudMetadata?.fileId || this.vault.path;
-        // Call with the object form to include the password for decryption
-        vaultContent = await CloudStorageCommands.readCloudVault({
-          vaultId: cloudFileId,
-          password: password,
-          providerName: this.vault.providerId,
-        });
-      } else {
-        // Use local vault commands for local vaults
-        vaultContent = await VaultCommands.read(this.vault.path, password);
-      }
+		if (oauthState.isOpen && oauthState.providerName === providerName) {
+			return;
+		}
 
-      // Dispatch setVaultCredential with the provided password
-      this.dispatch(
-        setVaultCredential({ vaultId: this.id, credential: password })
-      );
+		if (currentStatus === "authenticating") {
+			return;
+		}
 
-      // Dispatch setVaultEntries with the entries from the vault content
-      this.dispatch(
-        setVaultEntries({ vaultId: this.id, entries: vaultContent.entries })
-      );
+		this.dispatch(
+			setProviderStatus({ providerId: providerName, status: "expired" }),
+		);
 
-      this.dispatch(
-        setVaultLocked({ vaultId: this.id, isLocked: false })
-      );
+		try {
+			const { url, state: oauthStateValue } =
+				await CloudStorageCommands.getGoogleDriveOAuthUrl(providerName);
+			this.dispatch(
+				setOAuthState({
+					providerName,
+					authUrl: url,
+					state: oauthStateValue,
+					isOpen: true,
+				}),
+			);
+		} catch (error) {
+			console.warn(`Failed to start re-auth flow for ${providerName}:`, error);
+		}
+	}
 
-      this.vault = {
-        ...this.vault,
-        isLocked: false,
-      };
+	private async getProviderAuthState(
+		providerName: string,
+	): Promise<{ authenticated: boolean; expired: boolean }> {
+		try {
+			const authInfo =
+				await CloudStorageCommands.getProviderAuthInfo(providerName);
+			return {
+				authenticated: authInfo.authenticated,
+				expired:
+					Boolean(authInfo.token_expires_at) &&
+					isTokenExpired(authInfo.token_expires_at),
+			};
+		} catch (error) {
+			console.warn(
+				`Failed to check auth info for provider ${providerName}:`,
+				error,
+			);
+			return { authenticated: false, expired: true };
+		}
+	}
 
-      // Note: Setting isLocked = false requires a reducer action that works by vault ID
-      // This would typically be added to the vault slice reducers
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to unlock vault: ${errorMessage}`);
-    }
-  }
+	async startProviderReauth(providerName: string): Promise<void> {
+		await this.promptProviderReauth(providerName);
+	}
 
-  /**
-   * Locks the vault and clears sensitive data from memory
-   */
-  lock(): void {
-    // Dispatch an action to clear the vault's volatile data (entries, credential, etc.)
-    this.dispatch(lockVault(this.id));
-    this.vault = {
-      ...this.vault,
-      isLocked: true,
-    };
-  }
+	/**
+	 * Unlocks the vault using the provided password
+	 * Supports both local and cloud vaults
+	 * @param password - The password to unlock the vault
+	 * @throws Error if unlock fails
+	 */
+	async unlock(password: string): Promise<void> {
+		try {
+			let vaultContent: VaultContent;
 
-  /**
-   * Adds a new entry to the vault at the specified path
-   * @param path - Array representing the path where to add the entry
-   * @param newEntry - The entry to add
-   * @throws Error if parent group not found or save fails
-   */
-  async addEntry(path: string[], newEntry: Entry): Promise<void> {
-    // Get the current entries from the Redux store using getState()
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
-    const currentEntries = vault?.volatile?.entries ?? [];
+			// Check if this is a cloud vault
+			if (this.vault.storageType === "cloud" && this.vault.providerId) {
+				const authState = await this.getProviderAuthState(
+					this.vault.providerId,
+				);
+				if (!authState.authenticated || authState.expired) {
+					await this.promptProviderReauth(this.vault.providerId);
+				}
 
-    // Create a deep copy of the current entries
-    const newEntries = structuredClone(currentEntries);
+				// Use cloud storage commands for cloud vaults
+				const cloudFileId = this.vault.cloudMetadata?.fileId || this.vault.path;
+				// Call with the object form to include the password for decryption
+				vaultContent = await CloudStorageCommands.readCloudVault({
+					vaultId: cloudFileId,
+					password: password,
+					providerName: this.vault.providerId,
+				});
+			} else {
+				// Use local vault commands for local vaults
+				vaultContent = await VaultCommands.read(this.vault.path, password);
+			}
 
-    if (path.length === 0) {
-      // Add to root level
-      newEntries.push(newEntry);
-    } else {
-      // Find the parent group using the path directly
-      const parentEntry = findEntryByPath(newEntries, path);
+			// Dispatch setVaultCredential with the provided password
+			this.dispatch(
+				setVaultCredential({ vaultId: this.id, credential: password }),
+			);
 
-      if (parentEntry && isGroupEntry(parentEntry)) {
-        // Ensure children array exists
-        if (!parentEntry.children) {
-          parentEntry.children = [];
-        }
-        // Add the new entry to the parent's children
-        parentEntry.children.push(newEntry);
-      } else {
-        throw new Error(`Parent group not found at path: ${path.join('/')}`);
-      }
-    }
+			// Dispatch setVaultEntries with the entries from the vault content
+			this.dispatch(
+				setVaultEntries({ vaultId: this.id, entries: vaultContent.entries }),
+			);
 
-    // Dispatch setVaultEntries with the new, updated entries
-    this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
+			this.dispatch(setVaultLocked({ vaultId: this.id, isLocked: false }));
 
-    // Call the private _saveVault() method to persist the changes
-    await this._saveVault();
-  }
+			this.vault = {
+				...this.vault,
+				isLocked: false,
+			};
 
-  /**
-   * Adds multiple entries to the vault in bulk for better performance
-   * @param entriesWithPaths Array of objects containing path and entry data
-   */
-  async addEntries(
-    entriesWithPaths: Array<{ path: string[]; entry: Entry }>
-  ): Promise<void> {
-    if (entriesWithPaths.length === 0) {
-      return;
-    }
+			// Note: Setting isLocked = false requires a reducer action that works by vault ID
+			// This would typically be added to the vault slice reducers
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to unlock vault: ${errorMessage}`);
+		}
+	}
 
-    // Get the current entries from the Redux store using getState()
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
-    const currentEntries = vault?.volatile?.entries ?? [];
+	/**
+	 * Locks the vault and clears sensitive data from memory
+	 */
+	lock(): void {
+		// Dispatch an action to clear the vault's volatile data (entries, credential, etc.)
+		this.dispatch(lockVault(this.id));
+		this.vault = {
+			...this.vault,
+			isLocked: true,
+		};
+	}
 
-    // Create a deep copy of the current entries
-    const newEntries = structuredClone(currentEntries);
+	/**
+	 * Adds a new entry to the vault at the specified path
+	 * @param path - Array representing the path where to add the entry
+	 * @param newEntry - The entry to add
+	 * @throws Error if parent group not found or save fails
+	 */
+	async addEntry(path: string[], newEntry: Entry): Promise<void> {
+		// Get the current entries from the Redux store using getState()
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+		const currentEntries = vault?.volatile?.entries ?? [];
 
-    // Process all entries in a single operation
-    for (const { path, entry } of entriesWithPaths) {
-      if (path.length === 0) {
-        // Add to root level
-        newEntries.push(entry);
-      } else {
-        // Find the parent group using the path directly
-        const parentEntry = findEntryByPath(newEntries, path);
+		// Create a deep copy of the current entries
+		const newEntries = structuredClone(currentEntries);
 
-        if (parentEntry && isGroupEntry(parentEntry)) {
-          // Ensure children array exists
-          if (!parentEntry.children) {
-            parentEntry.children = [];
-          }
-          // Add the new entry to the parent's children
-          parentEntry.children.push(entry);
-        } else {
-          throw new Error(`Parent group not found at path: ${path.join('/')}`);
-        }
-      }
-    }
+		if (path.length === 0) {
+			// Add to root level
+			newEntries.push(newEntry);
+		} else {
+			// Find the parent group using the path directly
+			const parentEntry = findEntryByPath(newEntries, path);
 
-    // Dispatch setVaultEntries once with all new entries
-    this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
+			if (parentEntry && isGroupEntry(parentEntry)) {
+				// Ensure children array exists
+				if (!parentEntry.children) {
+					parentEntry.children = [];
+				}
+				// Add the new entry to the parent's children
+				parentEntry.children.push(newEntry);
+			} else {
+				throw new Error(`Parent group not found at path: ${path.join("/")}`);
+			}
+		}
 
-    // Call the private _saveVault() method once to persist all changes
-    await this._saveVault();
-  }
+		// Dispatch setVaultEntries with the new, updated entries
+		this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
 
-  /**
-   * Updates an existing entry at the specified path
-   * @param path - Array representing the path to the entry
-   * @param updates - Partial entry data to update
-   * @throws Error if entry not found or save fails
-   */
-  async updateEntry(path: string[], updates: Partial<Entry>): Promise<void> {
-    // Get the current entries from the Redux store using getState()
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
-    const currentEntries = vault?.volatile?.entries ?? [];
+		// Call the private _saveVault() method to persist the changes
+		await this._saveVault();
+	}
 
-    // Create a deep copy of the current entries
-    const newEntries = structuredClone(currentEntries);
+	/**
+	 * Adds multiple entries to the vault in bulk for better performance
+	 * @param entriesWithPaths Array of objects containing path and entry data
+	 */
+	async addEntries(
+		entriesWithPaths: Array<{ path: string[]; entry: Entry }>,
+	): Promise<void> {
+		if (entriesWithPaths.length === 0) {
+			return;
+		}
 
-    // Find the target entry
-    const targetEntry = findEntryByPath(newEntries, path);
+		// Get the current entries from the Redux store using getState()
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+		const currentEntries = vault?.volatile?.entries ?? [];
 
-    if (targetEntry) {
-      // Update the entry properties
-      Object.assign(targetEntry, updates, {
-        updated_at: new Date().toISOString(),
-      });
+		// Create a deep copy of the current entries
+		const newEntries = structuredClone(currentEntries);
 
-      // Dispatch setVaultEntries with the new, updated entries
-      this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
+		// Process all entries in a single operation
+		for (const { path, entry } of entriesWithPaths) {
+			if (path.length === 0) {
+				// Add to root level
+				newEntries.push(entry);
+			} else {
+				// Find the parent group using the path directly
+				const parentEntry = findEntryByPath(newEntries, path);
 
-      // Call the private _saveVault() method to persist the changes
-      await this._saveVault();
-    } else {
-      throw new Error(`Entry not found at path: ${path.join('/')}`);
-    }
-  }
+				if (parentEntry && isGroupEntry(parentEntry)) {
+					// Ensure children array exists
+					if (!parentEntry.children) {
+						parentEntry.children = [];
+					}
+					// Add the new entry to the parent's children
+					parentEntry.children.push(entry);
+				} else {
+					throw new Error(`Parent group not found at path: ${path.join("/")}`);
+				}
+			}
+		}
 
-  /**
-   * Deletes an entry at the specified path
-   * @param path - Array representing the path to the entry to delete
-   * @throws Error if entry not found or save fails
-   */
-  async deleteEntry(path: string[]): Promise<void> {
-    // Get the current entries from the Redux store using getState()
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
-    const currentEntries = vault?.volatile?.entries ?? [];
+		// Dispatch setVaultEntries once with all new entries
+		this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
 
-    // Create a deep copy of the current entries
-    const newEntries = structuredClone(currentEntries);
+		// Call the private _saveVault() method once to persist all changes
+		await this._saveVault();
+	}
 
-    if (path.length === 0) {
-      throw new Error('Cannot delete root entry');
-    }
+	/**
+	 * Updates an existing entry at the specified path
+	 * @param path - Array representing the path to the entry
+	 * @param updates - Partial entry data to update
+	 * @throws Error if entry not found or save fails
+	 */
+	async updateEntry(path: string[], updates: Partial<Entry>): Promise<void> {
+		// Get the current entries from the Redux store using getState()
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+		const currentEntries = vault?.volatile?.entries ?? [];
 
-    const entryId = path[path.length - 1];
-    const parentPath = path.slice(0, -1);
+		// Create a deep copy of the current entries
+		const newEntries = structuredClone(currentEntries);
 
-    if (parentPath.length === 0) {
-      // Delete from root level
-      const filteredEntries = newEntries.filter(
-        (entry) => entry.id !== entryId
-      );
-      this.dispatch(
-        setVaultEntries({ vaultId: this.id, entries: filteredEntries })
-      );
-    } else {
-      // Find the parent group
-      const parentEntry = findEntryByPath(newEntries, parentPath);
+		// Find the target entry
+		const targetEntry = findEntryByPath(newEntries, path);
 
-      if (parentEntry && isGroupEntry(parentEntry)) {
-        // Filter the parent's children to remove the entry
-        parentEntry.children = parentEntry.children.filter(
-          (child) => child.id !== entryId
-        );
+		if (targetEntry) {
+			// Update the entry properties
+			Object.assign(targetEntry, updates, {
+				updated_at: new Date().toISOString(),
+			});
 
-        // Dispatch setVaultEntries with the new, updated entries
-        this.dispatch(
-          setVaultEntries({ vaultId: this.id, entries: newEntries })
-        );
-      } else {
-        throw new Error(
-          `Parent group not found at path: ${parentPath.join('/')}`
-        );
-      }
-    }
+			// Dispatch setVaultEntries with the new, updated entries
+			this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
 
-    // Call the private _saveVault() method to persist the changes
-    await this._saveVault();
-  }
+			// Call the private _saveVault() method to persist the changes
+			await this._saveVault();
+		} else {
+			throw new Error(`Entry not found at path: ${path.join("/")}`);
+		}
+	}
 
-  /**
-   * Saves the vault to storage (local or cloud)
-   * @private
-   * @throws Error if save fails
-   */
-  private async _saveVault(): Promise<void> {
-    // Get the vault's path and credential from the Redux store
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
+	/**
+	 * Deletes an entry at the specified path
+	 * @param path - Array representing the path to the entry to delete
+	 * @throws Error if entry not found or save fails
+	 */
+	async deleteEntry(path: string[]): Promise<void> {
+		// Get the current entries from the Redux store using getState()
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+		const currentEntries = vault?.volatile?.entries ?? [];
 
-    if (!vault?.volatile?.credential) {
-      throw new Error('No credential available for vault');
-    }
+		// Create a deep copy of the current entries
+		const newEntries = structuredClone(currentEntries);
 
-    const password = vault.volatile.credential;
-    const entries = vault.volatile.entries ?? [];
+		if (path.length === 0) {
+			throw new Error("Cannot delete root entry");
+		}
 
-    // Create the Vault object that matches the backend Rust struct
-    const vaultContent = {
-      updated_at: new Date().toISOString(),
-      hmac: '',
-      entries: entries,
-    };
+		const entryId = path[path.length - 1];
+		const parentPath = path.slice(0, -1);
 
-    // Check if this is a cloud vault
-    if (vault.storageType === 'cloud' && vault.providerId) {
-      // Use cloud storage commands for cloud vaults
-      // Pass the vault ID (stored in vault.path) to update the existing vault
-      const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
-      await CloudStorageCommands.writeCloudVault({
-        vaultId: cloudFileId,
-        vaultName: vault.name,
-        password: password,
-        vaultContent: vaultContent, // Already in snake_case format
-        providerName: vault.providerId,
-      } as any);
+		if (parentPath.length === 0) {
+			// Delete from root level
+			const filteredEntries = newEntries.filter(
+				(entry) => entry.id !== entryId,
+			);
+			this.dispatch(
+				setVaultEntries({ vaultId: this.id, entries: filteredEntries }),
+			);
+		} else {
+			// Find the parent group
+			const parentEntry = findEntryByPath(newEntries, parentPath);
 
-      // Update sync timestamp
-      this.dispatch(syncCloudVault(this.id));
-    } else {
-      // Use local vault commands for local vaults
-      await VaultCommands.write(vault.path, password, vaultContent);
-    }
-  }
+			if (parentEntry && isGroupEntry(parentEntry)) {
+				// Filter the parent's children to remove the entry
+				parentEntry.children = parentEntry.children.filter(
+					(child) => child.id !== entryId,
+				);
 
-  /**
-   * Forces a sync with cloud storage for cloud vaults
-   * @throws Error if vault is not a cloud vault or sync fails
-   */
-  async syncWithCloud(): Promise<void> {
-    if (this.vault.storageType !== 'cloud' || !this.vault.providerId) {
-      throw new Error('Cannot sync non-cloud vault');
-    }
+				// Dispatch setVaultEntries with the new, updated entries
+				this.dispatch(
+					setVaultEntries({ vaultId: this.id, entries: newEntries }),
+				);
+			} else {
+				throw new Error(
+					`Parent group not found at path: ${parentPath.join("/")}`,
+				);
+			}
+		}
 
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
+		// Call the private _saveVault() method to persist the changes
+		await this._saveVault();
+	}
 
-    if (!vault?.volatile?.credential) {
-      throw new Error('Vault must be unlocked to sync');
-    }
+	/**
+	 * Saves the vault to storage (local or cloud)
+	 * @private
+	 * @throws Error if save fails
+	 */
+	private async _saveVault(): Promise<void> {
+		// Get the vault's path and credential from the Redux store
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
 
-    try {
-      // Re-read from cloud to get latest version
-      const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
-      const vaultContent = await CloudStorageCommands.readCloudVault({
-        vaultId: cloudFileId,
-        password: vault.volatile.credential,
-        providerName: vault.providerId,
-      });
+		if (!vault?.volatile?.credential) {
+			throw new Error("No credential available for vault");
+		}
 
-      // Update local entries with cloud version
-      this.dispatch(
-        setVaultEntries({ vaultId: this.id, entries: vaultContent.entries })
-      );
+		const password = vault.volatile.credential;
+		const entries = vault.volatile.entries ?? [];
 
-      // Update sync timestamp
-      this.dispatch(syncCloudVault(this.id));
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to sync with cloud: ${errorMessage}`);
-    }
-  }
+		// Create the Vault object that matches the backend Rust struct
+		const vaultContent = {
+			updated_at: new Date().toISOString(),
+			hmac: "",
+			entries: entries,
+		};
 
-  /**
-   * Changes the vault password and re-encrypts the vault with the new password
-   * Supports both local and cloud vaults
-   * @param newPassword - The new password to set
-   * @throws Error if password change fails
-   */
-  async changePassword(newPassword: string): Promise<void> {
-    // Get the current vault state
-    const state = this.getState();
-    const vault = state.vault.vaults.find((v) => v.id === this.id);
+		// Check if this is a cloud vault
+		if (vault.storageType === "cloud" && vault.providerId) {
+			// Use cloud storage commands for cloud vaults
+			// Pass the vault ID (stored in vault.path) to update the existing vault
+			const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
+			await CloudStorageCommands.writeCloudVault({
+				vaultId: cloudFileId,
+				vaultName: vault.name,
+				password: password,
+				vaultContent: vaultContent, // Already in snake_case format
+				providerName: vault.providerId,
+			} as any);
 
-    if (!vault?.volatile?.credential) {
-      throw new Error('Vault must be unlocked to change password');
-    }
+			// Update sync timestamp
+			this.dispatch(syncCloudVault(this.id));
+		} else {
+			// Use local vault commands for local vaults
+			await VaultCommands.write(vault.path, password, vaultContent);
+		}
+	}
 
-    if (!newPassword || newPassword.length === 0) {
-      throw new Error('New password is required');
-    }
+	/**
+	 * Forces a sync with cloud storage for cloud vaults
+	 * @throws Error if vault is not a cloud vault or sync fails
+	 */
+	async syncWithCloud(): Promise<void> {
+		if (this.vault.storageType !== "cloud" || !this.vault.providerId) {
+			throw new Error("Cannot sync non-cloud vault");
+		}
 
-    const oldPassword = vault.volatile.credential;
-    const entries = vault.volatile.entries ?? [];
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
 
-    try {
-      // Create the vault content with current entries
-      const vaultContent = {
-        updated_at: new Date().toISOString(),
-        hmac: '',
-        entries: entries,
-      };
+		if (!vault?.volatile?.credential) {
+			throw new Error("Vault must be unlocked to sync");
+		}
 
-      if (vault.storageType === 'cloud' && vault.providerId) {
-        // For cloud vaults, use the dedicated password change command
-        const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
-        
-        // Use the new changeCloudVaultPassword command
-        await CloudStorageCommands.changeCloudVaultPassword(
-          cloudFileId,
-          oldPassword, // Use the old password to decrypt
-          newPassword, // Use the new password to encrypt
-          vault.providerId
-        );
+		if (vault.providerId) {
+			const authState = await this.getProviderAuthState(vault.providerId);
+			if (!authState.authenticated || authState.expired) {
+				await this.promptProviderReauth(vault.providerId);
+			}
+		}
 
-        // Update sync timestamp
-        this.dispatch(syncCloudVault(this.id));
-      } else {
-        // For local vaults, use the regular write command with new password
-        await VaultCommands.write(vault.path, newPassword, vaultContent);
-      }
+		try {
+			// Re-read from cloud to get latest version
+			const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
+			const vaultContent = await CloudStorageCommands.readCloudVault({
+				vaultId: cloudFileId,
+				password: vault.volatile.credential,
+				providerName: vault.providerId,
+			});
 
-      // Update the stored credential with the new password
-      this.dispatch(
-        setVaultCredential({ vaultId: this.id, credential: newPassword })
-      );
+			// Update local entries with cloud version
+			this.dispatch(
+				setVaultEntries({ vaultId: this.id, entries: vaultContent.entries }),
+			);
 
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to change vault password: ${errorMessage}`);
-    }
-  }
+			// Update sync timestamp
+			this.dispatch(syncCloudVault(this.id));
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
 
-  /**
-   * Gets cloud metadata for cloud vaults
-   * @returns CloudVaultMetadata or null if not a cloud vault
-   */
-  getCloudMetadata(): CloudVaultMetadata | null {
-    if (this.vault.storageType !== 'cloud' || !this.vault.cloudMetadata) {
-      return null;
-    }
+			if (this.vault.providerId && isAuthRelatedCloudError(error)) {
+				this.dispatch(
+					setProviderStatus({
+						providerId: this.vault.providerId,
+						status: "error",
+					}),
+				);
+				void this.promptProviderReauth(this.vault.providerId);
+			}
 
-    // Get provider type from state or default to google_drive
-    const state = this.getState();
-    const provider = state.vault.providers.find(
-      (p) => p.name === this.vault.cloudMetadata?.provider
-    );
-    const providerType =
-      provider?.provider_type || StorageProviderType.GOOGLE_DRIVE;
+			throw new Error(`Failed to sync with cloud: ${errorMessage}`);
+		}
+	}
 
-    return {
-      id: this.vault.cloudMetadata.fileId,
-      name: this.vault.name,
-      providerName: this.vault.cloudMetadata.provider,
-      providerType,
-      createdAt: this.vault.cloudMetadata.lastSync || '',
-      modifiedAt: this.vault.cloudMetadata.lastSync || '',
-      path: this.vault.path,
-      isFolder: false,
-      mimeType: 'application/json',
-      parentId: undefined,
-      metadata: {},
-    };
-  }
+	/**
+	 * Changes the vault password and re-encrypts the vault with the new password
+	 * Supports both local and cloud vaults
+	 * @param newPassword - The new password to set
+	 * @throws Error if password change fails
+	 */
+	async changePassword(newPassword: string): Promise<void> {
+		// Get the current vault state
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+
+		if (!vault?.volatile?.credential) {
+			throw new Error("Vault must be unlocked to change password");
+		}
+
+		if (!newPassword || newPassword.length === 0) {
+			throw new Error("New password is required");
+		}
+
+		const oldPassword = vault.volatile.credential;
+		const entries = vault.volatile.entries ?? [];
+
+		try {
+			// Create the vault content with current entries
+			const vaultContent = {
+				updated_at: new Date().toISOString(),
+				hmac: "",
+				entries: entries,
+			};
+
+			if (vault.storageType === "cloud" && vault.providerId) {
+				// For cloud vaults, use the dedicated password change command
+				const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
+
+				// Use the new changeCloudVaultPassword command
+				await CloudStorageCommands.changeCloudVaultPassword(
+					cloudFileId,
+					oldPassword, // Use the old password to decrypt
+					newPassword, // Use the new password to encrypt
+					vault.providerId,
+				);
+
+				// Update sync timestamp
+				this.dispatch(syncCloudVault(this.id));
+			} else {
+				// For local vaults, use the regular write command with new password
+				await VaultCommands.write(vault.path, newPassword, vaultContent);
+			}
+
+			// Update the stored credential with the new password
+			this.dispatch(
+				setVaultCredential({ vaultId: this.id, credential: newPassword }),
+			);
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to change vault password: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Gets cloud metadata for cloud vaults
+	 * @returns CloudVaultMetadata or null if not a cloud vault
+	 */
+	getCloudMetadata(): CloudVaultMetadata | null {
+		if (this.vault.storageType !== "cloud" || !this.vault.cloudMetadata) {
+			return null;
+		}
+
+		// Get provider type from state or default to google_drive
+		const state = this.getState();
+		const provider = state.vault.providers.find(
+			(p) => p.name === this.vault.cloudMetadata?.provider,
+		);
+		const providerType =
+			provider?.provider_type || StorageProviderType.GOOGLE_DRIVE;
+
+		return {
+			id: this.vault.cloudMetadata.fileId,
+			name: this.vault.name,
+			providerName: this.vault.cloudMetadata.provider,
+			providerType,
+			createdAt: this.vault.cloudMetadata.lastSync || "",
+			modifiedAt: this.vault.cloudMetadata.lastSync || "",
+			path: this.vault.path,
+			isFolder: false,
+			mimeType: "application/json",
+			parentId: undefined,
+			metadata: {},
+		};
+	}
 }
 
 export class VaultManager {
-  private static instance: VaultManager;
-  private _instances: Map<string, VaultInstance>;
-  private _dispatch: AppDispatch | null = null;
-  private _getState: (() => RootState) | null = null;
+	private static instance: VaultManager;
+	private _instances: Map<string, VaultInstance>;
+	private _dispatch: AppDispatch | null = null;
+	private _getState: (() => RootState) | null = null;
 
-  private constructor() {
-    this._instances = new Map();
-  }
+	private constructor() {
+		this._instances = new Map();
+	}
 
-  static getInstance(): VaultManager {
-    if (!VaultManager.instance) {
-      VaultManager.instance = new VaultManager();
-    }
-    return VaultManager.instance;
-  }
+	private async getProviderAuthState(
+		providerName: string,
+	): Promise<{ authenticated: boolean; expired: boolean }> {
+		try {
+			const authInfo =
+				await CloudStorageCommands.getProviderAuthInfo(providerName);
+			return {
+				authenticated: authInfo.authenticated,
+				expired:
+					Boolean(authInfo.token_expires_at) &&
+					isTokenExpired(authInfo.token_expires_at),
+			};
+		} catch (error) {
+			console.warn(
+				`Failed to check auth info for provider ${providerName}:`,
+				error,
+			);
+			return { authenticated: false, expired: true };
+		}
+	}
 
-  /**
-   * Initializes the VaultManager with Redux dispatch and getState functions
-   * @param dispatch - Redux dispatch function
-   * @param getState - Redux getState function
-   */
-  initialize(dispatch: AppDispatch, getState: () => RootState): void {
-    this._dispatch = dispatch;
-    this._getState = getState;
-  }
+	private async promptProviderReauth(providerName: string): Promise<void> {
+		if (!this._dispatch || !this._getState) {
+			return;
+		}
 
-  /**
-   * Gets a VaultInstance for the specified vault ID
-   * Creates a new instance if one doesn't exist
-   * @param vaultId - ID of the vault to get instance for
-   * @returns VaultInstance or undefined if vault not found
-   */
-  getInstance(vaultId: string): VaultInstance | undefined {
-    // Check if instance already exists
-    if (this._instances.has(vaultId)) {
-      return this._instances.get(vaultId);
-    }
+		const state = this._getState();
+		const oauthState = state.vault.oauthState;
+		const currentStatus = state.vault.providerStatus[providerName];
 
-    // If it doesn't exist, create a new one if we have the required dependencies
-    if (!this._dispatch || !this._getState) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+		if (oauthState.isOpen && oauthState.providerName === providerName) {
+			return;
+		}
 
-    // Get the vault from the Redux store
-    const state = this._getState();
-    const vault = state.vault.vaults.find((v) => v.id === vaultId);
+		if (currentStatus === "authenticating") {
+			return;
+		}
 
-    if (!vault) {
-      return undefined;
-    }
+		this._dispatch(
+			setProviderStatus({ providerId: providerName, status: "expired" }),
+		);
 
-    // Ensure cloud vaults have proper metadata
-    if (
-      vault.storageType === 'cloud' &&
-      (!vault.providerId || !vault.cloudMetadata)
-    ) {
-      console.warn(`Cloud vault ${vaultId} is missing provider information`);
-      return undefined;
-    }
+		try {
+			const { url, state: oauthStateValue } =
+				await CloudStorageCommands.getGoogleDriveOAuthUrl(providerName);
+			this._dispatch(
+				setOAuthState({
+					providerName,
+					authUrl: url,
+					state: oauthStateValue,
+					isOpen: true,
+				}),
+			);
+		} catch (error) {
+			console.warn(`Failed to start re-auth flow for ${providerName}:`, error);
+		}
+	}
 
-    // Create new instance, store it, and return it
-    const newInstance = new VaultInstance(
-      vault,
-      this._dispatch,
-      this._getState
-    );
-    this._instances.set(vaultId, newInstance);
-    return newInstance;
-  }
+	static getInstance(): VaultManager {
+		if (!VaultManager.instance) {
+			VaultManager.instance = new VaultManager();
+		}
+		return VaultManager.instance;
+	}
 
-  /**
-   * Removes a VaultInstance from the manager
-   * @param vaultId - ID of the vault instance to remove
-   */
-  removeInstance(vaultId: string): void {
-    this._instances.delete(vaultId);
-  }
+	/**
+	 * Initializes the VaultManager with Redux dispatch and getState functions
+	 * @param dispatch - Redux dispatch function
+	 * @param getState - Redux getState function
+	 */
+	initialize(dispatch: AppDispatch, getState: () => RootState): void {
+		this._dispatch = dispatch;
+		this._getState = getState;
+	}
 
-  /**
-   * Loads storage providers from backend and updates Redux state
-   */
-  async loadProviders(): Promise<void> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+	/**
+	 * Gets a VaultInstance for the specified vault ID
+	 * Creates a new instance if one doesn't exist
+	 * @param vaultId - ID of the vault to get instance for
+	 * @returns VaultInstance or undefined if vault not found
+	 */
+	getInstance(vaultId: string): VaultInstance | undefined {
+		// Check if instance already exists
+		if (this._instances.has(vaultId)) {
+			return this._instances.get(vaultId);
+		}
 
-    try {
-      const providers = await CloudStorageCommands.listProviders();
-      this._dispatch(setStorageProviders(providers));
+		// If it doesn't exist, create a new one if we have the required dependencies
+		if (!this._dispatch || !this._getState) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-      // Check authentication status for each provider
-      for (const provider of providers) {
-        try {
-          const isAuthenticated =
-            await CloudStorageCommands.checkProviderAuthStatus(provider.name);
+		// Get the vault from the Redux store
+		const state = this._getState();
+		const vault = state.vault.vaults.find((v) => v.id === vaultId);
 
-          // Update provider status based on authentication state
-          this._dispatch(
-            setProviderStatus({
-              providerId: provider.name,
-              status: isAuthenticated ? 'authenticated' : 'idle',
-            })
-          );
-        } catch (error) {
-          console.error(
-            `Failed to check auth status for provider ${provider.name}:`,
-            error
-          );
-          // Set to idle if we can't determine the status
-          this._dispatch(
-            setProviderStatus({
-              providerId: provider.name,
-              status: 'idle',
-            })
-          );
-        }
-      }
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to load providers: ${errorMessage}`);
-    }
-  }
+		if (!vault) {
+			return undefined;
+		}
 
-  /**
-   * Adds a new storage provider configuration
-   * @param request - Provider request with name and configuration
-   */
-  async addProvider(request: {
-    name: string;
-    config: ProviderConfig;
-  }): Promise<void> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+		// Ensure cloud vaults have proper metadata
+		if (
+			vault.storageType === "cloud" &&
+			(!vault.providerId || !vault.cloudMetadata)
+		) {
+			console.warn(`Cloud vault ${vaultId} is missing provider information`);
+			return undefined;
+		}
 
-    try {
-      await CloudStorageCommands.addProvider(request);
+		// Create new instance, store it, and return it
+		const newInstance = new VaultInstance(
+			vault,
+			this._dispatch,
+			this._getState,
+		);
+		this._instances.set(vaultId, newInstance);
+		return newInstance;
+	}
 
-      // Reload providers to get updated list
-      await this.loadProviders();
-    } catch (error) {
-      // Handle CloudStorageError objects specifically
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to add provider: ${errorMessage}`);
-    }
-  }
+	/**
+	 * Removes a VaultInstance from the manager
+	 * @param vaultId - ID of the vault instance to remove
+	 */
+	removeInstance(vaultId: string): void {
+		this._instances.delete(vaultId);
+	}
 
-  /**
-   * Removes a storage provider configuration
-   * @param providerId - ID of the provider to remove
-   */
-  async removeProvider(providerId: string): Promise<void> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+	async startProviderReauth(providerName: string): Promise<void> {
+		if (!this._dispatch || !this._getState) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-    try {
-      await CloudStorageCommands.removeProvider(providerId);
-      this._dispatch(removeStorageProvider(providerId));
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to remove provider: ${errorMessage}`);
-    }
-  }
+		await this.promptProviderReauth(providerName);
+	}
 
-  /**
-   * Sets the default storage provider
-   * @param providerId - ID of the provider to set as default
-   */
-  async setDefaultProvider(providerId: string): Promise<void> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+	/**
+	 * Loads storage providers from backend and updates Redux state
+	 */
+	async loadProviders(): Promise<void> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-    try {
-      await CloudStorageCommands.setDefaultProvider(providerId);
-      this._dispatch(setDefaultStorageProvider(providerId));
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to set default provider: ${errorMessage}`);
-    }
-  }
+		try {
+			const providers = await CloudStorageCommands.listProviders();
+			this._dispatch(setStorageProviders(providers));
 
-  /**
-   * Authenticates with a storage provider
-   * @param providerId - ID of the provider to authenticate
-   */
-  async authenticateProvider(providerId: string): Promise<void> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+			// Check authentication status for each provider
+			for (const provider of providers) {
+				try {
+					const authState = await this.getProviderAuthState(provider.name);
 
-    try {
-      this._dispatch(
-        setProviderStatus({ providerId, status: 'authenticating' })
-      );
-      await CloudStorageCommands.authenticateProvider(providerId);
-      this._dispatch(
-        setProviderStatus({ providerId, status: 'authenticated' })
-      );
-    } catch (error) {
-      this._dispatch(setProviderStatus({ providerId, status: 'error' }));
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to authenticate provider: ${errorMessage}`);
-    }
-  }
+					// Update provider status based on authentication state
+					this._dispatch(
+						setProviderStatus({
+							providerId: provider.name,
+							status: authState.expired
+								? "expired"
+								: authState.authenticated
+									? "authenticated"
+									: "idle",
+						}),
+					);
+				} catch (error) {
+					console.error(
+						`Failed to check auth status for provider ${provider.name}:`,
+						error,
+					);
+					// Set to idle if we can't determine the status
+					this._dispatch(
+						setProviderStatus({
+							providerId: provider.name,
+							status: "idle",
+						}),
+					);
+				}
+			}
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to load providers: ${errorMessage}`);
+		}
+	}
 
-  /**
-   * Gets authentication URL for a provider
-   * @param providerId - ID of the provider to get auth URL for
-   * @returns Authentication URL
-   */
-  async getAuthenticationUrl(providerId: string): Promise<string> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+	/**
+	 * Adds a new storage provider configuration
+	 * @param request - Provider request with name and configuration
+	 */
+	async addProvider(request: {
+		name: string;
+		config: ProviderConfig;
+	}): Promise<void> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-    try {
-      // For now, return a mock URL - in a real implementation this would call the backend
-      // to generate a proper OAuth URL with state and other parameters
-      const authUrl = `https://accounts.google.com/oauth/authorize?client_id=mock_client_id&redirect_uri=http://localhost:1420/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/drive.file&state=${providerId}_${Date.now()}`;
-      return authUrl;
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to get authentication URL: ${errorMessage}`);
-    }
-  }
+		try {
+			await CloudStorageCommands.addProvider(request);
 
-  /**
-   * Lists cloud vaults from storage providers
-   * @param providerId - Optional provider ID to filter by
-   * @returns Array of vault objects
-   */
-  async listCloudVaults(providerId?: string): Promise<Vault[]> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+			// Reload providers to get updated list
+			await this.loadProviders();
+		} catch (error) {
+			// Handle CloudStorageError objects specifically
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to add provider: ${errorMessage}`);
+		}
+	}
 
-    try {
-      const cloudVaultsMetadata =
-        await CloudStorageCommands.listCloudVaults(providerId);
+	/**
+	 * Removes a storage provider configuration
+	 * @param providerId - ID of the provider to remove
+	 */
+	async removeProvider(providerId: string): Promise<void> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-      // Convert CloudVaultMetadata to Vault objects
-      const vaults: Vault[] = cloudVaultsMetadata.map((metadata) => ({
-        id: metadata.id,
-        name: metadata.name,
-        path: metadata.id, // Use cloud file ID as path
-        storageType: 'cloud' as const,
-        providerId: metadata.providerName,
-        cloudMetadata: {
-          fileId: metadata.id,
-          provider: metadata.providerName,
-          lastSync: metadata.modifiedAt,
-        },
-        isLocked: true,
-        volatile: {
-          entries: [],
-          credential: '',
-          navigationPath: '/',
-          encryptedData: undefined,
-        },
-      }));
+		try {
+			await CloudStorageCommands.removeProvider(providerId);
+			this._dispatch(removeStorageProvider(providerId));
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to remove provider: ${errorMessage}`);
+		}
+	}
 
-      return vaults;
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to list cloud vaults: ${errorMessage}`);
-    }
-  }
+	/**
+	 * Sets the default storage provider
+	 * @param providerId - ID of the provider to set as default
+	 */
+	async setDefaultProvider(providerId: string): Promise<void> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-  /**
-   * Refreshes cloud vault list in Redux state
-   * Only refreshes vaults from actual cloud providers (not local)
-   */
-  async refreshCloudVaults(): Promise<void> {
-    if (!this._dispatch || !this._getState) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+		try {
+			await CloudStorageCommands.setDefaultProvider(providerId);
+			this._dispatch(setDefaultStorageProvider(providerId));
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to set default provider: ${errorMessage}`);
+		}
+	}
 
-    try {
-      // Get providers from state and filter only cloud providers
-      const state = this._getState();
-      if (!state?.vault?.providers) {
-        // No providers configured yet, that's okay
-        this._dispatch(setCloudVaults([]));
-        return;
-      }
-      
-      const cloudProviders = state.vault.providers.filter(
-        (p) => p.provider_type !== StorageProviderType.LOCAL
-      );
+	/**
+	 * Authenticates with a storage provider
+	 * @param providerId - ID of the provider to authenticate
+	 */
+	async authenticateProvider(providerId: string): Promise<void> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-      // Collect vaults from all cloud providers
-      const allCloudVaults: Vault[] = [];
-      
-      for (const provider of cloudProviders) {
-        try {
-          const providerVaults = await this.listCloudVaults(provider.name);
-          allCloudVaults.push(...providerVaults);
-        } catch (error) {
-          // Log but don't fail - one provider failure shouldn't block others
-          console.warn(
-            `Failed to refresh vaults for provider ${provider.name}:`,
-            error
-          );
-        }
-      }
+		try {
+			this._dispatch(
+				setProviderStatus({ providerId, status: "authenticating" }),
+			);
+			await CloudStorageCommands.authenticateProvider(providerId);
+			this._dispatch(
+				setProviderStatus({ providerId, status: "authenticated" }),
+			);
+		} catch (error) {
+			this._dispatch(setProviderStatus({ providerId, status: "error" }));
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to authenticate provider: ${errorMessage}`);
+		}
+	}
 
-      // Update Redux state with collected cloud vaults
-      this._dispatch(setCloudVaults(allCloudVaults));
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to refresh cloud vaults: ${errorMessage}`);
-    }
-  }
+	/**
+	 * Gets authentication URL for a provider
+	 * @param providerId - ID of the provider to get auth URL for
+	 * @returns Authentication URL
+	 */
+	async getAuthenticationUrl(providerId: string): Promise<string> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-  /**
-   * Creates a new vault
-   * @param name - Vault name
-   * @param password - Vault password
-   * @param storageType - Storage type (local or cloud)
-   * @param providerId - Cloud provider ID (required for cloud vaults)
-   * @param path - Optional path for local vaults
-   * @param parentId - Optional parent folder ID for cloud vaults
-   * @returns Created vault ID
-   */
-  async createVault(
-    name: string,
-    password: string,
-    storageType: 'local' | 'cloud',
-    providerId?: string,
-    path?: string,
-    parentId?: string
-  ): Promise<string> {
-    if (!this._dispatch) {
-      throw new Error('VaultManager not initialized. Call initialize() first.');
-    }
+		try {
+			// For now, return a mock URL - in a real implementation this would call the backend
+			// to generate a proper OAuth URL with state and other parameters
+			const authUrl = `https://accounts.google.com/oauth/authorize?client_id=mock_client_id&redirect_uri=http://localhost:1420/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/drive.file&state=${providerId}_${Date.now()}`;
+			return authUrl;
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to get authentication URL: ${errorMessage}`);
+		}
+	}
 
-    // Input validation
-    if (!name || name.trim().length === 0) {
-      throw new Error('Vault name is required');
-    }
-    if (!password || password.length === 0) {
-      throw new Error('Password is required');
-    }
-    if (storageType === 'cloud' && !providerId) {
-      throw new Error('Provider ID is required for cloud vaults');
-    }
+	/**
+	 * Lists cloud vaults from storage providers
+	 * @param providerId - Optional provider ID to filter by
+	 * @returns Array of vault objects
+	 */
+	async listCloudVaults(providerId?: string): Promise<Vault[]> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-    try {
-      const vaultId = `vault_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      let vaultPath: string;
-      let cloudMetadata: Vault['cloudMetadata'] | undefined;
+		try {
+			const cloudVaultsMetadata =
+				await CloudStorageCommands.listCloudVaults(providerId);
 
-      if (storageType === 'cloud') {
-        // Create cloud vault
-        const vaultContent = {
-          updated_at: new Date().toISOString(),
-          hmac: '',
-          entries: [],
-        };
+			// Convert CloudVaultMetadata to Vault objects
+			const vaults: Vault[] = cloudVaultsMetadata.map((metadata) => ({
+				id: metadata.id,
+				name: metadata.name,
+				path: metadata.id, // Use cloud file ID as path
+				storageType: "cloud" as const,
+				providerId: metadata.providerName,
+				cloudMetadata: {
+					fileId: metadata.id,
+					provider: metadata.providerName,
+					lastSync: metadata.modifiedAt,
+				},
+				isLocked: true,
+				volatile: {
+					entries: [],
+					credential: "",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			}));
 
-        // Use request object form to create a new vault with vaultName and password
-        const cloudVaultId = await CloudStorageCommands.writeCloudVault({
-          vaultName: name,
-          password: password,
-          vaultContent: vaultContent, // Use snake_case format directly
-          providerName: providerId!,
-          parentId: parentId,
-        } as any);
+			return vaults;
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to list cloud vaults: ${errorMessage}`);
+		}
+	}
 
-        vaultPath = cloudVaultId;
-        cloudMetadata = {
-          fileId: cloudVaultId,
-          provider: providerId!,
-          lastSync: new Date().toISOString(),
-        };
-      } else {
-        // Create local vault
-        const vaultContent = {
-          updated_at: new Date().toISOString(),
-          hmac: '',
-          entries: [],
-        };
+	/**
+	 * Refreshes cloud vault list in Redux state
+	 * Only refreshes vaults from actual cloud providers (not local)
+	 */
+	async refreshCloudVaults(): Promise<void> {
+		if (!this._dispatch || !this._getState) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
 
-        // Use provided path or generate default
-        vaultPath = path || `${name}.vault`;
+		try {
+			// Get providers from state and filter only cloud providers
+			const state = this._getState();
+			if (!state?.vault?.providers) {
+				// No providers configured yet, that's okay
+				this._dispatch(setCloudVaults([]));
+				return;
+			}
 
-        // Create the vault file using VaultCommands
-        await VaultCommands.write(vaultPath, password, vaultContent);
-      }
+			const cloudProviders = state.vault.providers.filter(
+				(p) => p.provider_type !== StorageProviderType.LOCAL,
+			);
 
-      const vault: Vault = {
-        id: vaultId,
-        name,
-        path: vaultPath,
-        storageType,
-        providerId: storageType === 'cloud' ? providerId : undefined,
-        cloudMetadata,
-        isLocked: true,
-        volatile: {
-          entries: [],
-          credential: '',
-          navigationPath: '/',
-          encryptedData: undefined,
-        },
-      };
+			// Collect vaults from all cloud providers
+			const allCloudVaults: Vault[] = [];
 
-      this._dispatch(addVault(vault));
-      return vaultId;
-    } catch (error) {
-      const errorMessage =
-        (error as any)?.message ||
-        (error instanceof Error ? error.message : String(error));
-      throw new Error(`Failed to create vault: ${errorMessage}`);
-    }
-  }
+			for (const provider of cloudProviders) {
+				try {
+					const authState = await this.getProviderAuthState(provider.name);
+					if (!authState.authenticated || authState.expired) {
+						this._dispatch(
+							setProviderStatus({
+								providerId: provider.name,
+								status: "expired",
+							}),
+						);
+						continue;
+					}
 
-  /**
-   * Changes the password for an existing vault
-   * @param vaultId - ID of the vault to change password for
-   * @param newPassword - The new password to set
-   * @throws Error if vault not found or password change fails
-   */
-  async changeVaultPassword(vaultId: string, newPassword: string): Promise<void> {
-    const vaultInstance = this.getInstance(vaultId);
-    if (!vaultInstance) {
-      throw new Error('Vault not found');
-    }
+					const providerVaults = await this.listCloudVaults(provider.name);
+					allCloudVaults.push(...providerVaults);
+				} catch (error) {
+					// Log but don't fail - one provider failure shouldn't block others
+					if (isAuthRelatedCloudError(error)) {
+						this._dispatch(
+							setProviderStatus({
+								providerId: provider.name,
+								status: "expired",
+							}),
+						);
+						await this.promptProviderReauth(provider.name);
+					}
+					console.warn(
+						`Failed to refresh vaults for provider ${provider.name}:`,
+						error,
+					);
+				}
+			}
 
-    await vaultInstance.changePassword(newPassword);
-  }
+			// Update Redux state with collected cloud vaults
+			this._dispatch(setCloudVaults(allCloudVaults));
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to refresh cloud vaults: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Creates a new vault
+	 * @param name - Vault name
+	 * @param password - Vault password
+	 * @param storageType - Storage type (local or cloud)
+	 * @param providerId - Cloud provider ID (required for cloud vaults)
+	 * @param path - Optional path for local vaults
+	 * @param parentId - Optional parent folder ID for cloud vaults
+	 * @returns Created vault ID
+	 */
+	async createVault(
+		name: string,
+		password: string,
+		storageType: "local" | "cloud",
+		providerId?: string,
+		path?: string,
+		parentId?: string,
+	): Promise<string> {
+		if (!this._dispatch) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
+
+		// Input validation
+		if (!name || name.trim().length === 0) {
+			throw new Error("Vault name is required");
+		}
+		if (!password || password.length === 0) {
+			throw new Error("Password is required");
+		}
+		if (storageType === "cloud" && !providerId) {
+			throw new Error("Provider ID is required for cloud vaults");
+		}
+
+		try {
+			const vaultId = `vault_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			let vaultPath: string;
+			let cloudMetadata: Vault["cloudMetadata"] | undefined;
+
+			if (storageType === "cloud") {
+				// Create cloud vault
+				const vaultContent = {
+					updated_at: new Date().toISOString(),
+					hmac: "",
+					entries: [],
+				};
+
+				// Use request object form to create a new vault with vaultName and password
+				const cloudVaultId = await CloudStorageCommands.writeCloudVault({
+					vaultName: name,
+					password: password,
+					vaultContent: vaultContent, // Use snake_case format directly
+					providerName: providerId!,
+					parentId: parentId,
+				} as any);
+
+				vaultPath = cloudVaultId;
+				cloudMetadata = {
+					fileId: cloudVaultId,
+					provider: providerId!,
+					lastSync: new Date().toISOString(),
+				};
+			} else {
+				// Create local vault
+				const vaultContent = {
+					updated_at: new Date().toISOString(),
+					hmac: "",
+					entries: [],
+				};
+
+				// Use provided path or generate default
+				vaultPath = path || `${name}.vault`;
+
+				// Create the vault file using VaultCommands
+				await VaultCommands.write(vaultPath, password, vaultContent);
+			}
+
+			const vault: Vault = {
+				id: vaultId,
+				name,
+				path: vaultPath,
+				storageType,
+				providerId: storageType === "cloud" ? providerId : undefined,
+				cloudMetadata,
+				isLocked: true,
+				volatile: {
+					entries: [],
+					credential: "",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+
+			this._dispatch(addVault(vault));
+			return vaultId;
+		} catch (error) {
+			const errorMessage =
+				(error as any)?.message ||
+				(error instanceof Error ? error.message : String(error));
+			throw new Error(`Failed to create vault: ${errorMessage}`);
+		}
+	}
+
+	/**
+	 * Changes the password for an existing vault
+	 * @param vaultId - ID of the vault to change password for
+	 * @param newPassword - The new password to set
+	 * @throws Error if vault not found or password change fails
+	 */
+	async changeVaultPassword(
+		vaultId: string,
+		newPassword: string,
+	): Promise<void> {
+		const vaultInstance = this.getInstance(vaultId);
+		if (!vaultInstance) {
+			throw new Error("Vault not found");
+		}
+
+		await vaultInstance.changePassword(newPassword);
+	}
 }

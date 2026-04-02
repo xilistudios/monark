@@ -1,35 +1,32 @@
-import {
-	createSlice,
-	type PayloadAction,
-} from "@reduxjs/toolkit"
-import type { Entry } from "../../interfaces/vault.interface"
-import type { StorageProvider } from '../../interfaces/cloud-storage.interface';
-import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
-import { VaultManager } from "../../services/vault"
-import VaultCommands from "../../services/commands"
-import { VaultStateCommands, isVaultLocked } from '../../services/vaultState';
+import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import type { StorageProvider } from "../../interfaces/cloud-storage.interface";
+import { StorageProviderType } from "../../interfaces/cloud-storage.interface";
+import type { Entry } from "../../interfaces/vault.interface";
+import VaultCommands from "../../services/commands";
+import { VaultManager } from "../../services/vault";
+import { isVaultLocked, VaultStateCommands } from "../../services/vaultState";
 
 export interface Vault {
-	id: string
-	name: string
-	path: string
-	lastAccessed?: string
-	isLocked: boolean
+	id: string;
+	name: string;
+	path: string;
+	lastAccessed?: string;
+	isLocked: boolean;
 	// New: Cloud storage support
-	storageType: 'local' | 'cloud'
-	providerId?: string
+	storageType: "local" | "cloud";
+	providerId?: string;
 	cloudMetadata?: {
-		fileId: string
-		provider: string
-		lastSync?: string
-	}
+		fileId: string;
+		provider: string;
+		lastSync?: string;
+	};
 	// Multi-vault runtime state persisted via Rust backend
 	volatile: {
-		credential: string
-		entries: Entry[]
-		navigationPath?: string
-		encryptedData?: string
-	}
+		credential: string;
+		entries: Entry[];
+		navigationPath?: string;
+		encryptedData?: string;
+	};
 }
 
 // Types for vault entry operations - using the new unified structure
@@ -42,14 +39,17 @@ export interface OAuthState {
 }
 
 export interface VaultState {
-	vaults: Vault[]
-	currentVaultId: string | null
-	loading: boolean
-	error: string | null
+	vaults: Vault[];
+	currentVaultId: string | null;
+	loading: boolean;
+	error: string | null;
 	// New: Storage provider state
-	providers: StorageProvider[]
-	defaultProvider: string | null
-	providerStatus: Record<string, 'idle' | 'authenticating' | 'authenticated' | 'error'>
+	providers: StorageProvider[];
+	defaultProvider: string | null;
+	providerStatus: Record<
+		string,
+		"idle" | "authenticating" | "authenticated" | "expired" | "error"
+	>;
 	// OAuth state for deep link handling
 	oauthState: OAuthState;
 }
@@ -59,54 +59,55 @@ export interface VaultState {
  * Mirrors savePreferencesToSettings pattern.
  */
 const persistVaultState = async (
-  vaults: Vault[],
-  providers: StorageProvider[],
-  defaultProvider: string | null,
-  providerStatus: VaultState['providerStatus']
+	vaults: Vault[],
+	providers: StorageProvider[],
+	defaultProvider: string | null,
+	providerStatus: VaultState["providerStatus"],
 ) => {
-  try {
-    const serializedStatus = Object.fromEntries(
-      Object.entries(providerStatus).map(([providerId, status]) => [
-        providerId,
-        status,
-      ])
-    );
-    await VaultStateCommands.persistVaultsSnapshot({
-      vaults,
-      providers,
-      defaultProvider,
-      providerStatus: serializedStatus,
-    });
-  } catch (error) {
-    console.error('Error persisting vault state:', error);
-  }
+	try {
+		const serializedStatus = Object.fromEntries(
+			Object.entries(providerStatus).map(([providerId, status]) => [
+				providerId,
+				status,
+			]),
+		);
+		await VaultStateCommands.persistVaultsSnapshot({
+			vaults,
+			providers,
+			defaultProvider,
+			providerStatus: serializedStatus,
+		});
+	} catch (error) {
+		console.error("Error persisting vault state:", error);
+	}
 };
 
 const normalizeProviderStatus = (
-  statusMap?: Record<string, string>
-): VaultState['providerStatus'] => {
-  if (!statusMap) {
-    return {};
-  }
+	statusMap?: Record<string, string>,
+): VaultState["providerStatus"] => {
+	if (!statusMap) {
+		return {};
+	}
 
-  const allowedStatuses: VaultState['providerStatus'][string][] = [
-    'idle',
-    'authenticating',
-    'authenticated',
-    'error',
-  ];
+	const allowedStatuses: VaultState["providerStatus"][string][] = [
+		"idle",
+		"authenticating",
+		"authenticated",
+		"expired",
+		"error",
+	];
 
-  return Object.entries(statusMap).reduce(
-    (acc, [providerId, status]) => {
-      if ((allowedStatuses as string[]).includes(status)) {
-        acc[providerId] = status as VaultState['providerStatus'][string];
-      } else {
-        acc[providerId] = 'idle';
-      }
-      return acc;
-    },
-    {} as VaultState['providerStatus']
-  );
+	return Object.entries(statusMap).reduce(
+		(acc, [providerId, status]) => {
+			if ((allowedStatuses as string[]).includes(status)) {
+				acc[providerId] = status as VaultState["providerStatus"][string];
+			} else {
+				acc[providerId] = "idle";
+			}
+			return acc;
+		},
+		{} as VaultState["providerStatus"],
+	);
 };
 
 /**
@@ -122,24 +123,24 @@ export const loadVaultStateFromSettings = async (): Promise<
 		let loadedVaults: Vault[] = [];
 		if (persistedState.vaults && Array.isArray(persistedState.vaults)) {
 			loadedVaults = persistedState.vaults.map((vault: any) => {
-				const rawVolatile = vault.volatile ?? {}
+				const rawVolatile = vault.volatile ?? {};
 				const credential =
-					typeof rawVolatile.credential === 'string'
+					typeof rawVolatile.credential === "string"
 						? rawVolatile.credential
-						: ''
+						: "";
 				// Use the isVaultLocked helper for consistent lock state determination.
 				// Defense in depth: a vault is locked if isLocked is true OR if credential is missing.
 				// This ensures that even if isLocked is incorrectly set to false,
 				// the absence of a credential will still prevent access.
 				const effectiveLocked = isVaultLocked({
-					isLocked: typeof vault.isLocked === 'boolean' ? vault.isLocked : true,
-					volatile: { credential }
+					isLocked: typeof vault.isLocked === "boolean" ? vault.isLocked : true,
+					volatile: { credential },
 				});
 
 				return {
 					...vault,
 					// Migrate existing vaults to local storage type
-					storageType: vault.storageType || 'local',
+					storageType: vault.storageType || "local",
 					lastAccessed: vault.lastAccessed || undefined,
 					// If we don't have a runtime credential, always treat as locked.
 					isLocked: effectiveLocked,
@@ -148,43 +149,43 @@ export const loadVaultStateFromSettings = async (): Promise<
 							? rawVolatile.entries
 							: [],
 						credential,
-						navigationPath: rawVolatile.navigationPath || '/',
+						navigationPath: rawVolatile.navigationPath || "/",
 						encryptedData: rawVolatile.encryptedData,
 					},
-				} as Vault
-			})
+				} as Vault;
+			});
 		}
 
 		const persistedProviders = (persistedState.providers || []).map(
-      (provider: any) => {
-        const rawType =
-          provider.provider_type ??
-          provider.providerType ??
-          StorageProviderType.LOCAL;
-        const validTypes = Object.values(StorageProviderType) as string[];
-        const normalizedType = validTypes.includes(rawType)
-          ? (rawType as StorageProviderType)
-          : StorageProviderType.LOCAL;
+			(provider: any) => {
+				const rawType =
+					provider.provider_type ??
+					provider.providerType ??
+					StorageProviderType.LOCAL;
+				const validTypes = Object.values(StorageProviderType) as string[];
+				const normalizedType = validTypes.includes(rawType)
+					? (rawType as StorageProviderType)
+					: StorageProviderType.LOCAL;
 
-        return {
-          name: provider.name,
-          provider_type: normalizedType,
-          is_default: Boolean(
-            provider.is_default ?? provider.isDefault ?? false
-          ),
-        };
-      }
-    ) as StorageProvider[];
+				return {
+					name: provider.name,
+					provider_type: normalizedType,
+					is_default: Boolean(
+						provider.is_default ?? provider.isDefault ?? false,
+					),
+				};
+			},
+		) as StorageProvider[];
 
 		return {
-      vaults: loadedVaults,
-      currentVaultId: null,
-      providers: persistedProviders,
-      defaultProvider: persistedState.defaultProvider || null,
-      providerStatus: normalizeProviderStatus(persistedState.providerStatus),
-    };
+			vaults: loadedVaults,
+			currentVaultId: null,
+			providers: persistedProviders,
+			defaultProvider: persistedState.defaultProvider || null,
+			providerStatus: normalizeProviderStatus(persistedState.providerStatus),
+		};
 	} catch (error) {
-		console.error("Error loading vaults from settings:", error)
+		console.error("Error loading vaults from settings:", error);
 	}
 	return {
 		vaults: [],
@@ -192,11 +193,11 @@ export const loadVaultStateFromSettings = async (): Promise<
 		providers: [],
 		defaultProvider: null,
 		providerStatus: {},
-	}
-}
+	};
+};
 
 // Action Types
-export const SET_VAULT_STATE = "vault/setVaultState"
+export const SET_VAULT_STATE = "vault/setVaultState";
 
 const initialState: VaultState = {
 	vaults: [],
@@ -212,7 +213,7 @@ const initialState: VaultState = {
 		state: null,
 		isOpen: false,
 	},
-}
+};
 
 export const vaultSlice = createSlice({
 	name: "vault",
@@ -225,122 +226,117 @@ export const vaultSlice = createSlice({
 		addVault: (state, action: PayloadAction<Vault>) => {
 			const vault = {
 				...action.payload,
-				storageType: action.payload.storageType || 'local',
+				storageType: action.payload.storageType || "local",
 				volatile: {
 					entries: action.payload.volatile?.entries || [],
 					credential: action.payload.volatile?.credential || "",
 					navigationPath: action.payload.volatile?.navigationPath || "/",
 					encryptedData: action.payload.volatile?.encryptedData || undefined,
 				},
-			}
-			state.vaults.push(vault)
-			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
-			// VaultManager will create instances on-demand when getInstance() is called
-		},
-		removeVault: (state, action: PayloadAction<string>) => {
-			state.vaults = state.vaults.filter(
-				(vault: Vault) => vault.id !== action.payload
-			)
+			};
+			state.vaults.push(vault);
 			void persistVaultState(
 				state.vaults,
 				state.providers,
 				state.defaultProvider,
-				state.providerStatus
+				state.providerStatus,
+			);
+			// VaultManager will create instances on-demand when getInstance() is called
+		},
+		removeVault: (state, action: PayloadAction<string>) => {
+			state.vaults = state.vaults.filter(
+				(vault: Vault) => vault.id !== action.payload,
+			);
+			void persistVaultState(
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
 			);
 			if (state.currentVaultId === action.payload) {
-				state.currentVaultId = null
+				state.currentVaultId = null;
 			}
 			// Clean up the vault instance from VaultManager
-			VaultManager.getInstance().removeInstance(action.payload)
+			VaultManager.getInstance().removeInstance(action.payload);
 		},
 		updateVault: (state, action: PayloadAction<Vault>) => {
 			const index = state.vaults.findIndex(
-				(vault: Vault) => vault.id === action.payload.id
-			)
+				(vault: Vault) => vault.id === action.payload.id,
+			);
 			if (index !== -1) {
-				state.vaults[index] = action.payload
+				state.vaults[index] = action.payload;
 			}
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		setCurrentVault: (state, action: PayloadAction<string | null>) => {
-			state.currentVaultId = action.payload
+			state.currentVaultId = action.payload;
 		},
 		updateLastAccessed: (state, action: PayloadAction<string>) => {
 			const vault = state.vaults.find(
-				(vault: Vault) => vault.id === action.payload
-			)
+				(vault: Vault) => vault.id === action.payload,
+			);
 			if (vault) {
-				vault.lastAccessed = new Date().toISOString()
+				vault.lastAccessed = new Date().toISOString();
 			}
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		setLoading: (state, action: PayloadAction<boolean>) => {
-			state.loading = action.payload
+			state.loading = action.payload;
 		},
 		setError: (state, action: PayloadAction<string | null>) => {
-			state.error = action.payload
+			state.error = action.payload;
 		},
 		clearError: (state) => {
-			state.error = null
+			state.error = null;
 		},
-		restoreVaultState: (
-			state,
-			action: PayloadAction<Partial<VaultState>>
-		) => {
+		restoreVaultState: (state, action: PayloadAction<Partial<VaultState>>) => {
 			if (action.payload.vaults && Array.isArray(action.payload.vaults)) {
-				state.vaults = action.payload.vaults
+				state.vaults = action.payload.vaults;
 			} else {
-				state.vaults = []
+				state.vaults = [];
 			}
 			if (action.payload.providers && Array.isArray(action.payload.providers)) {
-				state.providers = action.payload.providers
+				state.providers = action.payload.providers;
 			} else {
-				state.providers = []
+				state.providers = [];
 			}
 			if (action.payload.defaultProvider) {
-				state.defaultProvider = action.payload.defaultProvider
+				state.defaultProvider = action.payload.defaultProvider;
 			} else {
-				state.defaultProvider = null
+				state.defaultProvider = null;
 			}
 			if (action.payload.providerStatus) {
-				state.providerStatus = action.payload.providerStatus
+				state.providerStatus = action.payload.providerStatus;
 			} else {
-				state.providerStatus = {}
+				state.providerStatus = {};
 			}
 			if (action.payload.oauthState) {
-				state.oauthState = action.payload.oauthState
+				state.oauthState = action.payload.oauthState;
 			} else {
 				state.oauthState = {
 					providerName: null,
 					authUrl: null,
 					state: null,
 					isOpen: false,
-				}
+				};
 			}
-			state.currentVaultId = null
+			state.currentVaultId = null;
 		},
 		setVaultCredential: (
 			state,
-			action: PayloadAction<{ vaultId: string; credential: string }>
+			action: PayloadAction<{ vaultId: string; credential: string }>,
 		) => {
-			const vault = state.vaults.find(
-				(v) => v.id === action.payload.vaultId
-			)
+			const vault = state.vaults.find((v) => v.id === action.payload.vaultId);
 			if (vault) {
 				if (!vault.volatile) {
 					vault.volatile = {
@@ -348,24 +344,24 @@ export const vaultSlice = createSlice({
 						credential: "",
 						navigationPath: "/",
 						encryptedData: undefined,
-					}
+					};
 				}
-				vault.volatile.credential = action.payload.credential
+				vault.volatile.credential = action.payload.credential;
 				void persistVaultState(
 					state.vaults,
 					state.providers,
 					state.defaultProvider,
-					state.providerStatus
+					state.providerStatus,
 				);
 			}
 		},
 		setNavigationPath: (
 			state,
-			action: PayloadAction<{ vaultId: string; navigationPath: string }>
+			action: PayloadAction<{ vaultId: string; navigationPath: string }>,
 		) => {
 			const vault = Array.isArray(state.vaults)
 				? state.vaults.find((v) => v.id === action.payload.vaultId)
-				: undefined
+				: undefined;
 			if (vault) {
 				if (!vault.volatile) {
 					vault.volatile = {
@@ -373,24 +369,24 @@ export const vaultSlice = createSlice({
 						credential: "",
 						navigationPath: "/",
 						encryptedData: undefined,
-					}
+					};
 				}
-				vault.volatile.navigationPath = action.payload.navigationPath
+				vault.volatile.navigationPath = action.payload.navigationPath;
 				void persistVaultState(
 					state.vaults,
 					state.providers,
 					state.defaultProvider,
-					state.providerStatus
+					state.providerStatus,
 				);
 			}
 		},
 		setVaultEntries: (
 			state,
-			action: PayloadAction<{ vaultId: string; entries: Entry[] }>
+			action: PayloadAction<{ vaultId: string; entries: Entry[] }>,
 		) => {
 			const vault = Array.isArray(state.vaults)
 				? state.vaults.find((v) => v.id === action.payload.vaultId)
-				: undefined
+				: undefined;
 			if (vault) {
 				if (!vault.volatile) {
 					vault.volatile = {
@@ -398,51 +394,54 @@ export const vaultSlice = createSlice({
 						credential: "",
 						navigationPath: "/",
 						encryptedData: undefined,
-					}
+					};
 				}
-				vault.volatile.entries = action.payload.entries
+				vault.volatile.entries = action.payload.entries;
 				void persistVaultState(
 					state.vaults,
 					state.providers,
 					state.defaultProvider,
-					state.providerStatus
+					state.providerStatus,
 				);
 			}
 		},
 		lockVault: (state, action: PayloadAction<string>) => {
-					const vault = state.vaults.find((v) => v.id === action.payload)
-					if (vault) {
-						if (!vault.volatile) {
-							vault.volatile = {
-								entries: [],
-								credential: "",
-								navigationPath: "/",
-								encryptedData: undefined,
-							}
-						}
-						vault.volatile.entries = []
-						vault.volatile.encryptedData = undefined
-						vault.isLocked = true
-						vault.volatile.credential = "" // Clear credential on lock
-						vault.volatile.navigationPath = "/"
-						void persistVaultState(
-							state.vaults,
-							state.providers,
-							state.defaultProvider,
-							state.providerStatus
-						);
-					}
-				},
-		// New reducer for setting vault locked state
-		setVaultLocked: (state, action: PayloadAction<{ vaultId: string; isLocked: boolean }>) => {
-			const vault = state.vaults.find((v) => v.id === action.payload.vaultId)
+			const vault = state.vaults.find((v) => v.id === action.payload);
 			if (vault) {
-				vault.isLocked = action.payload.isLocked
+				if (!vault.volatile) {
+					vault.volatile = {
+						entries: [],
+						credential: "",
+						navigationPath: "/",
+						encryptedData: undefined,
+					};
+				}
+				vault.volatile.entries = [];
+				vault.volatile.encryptedData = undefined;
+				vault.isLocked = true;
+				vault.volatile.credential = ""; // Clear credential on lock
+				vault.volatile.navigationPath = "/";
 				void persistVaultState(
 					state.vaults,
 					state.providers,
 					state.defaultProvider,
-					state.providerStatus
+					state.providerStatus,
+				);
+			}
+		},
+		// New reducer for setting vault locked state
+		setVaultLocked: (
+			state,
+			action: PayloadAction<{ vaultId: string; isLocked: boolean }>,
+		) => {
+			const vault = state.vaults.find((v) => v.id === action.payload.vaultId);
+			if (vault) {
+				vault.isLocked = action.payload.isLocked;
+				void persistVaultState(
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus,
 				);
 			}
 		},
@@ -451,116 +450,128 @@ export const vaultSlice = createSlice({
 		 * Set the list of storage providers
 		 */
 		setStorageProviders: (state, action: PayloadAction<StorageProvider[]>) => {
-			state.providers = action.payload
+			state.providers = action.payload;
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		/**
 		 * Add a new storage provider
 		 */
 		addStorageProvider: (state, action: PayloadAction<StorageProvider>) => {
-			state.providers.push(action.payload)
+			state.providers.push(action.payload);
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		/**
 		 * Remove a storage provider by ID
 		 */
 		removeStorageProvider: (state, action: PayloadAction<string>) => {
-			state.providers = state.providers.filter(p => p.name !== action.payload)
+			state.providers = state.providers.filter(
+				(p) => p.name !== action.payload,
+			);
 			// Update vaults that use this provider
-			state.vaults.forEach(vault => {
+			state.vaults.forEach((vault) => {
 				if (vault.providerId === action.payload) {
-					vault.providerId = undefined
-					vault.storageType = 'local'
-					vault.cloudMetadata = undefined
+					vault.providerId = undefined;
+					vault.storageType = "local";
+					vault.cloudMetadata = undefined;
 				}
-			})
+			});
 			// Clear provider status
-			delete state.providerStatus[action.payload]
+			delete state.providerStatus[action.payload];
 			// Update default provider if necessary
 			if (state.defaultProvider === action.payload) {
-				state.defaultProvider = state.providers.length > 0 ? state.providers[0].name : null
+				state.defaultProvider =
+					state.providers.length > 0 ? state.providers[0].name : null;
 			}
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		/**
 		 * Set the default storage provider
 		 */
 		setDefaultStorageProvider: (state, action: PayloadAction<string>) => {
-			state.defaultProvider = action.payload
+			state.defaultProvider = action.payload;
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		/**
 		 * Set the authentication status for a provider
 		 */
-		setProviderStatus: (state, action: PayloadAction<{ providerId: string; status: 'idle' | 'authenticating' | 'authenticated' | 'error' }>) => {
-			state.providerStatus[action.payload.providerId] = action.payload.status
+		setProviderStatus: (
+			state,
+			action: PayloadAction<{
+				providerId: string;
+				status:
+					| "idle"
+					| "authenticating"
+					| "authenticated"
+					| "expired"
+					| "error";
+			}>,
+		) => {
+			state.providerStatus[action.payload.providerId] = action.payload.status;
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		/**
 		 * Set cloud vaults list
 		 */
 		setCloudVaults: (state, action: PayloadAction<Vault[]>) => {
-			// This action is used to update the vaults list with cloud vaults
-			// It merges with existing vaults, updating cloud vault information
-			const cloudVaults = action.payload
-			cloudVaults.forEach(cloudVault => {
-				const existingIndex = state.vaults.findIndex(v => v.id === cloudVault.id)
+			// Merge cloud vault metadata into existing state without dropping local cache
+			action.payload.forEach((cloudVault) => {
+				const existingIndex = state.vaults.findIndex(
+					(v) => v.id === cloudVault.id,
+				);
 				if (existingIndex !== -1) {
-					// Update existing vault with cloud information
 					state.vaults[existingIndex] = {
 						...state.vaults[existingIndex],
 						...cloudVault,
-					}
+					};
 				} else {
-					// Add new cloud vault
-					state.vaults.push(cloudVault)
+					state.vaults.push(cloudVault);
 				}
-			})
+			});
 			void persistVaultState(
-        state.vaults,
-        state.providers,
-        state.defaultProvider,
-        state.providerStatus
-      );
+				state.vaults,
+				state.providers,
+				state.defaultProvider,
+				state.providerStatus,
+			);
 		},
 		/**
 		 * Trigger cloud sync for a vault
 		 */
 		syncCloudVault: (state, action: PayloadAction<string>) => {
-			const vault = state.vaults.find(v => v.id === action.payload)
+			const vault = state.vaults.find((v) => v.id === action.payload);
 			if (vault && vault.cloudMetadata) {
-				vault.cloudMetadata.lastSync = new Date().toISOString()
+				vault.cloudMetadata.lastSync = new Date().toISOString();
 				void persistVaultState(
-          state.vaults,
-          state.providers,
-          state.defaultProvider,
-          state.providerStatus
-        );
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus,
+				);
 			}
 		},
 		/**
@@ -582,45 +593,45 @@ export const vaultSlice = createSlice({
 		},
 	},
 	extraReducers: (builder) => {
-		builder
+		builder;
 		// All async thunk cases have been removed as they are now handled by VaultManager
 	},
-})
+});
 
 // Async thunk for deleting a vault with optional file deletion
 export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
 	return async (dispatch: any, getState: any) => {
-      // First, get the vault to access its path
-      const state = getState();
-      const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
+		// First, get the vault to access its path
+		const state = getState();
+		const vault = state.vault.vaults.find((v: Vault) => v.id === vaultId);
 
-      if (!vault) {
-        throw new Error('Vault not found');
-      }
+		if (!vault) {
+			throw new Error("Vault not found");
+		}
 
-      let fileDeletionError: Error | null = null;
+		let fileDeletionError: Error | null = null;
 
-      // If deleteFile is true, attempt to delete the file from storage
-      if (deleteFile) {
-        try {
-          // Use the unified deleteVault command that handles both local and cloud vaults
-          await VaultCommands.deleteVault(vault.path, vault.providerId);
-        } catch (error) {
-          console.error('Failed to delete vault file:', error);
-          fileDeletionError = new Error(
-            (error as any)?.message ||
-            (error instanceof Error ? error.message : String(error))
-          );
-        }
-      }
+		// If deleteFile is true, attempt to delete the file from storage
+		if (deleteFile) {
+			try {
+				// Use the unified deleteVault command that handles both local and cloud vaults
+				await VaultCommands.deleteVault(vault.path, vault.providerId);
+			} catch (error) {
+				console.error("Failed to delete vault file:", error);
+				fileDeletionError = new Error(
+					(error as any)?.message ||
+						(error instanceof Error ? error.message : String(error)),
+				);
+			}
+		}
 
-      // Remove the vault from Redux state (this will also clean up VaultManager)
-      dispatch(removeVault(vaultId));
+		// Remove the vault from Redux state (this will also clean up VaultManager)
+		dispatch(removeVault(vaultId));
 
-      // If there was an error during file deletion, re-throw it so UI can show an alert
-      if (fileDeletionError) {
-        throw fileDeletionError;
-      }
+		// If there was an error during file deletion, re-throw it so UI can show an alert
+		if (fileDeletionError) {
+			throw fileDeletionError;
+		}
 	};
 };
 
@@ -648,27 +659,27 @@ export const {
 	syncCloudVault,
 	setOAuthState,
 	clearOAuthState,
-} = vaultSlice.actions
+} = vaultSlice.actions;
 
 /**
  * Helper function to check if a vault is cloud-based
  */
 export const isCloudVault = (vault: Vault): boolean => {
-	return vault.storageType === 'cloud' && !!vault.providerId
-}
+	return vault.storageType === "cloud" && !!vault.providerId;
+};
 
 /**
  * Helper function to get the storage provider for a vault
  */
 export const getVaultProvider = (
 	vault: Vault,
-	providers: StorageProvider[]
+	providers: StorageProvider[],
 ): StorageProvider | undefined => {
 	if (!isCloudVault(vault) || !vault.providerId) {
-		return undefined
+		return undefined;
 	}
-	return providers.find(provider => provider.name === vault.providerId)
-}
+	return providers.find((provider) => provider.name === vault.providerId);
+};
 
 /**
  * Helper function to create a cloud vault object
@@ -678,13 +689,13 @@ export const createCloudVault = (
 	name: string,
 	providerId: string,
 	fileId: string,
-	password?: string
+	password?: string,
 ): Vault => {
 	return {
 		id,
 		name,
 		path: fileId, // Use cloud file ID as path
-		storageType: 'cloud',
+		storageType: "cloud",
 		providerId,
 		cloudMetadata: {
 			fileId,
@@ -698,8 +709,8 @@ export const createCloudVault = (
 			navigationPath: "/",
 			encryptedData: undefined,
 		},
-	}
-}
+	};
+};
 
 /**
  * Helper function to migrate a local vault to cloud storage
@@ -707,11 +718,11 @@ export const createCloudVault = (
 export const migrateVaultToCloud = (
 	vault: Vault,
 	providerId: string,
-	fileId: string
+	fileId: string,
 ): Vault => {
 	return {
 		...vault,
-		storageType: 'cloud' as const,
+		storageType: "cloud" as const,
 		providerId,
 		cloudMetadata: {
 			fileId,
@@ -719,23 +730,20 @@ export const migrateVaultToCloud = (
 			lastSync: new Date().toISOString(),
 		},
 		path: fileId, // Update path to use cloud file ID
-	}
-}
+	};
+};
 
 /**
  * Helper function to migrate a cloud vault to local storage
  */
-export const migrateVaultToLocal = (
-	vault: Vault,
-	localPath: string
-): Vault => {
+export const migrateVaultToLocal = (vault: Vault, localPath: string): Vault => {
 	return {
 		...vault,
-		storageType: 'local' as const,
+		storageType: "local" as const,
 		providerId: undefined,
 		cloudMetadata: undefined,
 		path: localPath,
-	}
-}
+	};
+};
 
-export default vaultSlice.reducer
+export default vaultSlice.reducer;

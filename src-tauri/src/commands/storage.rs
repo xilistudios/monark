@@ -185,8 +185,8 @@ pub async fn check_provider_auth_status(
     if let Some(provider_config) = config.get_provider_config(&provider_name) {
         match provider_config {
             ProviderConfig::GoogleDrive { config } => {
-                // Provider is authenticated if it has an access token
-                Ok(config.access_token.is_some())
+                // Provider is authenticated only if it has a non-expired access token
+                Ok(config.access_token.is_some() && !config.is_token_expired())
             }
             ProviderConfig::Local { .. } => {
                 // Local provider doesn't need authentication

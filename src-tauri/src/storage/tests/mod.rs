@@ -164,7 +164,7 @@ mod tests {
         // Test creating a vault file
         let vault_request = CreateFileRequest {
             name: "test_vault.monark".to_string(),
-            path: "/Monark/test_vault.monark".to_string(),
+            path: "/test_vault.monark".to_string(),
             content: b"Mock vault content".to_vec(),
             parent_id: Some(vault_folder_id.clone()),
             mime_type: Some("application/octet-stream".to_string()),

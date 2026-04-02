@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 target
 .aider*
+# CocoIndex Code (ccc)
+/.cocoindex_code/

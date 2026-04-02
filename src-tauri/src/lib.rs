@@ -103,6 +103,8 @@ fn build_app(storage_manager: Arc<storage::StorageManager>) {
             commands::storage::list_vaults,
             commands::storage::authenticate_provider,
             commands::storage::check_provider_auth_status,
+            commands::storage::get_provider_auth_info,
+            commands::storage::refresh_provider_auth,
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
             state::load_vault_state,
