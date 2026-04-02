@@ -58,7 +58,12 @@ export class VaultInstance {
 
 	private async promptProviderReauth(providerName: string): Promise<void> {
 		const state = this.getState();
-		const oauthState = state.vault.oauthState;
+		const oauthState = state.vault.oauthState ?? {
+			providerName: null,
+			authUrl: null,
+			state: null,
+			isOpen: false,
+		};
 		const currentStatus = state.vault.providerStatus[providerName];
 
 		if (oauthState.isOpen && oauthState.providerName === providerName) {
@@ -94,12 +99,35 @@ export class VaultInstance {
 	): Promise<{ authenticated: boolean; expired: boolean }> {
 		try {
 			const authInfo =
-				await CloudStorageCommands.getProviderAuthInfo(providerName);
+				(await CloudStorageCommands.getProviderAuthInfo(providerName)) ?? null;
+			if (!authInfo) {
+				return { authenticated: false, expired: true };
+			}
+			const expired =
+				Boolean(authInfo.token_expires_at) &&
+				isTokenExpired(authInfo.token_expires_at);
+
+			if (expired) {
+				try {
+					const refreshed =
+						await CloudStorageCommands.refreshProviderAuth(providerName);
+					return {
+						authenticated: refreshed.authenticated,
+						expired:
+							Boolean(refreshed.token_expires_at) &&
+							isTokenExpired(refreshed.token_expires_at),
+					};
+				} catch (refreshError) {
+					console.warn(
+						`Failed to refresh auth for provider ${providerName}:`,
+						refreshError,
+					);
+					return { authenticated: false, expired: true };
+				}
+			}
 			return {
 				authenticated: authInfo.authenticated,
-				expired:
-					Boolean(authInfo.token_expires_at) &&
-					isTokenExpired(authInfo.token_expires_at),
+				expired,
 			};
 		} catch (error) {
 			console.warn(
@@ -575,11 +603,39 @@ export class VaultManager {
 		try {
 			const authInfo =
 				await CloudStorageCommands.getProviderAuthInfo(providerName);
+			if (!authInfo) {
+				return { authenticated: false, expired: true };
+			}
+
+			const expired =
+				Boolean(authInfo.token_expires_at) &&
+				isTokenExpired(authInfo.token_expires_at);
+
+			if (expired) {
+				try {
+					const refreshed =
+						await CloudStorageCommands.refreshProviderAuth(providerName);
+					if (!refreshed) {
+						return { authenticated: false, expired: true };
+					}
+
+					return {
+						authenticated: refreshed.authenticated,
+						expired:
+							Boolean(refreshed.token_expires_at) &&
+							isTokenExpired(refreshed.token_expires_at),
+					};
+				} catch (refreshError) {
+					console.warn(
+						`Failed to refresh auth for provider ${providerName}:`,
+						refreshError,
+					);
+					return { authenticated: false, expired: true };
+				}
+			}
 			return {
 				authenticated: authInfo.authenticated,
-				expired:
-					Boolean(authInfo.token_expires_at) &&
-					isTokenExpired(authInfo.token_expires_at),
+				expired,
 			};
 		} catch (error) {
 			console.warn(

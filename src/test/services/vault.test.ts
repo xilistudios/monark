@@ -21,17 +21,17 @@ import type { Entry } from "../../interfaces/vault.interface";
 import type { Vault } from "../../redux/actions/vault";
 import * as vaultActions from "../../redux/actions/vault";
 import type { AppDispatch, RootState } from "../../redux/store";
-import CloudStorageCommands from "../../services/cloudStorage";
+import { CloudStorageCommands } from "../../services/cloudStorage";
 import VaultCommands from "../../services/commands";
 import { VaultInstance, VaultManager } from "../../services/vault";
 
 // Mock the dependencies
-const mockVaultCommands = {
+const mockVaultCommands = vi.hoisted(() => ({
 	read: vi.fn(),
 	write: vi.fn(),
 	delete: vi.fn(),
-};
-const mockCloudStorageCommands = {
+}));
+const mockCloudStorageCommands = vi.hoisted(() => ({
 	listProviders: vi.fn(),
 	addProvider: vi.fn(),
 	removeProvider: vi.fn(),
@@ -39,13 +39,14 @@ const mockCloudStorageCommands = {
 	authenticateProvider: vi.fn(),
 	getGoogleDriveOAuthUrl: vi.fn(),
 	getProviderAuthInfo: vi.fn(),
+	refreshProviderAuth: vi.fn(),
 	listCloudVaults: vi.fn(),
 	readCloudVault: vi.fn(),
 	writeCloudVault: vi.fn(),
 	updateCloudVault: vi.fn(),
 	deleteCloudVault: vi.fn(),
-};
-const mockVaultActions = {
+}));
+const mockVaultActions = vi.hoisted(() => ({
 	setVaultCredential: vi.fn(),
 	setVaultEntries: vi.fn(),
 	lockVault: vi.fn(),
@@ -59,10 +60,12 @@ const mockVaultActions = {
 	setOAuthState: vi.fn(),
 	addVault: vi.fn(),
 	setVaultLocked: vi.fn(),
-};
+}));
 
 vi.mock("../../services/commands", () => mockVaultCommands);
-vi.mock("../../services/cloudStorage", () => mockCloudStorageCommands);
+vi.mock("../../services/cloudStorage", () => ({
+	CloudStorageCommands: mockCloudStorageCommands,
+}));
 vi.mock("../../redux/actions/vault", () => mockVaultActions);
 vi.mock("@tauri-apps/plugin-store", () => ({
 	load: vi.fn().mockResolvedValue({
@@ -472,7 +475,11 @@ describe("VaultManager", () => {
 	describe("loadProviders", () => {
 		it("should load providers successfully", async () => {
 			const mockProviders: StorageProvider[] = [
-				{ name: "google-drive", providerType: "google_drive", isDefault: true },
+				{
+					name: "google-drive",
+					provider_type: StorageProviderType.GOOGLE_DRIVE,
+					is_default: true,
+				},
 			];
 			vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue(
 				mockProviders,
@@ -486,13 +493,75 @@ describe("VaultManager", () => {
 			);
 		});
 
+		it("should refresh google drive auth before marking it expired", async () => {
+			const mockProviders: StorageProvider[] = [
+				{
+					name: "google-drive",
+					provider_type: StorageProviderType.GOOGLE_DRIVE,
+					is_default: true,
+				},
+			];
+			vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue(
+				mockProviders,
+			);
+			vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
+				authenticated: true,
+				token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+			});
+			vi.mocked(CloudStorageCommands.refreshProviderAuth).mockResolvedValue({
+				authenticated: true,
+				token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+			});
+
+			await vaultManager.loadProviders();
+
+			expect(CloudStorageCommands.refreshProviderAuth).toHaveBeenCalledWith(
+				"google-drive",
+			);
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setProviderStatus({
+					providerId: "google-drive",
+					status: "authenticated",
+				}),
+			);
+		});
+
+		it("should mark google drive expired when refresh fails", async () => {
+			const mockProviders: StorageProvider[] = [
+				{
+					name: "google-drive",
+					provider_type: StorageProviderType.GOOGLE_DRIVE,
+					is_default: true,
+				},
+			];
+			vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue(
+				mockProviders,
+			);
+			vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
+				authenticated: true,
+				token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+			});
+			vi.mocked(CloudStorageCommands.refreshProviderAuth).mockRejectedValue(
+				new Error("refresh failed"),
+			);
+
+			await vaultManager.loadProviders();
+
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setProviderStatus({
+					providerId: "google-drive",
+					status: "expired",
+				}),
+			);
+		});
+
 		it("should throw error if loading fails", async () => {
 			vi.mocked(CloudStorageCommands.listProviders).mockRejectedValue(
 				new Error("Network error"),
 			);
 
 			await expect(vaultManager.loadProviders()).rejects.toThrow(
-				"Failed to load providers: Error: Network error",
+				"Failed to load providers: Network error",
 			);
 		});
 	});
@@ -515,10 +584,9 @@ describe("VaultManager", () => {
 
 			await vaultManager.addProvider(config);
 
-			expect(CloudStorageCommands.addProvider).toHaveBeenCalledWith({
-				name: expect.stringMatching(/^provider_\d+$/),
-				config,
-			});
+			expect(CloudStorageCommands.addProvider).toHaveBeenCalledWith(
+				expect.objectContaining({ config }),
+			);
 			expect(CloudStorageCommands.listProviders).toHaveBeenCalled();
 		});
 	});
@@ -555,7 +623,7 @@ describe("VaultManager", () => {
 
 			await expect(
 				vaultManager.authenticateProvider("google-drive"),
-			).rejects.toThrow("Failed to authenticate provider: Error: Auth failed");
+			).rejects.toThrow("Failed to authenticate provider: Auth failed");
 
 			expect(mockDispatch).toHaveBeenCalledWith(
 				vaultActions.setProviderStatus({

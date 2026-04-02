@@ -110,6 +110,27 @@ export class CloudStorageCommands {
 	}
 
 	/**
+	 * Refreshes provider authentication and returns updated auth info.
+	 * @param providerName - Name of the provider to refresh
+	 */
+	static async refreshProviderAuth(providerName: string): Promise<{
+		authenticated: boolean;
+		token_expires_at?: string | null;
+	}> {
+		try {
+			return await invoke<{
+				authenticated: boolean;
+				token_expires_at?: string | null;
+			}>("refresh_provider_auth", { providerName });
+		} catch (error) {
+			throw CloudStorageCommands.handleError(
+				error,
+				"Failed to refresh provider auth",
+			);
+		}
+	}
+
+	/**
 	 * Checks if a storage provider is authenticated
 	 * @param providerName - Name of the provider to check
 	 * @returns Promise resolving to boolean indicating if provider is authenticated
