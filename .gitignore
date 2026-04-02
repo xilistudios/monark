@@ -26,3 +26,4 @@ target
 .aider*
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+keystore.properties 
