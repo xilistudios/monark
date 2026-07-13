@@ -372,8 +372,8 @@ const VaultTree = ({
     return a.name.localeCompare(b.name);
   });
 
-  return (
-    <div className="w-full h-screen max-h-screen overflow-y-auto pb-40">
+	return (
+		<div className="w-full">
       {processedEntries.length === 0 ? (
         renderEmptyState()
       ) : (

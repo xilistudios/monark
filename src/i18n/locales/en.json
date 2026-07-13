@@ -266,6 +266,7 @@
     },
     "addGroup": {
       "title": "Add Group",
+      "description": "Create a new group folder to organize your vault items.",
       "name": "Group Name",
       "namePlaceholder": "Enter group name",
       "addGroup": "Add Group",
@@ -296,10 +297,21 @@
     },
     "addEntry": {
       "title": "Add New Entry",
+      "back": "Back",
+      "templates": {
+        "title": "Select Template",
+        "login": "Login",
+        "creditCard": "Credit Card",
+        "apiKey": "API Key",
+        "sshKey": "SSH Key",
+        "note": "Note",
+        "custom": "Custom"
+      },
       "entryTitle": "Entry Title",
       "entryTitlePlaceholder": "Enter entry title",
       "fields": "Fields",
       "fieldTitle": "Field name",
+      "fieldType": "Field type",
       "fieldProperty": "Property",
       "fieldValue": "Value",
       "secret": "Secret",
@@ -445,8 +457,26 @@
     },
     "editEntry": {
       "title": "Edit Entry",
+      "entryTitle": "Entry Title",
+      "entryTitlePlaceholder": "Enter entry title",
+      "dataType": "Data Type",
+      "dataTypePlaceholder": "Data type of the entry",
+      "fields": "Fields",
+      "fieldTitle": "Field name",
+      "fieldType": "Field type",
+      "fieldValue": "Value",
+      "secret": "Secret",
+      "addField": "Add Field",
+      "tags": "Tags",
+      "tagPlaceholder": "Enter tag",
+      "addTag": "Add Tag",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "errors": {
+        "titleRequired": "Entry title is required",
+        "fieldsRequired": "At least one field is required",
+        "updateFailed": "Failed to update entry"
+      }
     },
     "editGroup": {
       "title": "Edit Group"

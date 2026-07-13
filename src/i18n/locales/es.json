@@ -266,6 +266,7 @@
     },
     "addGroup": {
       "title": "Agregar Grupo",
+      "description": "Cree un nuevo grupo para organizar los elementos de su bóveda.",
       "name": "Nombre del Grupo",
       "namePlaceholder": "Ingrese el nombre del grupo",
       "addGroup": "Agregar Grupo",
@@ -296,10 +297,21 @@
     },
     "addEntry": {
       "title": "Agregar Nueva Entrada",
+      "back": "Atrás",
+      "templates": {
+        "title": "Seleccionar Plantilla",
+        "login": "Inicio de Sesión",
+        "creditCard": "Tarjeta de Crédito",
+        "apiKey": "Clave API",
+        "sshKey": "Clave SSH",
+        "note": "Nota",
+        "custom": "Personalizado"
+      },
       "entryTitle": "Título de la Entrada",
       "entryTitlePlaceholder": "Ingrese el título de la entrada",
       "fields": "Campos",
       "fieldTitle": "Nombre del campo",
+      "fieldType": "Tipo de campo",
       "fieldProperty": "Propiedad",
       "fieldValue": "Valor",
       "secret": "Secreto",
@@ -444,8 +456,26 @@
     },
     "editEntry": {
       "title": "Editar Entrada",
+      "entryTitle": "Título de la Entrada",
+      "entryTitlePlaceholder": "Ingrese el título de la entrada",
+      "dataType": "Tipo de Datos",
+      "dataTypePlaceholder": "Tipo de datos de la entrada",
+      "fields": "Campos",
+      "fieldTitle": "Nombre del campo",
+      "fieldType": "Tipo de campo",
+      "fieldValue": "Valor",
+      "secret": "Secreto",
+      "addField": "Agregar Campo",
+      "tags": "Etiquetas",
+      "tagPlaceholder": "Ingrese etiqueta",
+      "addTag": "Agregar Etiqueta",
       "save": "Guardar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "errors": {
+        "titleRequired": "El título de la entrada es obligatorio",
+        "fieldsRequired": "Se requiere al menos un campo",
+        "updateFailed": "Error al actualizar la entrada"
+      }
     },
     "editGroup": {
       "title": "Editar Grupo"

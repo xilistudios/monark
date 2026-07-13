@@ -165,7 +165,7 @@ function UnlockedVaultView({
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* Left column: Breadcrumbs + VaultTree always visible */}
         <div
-          className={`w-full md:w-[40%] flex flex-col h-full overflow-auto border-r border-base-300 ${
+          className={`w-full md:w-[40%] flex flex-col h-full overflow-hidden border-r border-base-300 ${
             isMobileSidebarOpen ? 'hidden md:flex' : 'flex'
           }`}
         >
@@ -180,7 +180,7 @@ function UnlockedVaultView({
             }}
             onNavigate={handleNavigate}
           />
-          <div className="p-4 flex-1 overflow-auto relative">
+          <div className="p-4 flex-1 overflow-y-auto relative">
             {/* VaultTree always visible */}
             {entries.length === 0 ? (
               <div className="text-center py-12">
