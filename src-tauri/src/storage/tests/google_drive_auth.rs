@@ -221,12 +221,12 @@ mod google_drive_auth_tests {
             format!("{}/token", server.url()),
         );
 
-        // All 3 attempts fail.
+        // invalid_grant is non-retryable: expect exactly 1 request (no retries).
         let _m = server
             .mock("POST", "/token")
             .with_status(400)
             .with_body("invalid_grant")
-            .expect(3)
+            .expect(1)
             .create_async()
             .await;
 
@@ -259,5 +259,145 @@ mod google_drive_auth_tests {
         }
 
         _m.assert_async().await;
+    }
+
+    /// Verify that when Google's token response omits the `refresh_token` field
+    /// (which happens on subsequent token refreshes), the original refresh token
+    /// from the existing config is preserved rather than wiped.
+    #[tokio::test]
+    async fn google_drive_refresh_preserves_existing_token_when_response_omits_it() {
+        // Serialize because the provider uses a global env var for the token URL.
+        let _guard = lock_oauth_env();
+
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        // Return a valid token response that does NOT include a refresh_token.
+        // This mirrors real Google behavior: after the first authorization,
+        // subsequent refresh responses omit the refresh token.
+        let _m = server
+            .mock("POST", "/token")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                serde_json::json!({
+                    "access_token": "new_access_no_rt",
+                    "expires_in": 3600,
+                    "token_type": "Bearer"
+                })
+                .to_string(),
+            )
+            .expect(1)
+            .create_async()
+            .await;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _xdg = EnvVarGuard::set(
+            "XDG_CONFIG_HOME",
+            temp_dir.path().to_string_lossy().to_string(),
+        );
+        let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
+        let manager = StorageManager::new(config).await.unwrap();
+
+        let original_refresh_token = "original_refresh_token_value";
+        manager
+            .add_provider(
+                "google_drive".to_string(),
+                ProviderConfig::GoogleDrive {
+                    config: GoogleDriveConfig {
+                        refresh_token: Some(original_refresh_token.to_string()),
+                        ..expired_google_drive_config()
+                    },
+                },
+            )
+            .await
+            .unwrap();
+
+        let updated_config = manager
+            .ensure_google_drive_token_valid("google_drive")
+            .await
+            .unwrap();
+
+        // The access token should be updated.
+        assert_eq!(
+            updated_config.access_token.as_deref(),
+            Some("new_access_no_rt")
+        );
+        // Crucially, the original refresh token must be preserved.
+        assert_eq!(
+            updated_config.refresh_token.as_deref(),
+            Some(original_refresh_token),
+            "refresh token should be preserved when Google response omits it"
+        );
+
+        // Verify persistence: the config saved to disk should also retain the refresh token.
+        let cfg_after = manager.get_config().await;
+        let ProviderConfig::GoogleDrive { config: persisted } = cfg_after
+            .get_provider_config("google_drive")
+            .expect("google_drive provider config should exist")
+            .clone()
+        else {
+            panic!("Expected google_drive ProviderConfig");
+        };
+        assert_eq!(
+            persisted.refresh_token.as_deref(),
+            Some(original_refresh_token),
+            "persisted config should retain the original refresh token"
+        );
+    }
+
+    #[tokio::test]
+    async fn google_drive_invalid_grant_returns_authentication_error_without_retries() {
+        // Serialize because the provider uses a global env var for the token URL.
+        let _guard = lock_oauth_env();
+
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        // invalid_grant should be recognized as non-retryable: exactly 1 request.
+        let m = server
+            .mock("POST", "/token")
+            .with_status(400)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"error":"invalid_grant"}"#)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _xdg = EnvVarGuard::set(
+            "XDG_CONFIG_HOME",
+            temp_dir.path().to_string_lossy().to_string(),
+        );
+        let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
+        let manager = StorageManager::new(config).await.unwrap();
+
+        manager
+            .add_provider(
+                "google_drive".to_string(),
+                ProviderConfig::GoogleDrive {
+                    config: expired_google_drive_config(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let err = manager
+            .ensure_google_drive_token_valid("google_drive")
+            .await
+            .expect_err("refresh should fail with authentication error");
+
+        match err {
+            StorageError::Authentication(_) => {}
+            other => panic!("expected StorageError::Authentication, got: {other:?}"),
+        }
+
+        m.assert_async().await;
     }
 }

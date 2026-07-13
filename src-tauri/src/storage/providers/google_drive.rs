@@ -91,6 +91,12 @@ struct GoogleDriveFileList {
     next_page_token: Option<String>,
 }
 
+/// Checks if a token refresh error response indicates a non-retryable
+/// `invalid_grant` (refresh token revoked/expired/user removed access).
+fn is_invalid_grant_error(status: reqwest::StatusCode, body: &str) -> bool {
+    status == reqwest::StatusCode::BAD_REQUEST && body.contains("invalid_grant")
+}
+
 impl GoogleDriveProvider {
     pub fn new(config: GoogleDriveConfig) -> Self {
         Self { config }
@@ -167,6 +173,16 @@ impl GoogleDriveProvider {
                             .text()
                             .await
                             .unwrap_or_else(|_| "Unknown error".to_string());
+                        // Non-retryable: refresh token is revoked/expired/invalid
+                        if is_invalid_grant_error(status, &error_text) {
+                            println!(
+                                "[Google Drive] Token refresh failed with invalid_grant (attempt {}): {}",
+                                attempt, error_text
+                            );
+                            return Err(StorageError::authentication(
+                                "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
+                            ));
+                        }
                         let error_msg = format!(
                             "Failed to refresh access token ({}): {}",
                             status, error_text
@@ -287,6 +303,16 @@ impl GoogleDriveProvider {
                             .text()
                             .await
                             .unwrap_or_else(|_| "Unknown error".to_string());
+                        // Non-retryable: refresh token is revoked/expired/invalid
+                        if is_invalid_grant_error(status, &error_text) {
+                            println!(
+                                "[Google Drive] Token refresh failed with invalid_grant for config (attempt {}): {}",
+                                attempt, error_text
+                            );
+                            return Err(StorageError::authentication(
+                                "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
+                            ));
+                        }
                         let error_msg = format!(
                             "Failed to refresh access token ({}): {}",
                             status, error_text

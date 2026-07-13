@@ -367,9 +367,16 @@ impl StorageManager {
 
         let actual_provider_name = self.resolve_provider_key(&provider_name_str).await;
 
-        // Ensure Google Drive token is valid before operations
-        if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str)
+        let is_google_drive = {
+            let config = self.config.read().await;
+            matches!(
+                config.get_provider_config(&actual_provider_name),
+                Some(ProviderConfig::GoogleDrive { .. })
+            )
+        };
+
+        if is_google_drive {
+            self.ensure_google_drive_token_valid(&actual_provider_name)
                 .await?;
         }
 
@@ -412,9 +419,16 @@ impl StorageManager {
 
         let actual_provider_name = self.resolve_provider_key(&provider_name_str).await;
 
-        // Ensure Google Drive token is valid before operations
-        if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str)
+        let is_google_drive = {
+            let config = self.config.read().await;
+            matches!(
+                config.get_provider_config(&actual_provider_name),
+                Some(ProviderConfig::GoogleDrive { .. })
+            )
+        };
+
+        if is_google_drive {
+            self.ensure_google_drive_token_valid(&actual_provider_name)
                 .await?;
         }
 
@@ -457,9 +471,16 @@ impl StorageManager {
 
         let actual_provider_name = self.resolve_provider_key(&provider_name_str).await;
 
-        // Ensure Google Drive token is valid before operations
-        if actual_provider_name == "google_drive" {
-            self.ensure_google_drive_token_valid(&provider_name_str)
+        let is_google_drive = {
+            let config = self.config.read().await;
+            matches!(
+                config.get_provider_config(&actual_provider_name),
+                Some(ProviderConfig::GoogleDrive { .. })
+            )
+        };
+
+        if is_google_drive {
+            self.ensure_google_drive_token_valid(&actual_provider_name)
                 .await?;
         }
 

@@ -366,12 +366,21 @@ pub async fn get_google_drive_oauth_url(
 
             // Build OAuth URL
             let scopes = "https://www.googleapis.com/auth/drive.file";
+            // Only force consent prompt when we don't already have a refresh token,
+            // so re-auth doesn't discard the existing one.
+            let prompt_param = if gd_config.refresh_token.is_none() {
+                "&prompt=consent"
+            } else {
+                ""
+            };
+
             let auth_url = format!(
-                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&state={}&prompt=consent",
+                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&state={}{}",
                 urlencoding::encode(&gd_config.client_id),
                 urlencoding::encode(&gd_config.redirect_uri),
                 urlencoding::encode(scopes),
-                &oauth_state
+                &oauth_state,
+                prompt_param,
             );
 
             Ok(OAuthUrlResponse {
@@ -484,7 +493,7 @@ pub async fn handle_google_drive_oauth_callback(
         client_secret: gd_config.client_secret,
         redirect_uri,
         access_token: Some(token_response.access_token),
-        refresh_token: token_response.refresh_token,
+        refresh_token: token_response.refresh_token.or(gd_config.refresh_token),
         token_expires_at: Some(
             Utc::now() + chrono::Duration::seconds(token_response.expires_in as i64),
         ),
