@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="100%" height="100%">
+  <defs>
+    <mask id="keyhole-mask">
+      <rect x="0" y="0" width="300" height="300" fill="white" />
+      <circle cx="150" cy="184" r="13" fill="black" />
+      <polygon points="144,190 156,190 164,224 136,224" fill="black" />
+    </mask>
+
+    <g id="half-butterfly">
+      <path d="
+        M 150 130
+        C 155 130, 158 135, 158 140
+        C 165 130, 195 95, 235 100
+        C 265 105, 275 145, 255 170
+        C 240 185, 205 190, 175 190
+        C 195 195, 235 200, 245 220
+        C 250 240, 225 265, 200 260
+        C 180 255, 175 245, 160 245
+        L 150 245
+        Z
+      " />
+    </g>
+  </defs>
+
+  <!-- Shackle -->
+  <path d="M 102 120 L 102 85 A 48 48 0 0 1 198 85 L 198 120" fill="none" stroke="#ff7e0a" stroke-width="10" />
+
+  <!-- Antennae -->
+  <path d="M 147 133 Q 138 115 128 105" fill="none" stroke="#ff7e0a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="126" cy="103" r="3.5" fill="#ff7e0a"/>
+
+  <path d="M 153 133 Q 162 115 172 105" fill="none" stroke="#ff7e0a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="174" cy="103" r="3.5" fill="#ff7e0a"/>
+
+  <!-- Butterfly Body -->
+  <g mask="url(#keyhole-mask)" fill="#ff7e0a">
+    <use href="#half-butterfly" />
+    <!-- Mirror left half -->
+    <use href="#half-butterfly" transform="translate(300, 0) scale(-1, 1)" />
+  </g>
+</svg>
