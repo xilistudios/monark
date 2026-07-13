@@ -22,6 +22,7 @@ import vaultReducer, {
 	setStorageProviders,
 	setVaultCredential,
 	setVaultEntries,
+	restoreVaultState,
 	syncCloudVault,
 	type Vault,
 } from "../../redux/actions/vault";
@@ -38,6 +39,7 @@ const mockVaultStateCommands = vi.hoisted(() => ({
 
 vi.mock("../../services/vaultState", () => ({
 	VaultStateCommands: mockVaultStateCommands,
+	isVaultLocked: (vault: any) => vault.isLocked || !vault.volatile?.credential,
 }));
 
 const createEntry = (
@@ -696,6 +698,74 @@ describe("Vault Redux State Extensions", () => {
 			expect(result.providers).toEqual([]);
 			expect(result.defaultProvider).toBe(null);
 			expect(result.providerStatus).toEqual({});
+		});
+	});
+
+	describe("restoreVaultState", () => {
+		it("should select the vault with the latest lastAccessed timestamp", () => {
+			const vault1: Vault = {
+				id: "vault-1",
+				name: "Vault 1",
+				path: "/path/1",
+				storageType: "local",
+				isLocked: true,
+				lastAccessed: "2023-01-01T12:00:00.000Z",
+				volatile: { entries: [], credential: "", navigationPath: "/" },
+			};
+			const vault2: Vault = {
+				id: "vault-2",
+				name: "Vault 2",
+				path: "/path/2",
+				storageType: "local",
+				isLocked: true,
+				lastAccessed: "2023-01-02T12:00:00.000Z", // latest
+				volatile: { entries: [], credential: "", navigationPath: "/" },
+			};
+			const vault3: Vault = {
+				id: "vault-3",
+				name: "Vault 3",
+				path: "/path/3",
+				storageType: "local",
+				isLocked: true,
+				lastAccessed: "2023-01-01T15:00:00.000Z",
+				volatile: { entries: [], credential: "", navigationPath: "/" },
+			};
+
+			store.dispatch(restoreVaultState({ vaults: [vault1, vault2, vault3] }));
+			const state = store.getState().vault;
+
+			expect(state.currentVaultId).toBe("vault-2");
+		});
+
+		it("should fallback to the first vault if no vaults have lastAccessed", () => {
+			const vault1: Vault = {
+				id: "vault-1",
+				name: "Vault 1",
+				path: "/path/1",
+				storageType: "local",
+				isLocked: true,
+				volatile: { entries: [], credential: "", navigationPath: "/" },
+			};
+			const vault2: Vault = {
+				id: "vault-2",
+				name: "Vault 2",
+				path: "/path/2",
+				storageType: "local",
+				isLocked: true,
+				volatile: { entries: [], credential: "", navigationPath: "/" },
+			};
+
+			store.dispatch(restoreVaultState({ vaults: [vault1, vault2] }));
+			const state = store.getState().vault;
+
+			expect(state.currentVaultId).toBe("vault-1");
+		});
+
+		it("should set currentVaultId to null if vaults list is empty", () => {
+			store.dispatch(restoreVaultState({ vaults: [] }));
+			const state = store.getState().vault;
+
+			expect(state.currentVaultId).toBeNull();
 		});
 	});
 });

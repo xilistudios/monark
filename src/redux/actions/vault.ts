@@ -117,6 +117,10 @@ const resolveDefaultProvider = (
 	providers: StorageProvider[],
 	preferredProvider?: string | null,
 ): string | null => {
+	if (providers.length === 0) {
+		return null;
+	}
+
 	if (providers.some((provider) => provider.name === "local")) {
 		return "local";
 	}
@@ -254,6 +258,7 @@ export const vaultSlice = createSlice({
 			const vault = {
 				...action.payload,
 				storageType: action.payload.storageType || "local",
+				lastAccessed: action.payload.lastAccessed || new Date().toISOString(),
 				volatile: {
 					entries: action.payload.volatile?.entries || [],
 					credential: action.payload.volatile?.credential || "",
@@ -355,7 +360,25 @@ export const vaultSlice = createSlice({
 					isOpen: false,
 				};
 			}
-			state.currentVaultId = null;
+			// Select the vault with the latest lastAccessed timestamp
+			let latestVaultId: string | null = null;
+			let latestTime = 0;
+			if (state.vaults && state.vaults.length > 0) {
+				for (const vault of state.vaults) {
+					if (vault.lastAccessed) {
+						const time = new Date(vault.lastAccessed).getTime();
+						if (!isNaN(time) && time > latestTime) {
+							latestTime = time;
+							latestVaultId = vault.id;
+						}
+					}
+				}
+				// Fallback: If no vault has a lastAccessed timestamp, default to the first vault
+				if (!latestVaultId && state.vaults.length > 0) {
+					latestVaultId = state.vaults[0].id;
+				}
+			}
+			state.currentVaultId = latestVaultId;
 		},
 		setVaultCredential: (
 			state,
