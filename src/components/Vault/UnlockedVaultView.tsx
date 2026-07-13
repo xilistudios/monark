@@ -1,6 +1,6 @@
 // src/components/Vault/UnlockedVaultView.tsx
 
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
 import { AddEntryModal } from './Modals/AddEntryModal';
 import { AddGroupModal } from './Modals/AddGroupModal';
@@ -74,11 +74,16 @@ function UnlockedVaultView({
   const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const isSearchingRef = useRef(false);
   const { setIsSearchModalOpen } = useContext(VaultModalContext)!;
   useEffect(() => {
     setSidebarMode('view');
-    setIsMobileSidebarOpen(false);
-  }, [currentPath]);
+    if (isSearchingRef.current) {
+      isSearchingRef.current = false;
+    } else {
+      setIsMobileSidebarOpen(false);
+    }
+  }, [currentPath.join('/')]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 10);
@@ -107,10 +112,12 @@ function UnlockedVaultView({
     entry: DataEntry;
     path: string[];
   }) => {
+    isSearchingRef.current = true;
     handleNavigate(item.path);
     setIsSearchModalOpen(false);
     setSelectedEntry(item.entry);
     setSidebarMode('view');
+    setIsMobileSidebarOpen(true);
   };
 
   const handleCloseMobileSidebar = () => {
