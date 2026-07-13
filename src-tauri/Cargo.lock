@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "monark"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "argon2",
  "async-trait",
