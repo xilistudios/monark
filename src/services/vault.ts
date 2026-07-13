@@ -1121,6 +1121,7 @@ export class VaultManager {
 				providerId: storageType === "cloud" ? providerId : undefined,
 				cloudMetadata,
 				isLocked: true,
+				lastAccessed: new Date().toISOString(),
 				volatile: {
 					entries: [],
 					credential: "",

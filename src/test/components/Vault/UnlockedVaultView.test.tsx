@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { I18nextProvider } from 'react-i18next';
@@ -61,17 +61,25 @@ function renderWithProvider(ui: React.ReactElement) {
           'google-drive': 'authenticated',
           'dropbox': 'idle',
         },
+        oauthState: {
+          providerName: null,
+          authUrl: null,
+          state: null,
+          isOpen: false,
+        },
       },
     },
   });
 
-  return render(
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <Provider store={store}>
       <I18nextProvider i18n={i18n}>
-        <VaultModalProvider>{ui}</VaultModalProvider>
+        <VaultModalProvider>{children}</VaultModalProvider>
       </I18nextProvider>
     </Provider>
   );
+
+  return render(ui, { wrapper: Wrapper });
 }
 
 describe('UnlockedVaultView', () => {
@@ -105,5 +113,60 @@ describe('UnlockedVaultView', () => {
     await waitFor(() => {
       expect(container).toHaveClass('transition-opacity', 'duration-300', 'opacity-100');
     });
+  });
+
+  it('keeps mobile sidebar open when a search result is selected', async () => {
+    const entry: import('../../../interfaces/vault.interface').DataEntry = {
+      id: 'entry1',
+      entry_type: 'entry',
+      name: 'Test Entry',
+      data_type: 'login',
+      fields: [{ name: 'username', value: 'testuser', type: 'text' }],
+      tags: [],
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+    };
+
+    const vaultWithEntries = {
+      ...mockVault,
+      volatile: {
+        ...mockVault.volatile,
+        entries: [entry],
+      },
+    };
+
+    const { rerender } = renderWithProvider(
+      <UnlockedVaultView
+        {...mockProps}
+        entries={[entry]}
+        currentVault={vaultWithEntries}
+      />
+    );
+
+    // Click the search button to open search modal
+    const searchButton = screen.getByLabelText('vault.manager.search');
+    fireEvent.click(searchButton);
+
+    // Enter query into search input
+    const searchInput = screen.getByPlaceholderText('Search');
+    fireEvent.change(searchInput, { target: { value: 'Test Entry' } });
+
+    // Click the search result
+    const searchResults = screen.getAllByText('Test Entry');
+    const searchResult = searchResults[searchResults.length - 1];
+    fireEvent.click(searchResult);
+
+    // Rerender with the updated/navigated path, simulating handleNavigate callback updating currentPath
+    rerender(
+      <UnlockedVaultView
+        {...mockProps}
+        currentPath={['some', 'path']}
+        entries={[entry]}
+        currentVault={vaultWithEntries}
+      />
+    );
+
+    // The mobile sidebar header "Entry Details" should remain in the document
+    expect(screen.getByText('Entry Details')).toBeInTheDocument();
   });
 });

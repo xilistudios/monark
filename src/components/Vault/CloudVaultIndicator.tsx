@@ -18,9 +18,11 @@ export const CloudVaultIndicator = ({
 }: CloudVaultIndicatorProps) => {
   const { t } = useTranslation('home');
   const providers = useSelector((state: RootState) => state.vault.providers);
+  const providerStatus = useSelector((state: RootState) => state.vault.providerStatus);
 
   const isCloud = vault.storageType === 'cloud';
   const provider = getVaultProvider(vault, providers);
+  const isProviderExpired = vault.providerId ? providerStatus[vault.providerId] === 'expired' : false;
 
   const formatLastSync = (dateStr?: string) => {
     if (!dateStr) return t('vaultSelector.never');
@@ -52,6 +54,31 @@ export const CloudVaultIndicator = ({
             <title>{t('vaultSelector.cloudVault')}</title>
             <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
           </svg>
+
+          {/* Provider expired warning */}
+          {isProviderExpired && (
+            <span
+              className="text-warning"
+              title={t(
+                'vaultSelector.providerExpired',
+                'Provider auth expired — vault list may be stale',
+              )}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <title>
+                  {t(
+                    'vaultSelector.providerExpired',
+                    'Provider auth expired — vault list may be stale',
+                  )}
+                </title>
+                <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+              </svg>
+            </span>
+          )}
 
           {/* Provider badge */}
           {provider && (
@@ -116,6 +143,14 @@ export const CloudVaultIndicator = ({
           <span className="ml-1">
             {formatLastSync(vault.cloudMetadata.lastSync)}
           </span>
+        </div>
+      )}
+      {isProviderExpired && (
+        <div className="text-warning text-xs mt-1">
+          {t(
+            'vaultSelector.providerExpired',
+            'Provider auth expired — vault list may be stale',
+          )}
         </div>
       )}
       <div className="text-xs text-base-content/60 mt-1">
