@@ -225,6 +225,25 @@ export const AddEntryModal = () => {
 		setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
 	};
 
+	const resetFormState = () => {
+		setEntryTitle("");
+		setFields([]);
+		setTags([]);
+		setNewTag("");
+		setError("");
+		setSelectedTemplate(null);
+		setRevealed({});
+	};
+
+	const closeAndReset = () => {
+		closeAddEntryModal();
+		setTimeout(resetFormState, 300);
+	};
+
+	const handleCancel = () => {
+		closeAndReset();
+	};
+
 	const handleSubmit = async () => {
 		try {
 			const formData = {
@@ -263,16 +282,9 @@ export const AddEntryModal = () => {
 				}
 			}
 
-			// Reset Form
-			setEntryTitle("");
-			setFields([]);
-			setTags([]);
-			setNewTag("");
-			setSelectedTemplate(null);
-			setRevealed({});
-
 			addEntryOnSuccess?.();
 			closeAddEntryModal();
+			setTimeout(resetFormState, 300);
 		} catch (err) {
 			if (err instanceof z.ZodError) {
 				const errorMessages = err.issues.map((issue) => issue.message).join(", ");
@@ -286,20 +298,9 @@ export const AddEntryModal = () => {
 		}
 	};
 
-	const handleCancel = () => {
-		setEntryTitle("");
-		setFields([]);
-		setTags([]);
-		setNewTag("");
-		setError("");
-		setSelectedTemplate(null);
-		setRevealed({});
-		closeAddEntryModal();
-	};
-
-	if (selectedTemplate === null) {
-		return (
-			<Modal isOpen={isAddEntryModalOpen} onClose={handleCancel}>
+	return (
+		<Modal isOpen={isAddEntryModalOpen} onClose={handleCancel}>
+			{selectedTemplate === null ? (
 				<div className="space-y-6">
 					<div className="flex items-start gap-4 pb-3 border-b border-base-300/40">
 						<div className="p-2.5 rounded-xl bg-primary/10 text-primary">
@@ -356,13 +357,8 @@ export const AddEntryModal = () => {
 						</button>
 					</div>
 				</div>
-			</Modal>
-		);
-	}
-
-	return (
-		<Modal isOpen={isAddEntryModalOpen} onClose={handleCancel}>
-			<div className="space-y-4">
+			) : (
+				<div className="space-y-4">
 				<div className="flex items-center justify-between pb-3 border-b border-base-300/40">
 					<div className="flex items-center gap-3">
 						<div className="p-2.5 rounded-xl bg-primary/10 text-primary">
@@ -665,6 +661,7 @@ export const AddEntryModal = () => {
 					</button>
 				</div>
 			</div>
+			)}
 		</Modal>
 	);
 };
