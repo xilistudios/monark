@@ -33,6 +33,9 @@ type ProviderStatus =
 	| "expired"
 	| "error";
 
+/** The name of the default Monark Google Drive provider (protected, cannot be removed). */
+const MONARK_DEFAULT_PROVIDER_NAME = "Monark";
+
 export const CloudStorageSettings = () => {
 	const { t } = useTranslation("settings");
 	const dispatch = useDispatch();
@@ -118,7 +121,7 @@ export const CloudStorageSettings = () => {
 	};
 
 	const handleRemoveProvider = (providerName: string) => {
-		if (providerName === "local") {
+		if (providerName === "local" || providerName === MONARK_DEFAULT_PROVIDER_NAME) {
 			return;
 		}
 		setConfirmRemove({ isOpen: true, providerName });
@@ -224,6 +227,8 @@ export const CloudStorageSettings = () => {
 							"idle") as ProviderStatus;
 						const isLocalProvider =
 							provider.provider_type === StorageProviderType.LOCAL;
+						const isMonarkProvider = provider.name === MONARK_DEFAULT_PROVIDER_NAME;
+						const isProtectedProvider = isLocalProvider || isMonarkProvider;
 						const isExpired = status === "expired";
 						const isDefault = provider.name === defaultProvider;
 						const isAuthenticating = authenticatingProvider === provider.name;
@@ -242,6 +247,11 @@ export const CloudStorageSettings = () => {
 											{isLocalProvider && (
 												<span className="px-2.5 py-1 bg-base-200 text-base-content text-xs font-medium rounded-full">
 													{t("cloudStorage.local", "Local")}
+												</span>
+											)}
+											{isMonarkProvider && (
+												<span className="px-2.5 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+													Monark
 												</span>
 											)}
 											{isDefault && (
@@ -332,7 +342,7 @@ export const CloudStorageSettings = () => {
 										<button
 											className="px-3 py-2 bg-error/10 border border-error/20 text-error rounded-lg text-sm font-medium hover:bg-error/20 hover:border-error/30 focus:outline-none focus:ring-2 focus:ring-error/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 											onClick={() => handleRemoveProvider(provider.name)}
-											disabled={loading || isDefault || isLocalProvider}
+											disabled={loading || isDefault || isProtectedProvider}
 										>
 											{t("cloudStorage.remove", "Remove")}
 										</button>

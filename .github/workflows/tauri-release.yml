@@ -86,6 +86,10 @@ jobs:
           # Tauri v2 (Required for signing updater artifacts)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Default Monark Google Drive provider credentials (baked into binary at compile time)
+          MONARK_GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.MONARK_GOOGLE_DRIVE_CLIENT_ID }}
+          MONARK_GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.MONARK_GOOGLE_DRIVE_CLIENT_SECRET }}
+          MONARK_GOOGLE_DRIVE_REDIRECT_URI: ${{ secrets.MONARK_GOOGLE_DRIVE_REDIRECT_URI }}
         with:
           tagName: v__VERSION__
           releaseName: "Monark v__VERSION__"
@@ -160,6 +164,10 @@ jobs:
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Default Monark Google Drive provider credentials (baked into binary at compile time)
+          MONARK_GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.MONARK_GOOGLE_DRIVE_CLIENT_ID }}
+          MONARK_GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.MONARK_GOOGLE_DRIVE_CLIENT_SECRET }}
+          MONARK_GOOGLE_DRIVE_REDIRECT_URI: ${{ secrets.MONARK_GOOGLE_DRIVE_REDIRECT_URI }}
         with:
           tagName: v__VERSION__
           releaseName: "Monark v__VERSION__"

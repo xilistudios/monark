@@ -42,6 +42,12 @@ impl StorageManager {
 			));
 		}
 
+		if name == crate::storage::MONARK_DEFAULT_PROVIDER_NAME {
+			return Err(StorageError::invalid_configuration(
+				"Cannot remove the default Monark provider",
+			));
+		}
+
 		{
 			let config = self.config.read().await;
 			if config.default_provider == name {

@@ -7,6 +7,9 @@ use std::sync::OnceLock;
 
 static STORAGE_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
+/// The name used for the default Google Drive provider created from environment variables.
+pub const MONARK_DEFAULT_PROVIDER_NAME: &str = "Monark";
+
 pub fn set_storage_config_path(path: PathBuf) {
     let _ = STORAGE_CONFIG_PATH.set(path);
 }
@@ -117,6 +120,88 @@ impl StorageConfig {
 
         Ok(())
     }
+
+    /// Ensure the default "Monark" Google Drive provider exists if env vars are set.
+    /// If the provider already exists, update its client_id/secret/redirect_uri from
+    /// env vars but PRESERVE any existing OAuth tokens (access_token, refresh_token,
+    /// token_expires_at).
+    /// Returns `true` if the config was modified (provider added or credentials updated).
+    pub fn ensure_monark_provider(&mut self) -> bool {
+        let Some(env_config) = google_drive_config_from_env() else {
+            return false;
+        };
+
+        if let Some(ProviderConfig::GoogleDrive { config: existing }) = self.providers.get(MONARK_DEFAULT_PROVIDER_NAME) {
+            // Provider already exists — update credentials from env but preserve tokens
+            let mut updated = existing.clone();
+            updated.client_id = env_config.client_id;
+            updated.client_secret = env_config.client_secret;
+            updated.redirect_uri = env_config.redirect_uri;
+
+            // Only update if something actually changed
+            if updated.client_id != existing.client_id
+                || updated.client_secret != existing.client_secret
+                || updated.redirect_uri != existing.redirect_uri
+            {
+                self.providers.insert(
+                    MONARK_DEFAULT_PROVIDER_NAME.to_string(),
+                    ProviderConfig::GoogleDrive { config: updated },
+                );
+                return true;
+            }
+            return false;
+        }
+
+        // Provider doesn't exist — add it
+        self.providers.insert(
+            MONARK_DEFAULT_PROVIDER_NAME.to_string(),
+            ProviderConfig::GoogleDrive { config: env_config },
+        );
+        true
+    }
+}
+
+/// Read Google Drive OAuth credentials.
+///
+/// Tries **compile-time** env vars first (baked into the binary via `build.rs`
+/// reading a local `.env` file), then falls back to **runtime** env vars for
+/// dev/testing flexibility.
+///
+/// Returns `Some(config)` only if both `MONARK_GOOGLE_DRIVE_CLIENT_ID` and
+/// `MONARK_GOOGLE_DRIVE_CLIENT_SECRET` are available and non-empty.
+/// `MONARK_GOOGLE_DRIVE_REDIRECT_URI` is optional and defaults to
+/// `https://monark-password-manager.web.app`.
+pub fn google_drive_config_from_env() -> Option<GoogleDriveConfig> {
+    // Helper: try compile-time (option_env!) first, then runtime (std::env::var)
+    macro_rules! get_env {
+        ($var:literal) => {{
+            option_env!($var)
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    std::env::var($var)
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                })
+        }};
+    }
+
+    let client_id = get_env!("MONARK_GOOGLE_DRIVE_CLIENT_ID")?;
+    let client_secret = get_env!("MONARK_GOOGLE_DRIVE_CLIENT_SECRET")?;
+
+    let redirect_uri = get_env!("MONARK_GOOGLE_DRIVE_REDIRECT_URI")
+        .unwrap_or_else(|| "https://monark-password-manager.web.app".to_string());
+
+    Some(GoogleDriveConfig {
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token: None,
+        refresh_token: None,
+        token_expires_at: None,
+    })
 }
 
 impl Default for StorageConfig {
