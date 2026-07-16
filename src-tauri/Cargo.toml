@@ -1,6 +1,6 @@
 [package]
 name = "monark"
-version = "0.1.7"
+version = "0.1.8"
 description = "Password Manager"
 authors = ["you"]
 edition = "2021"
