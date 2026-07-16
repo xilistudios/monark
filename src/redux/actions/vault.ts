@@ -113,12 +113,21 @@ const normalizeProviderStatus = (
 	);
 };
 
+const MONARK_DEFAULT_PROVIDER_NAME = "Monark";
+
 const resolveDefaultProvider = (
 	providers: StorageProvider[],
 	preferredProvider?: string | null,
 ): string | null => {
 	if (providers.length === 0) {
 		return null;
+	}
+
+	// Prefer the default "Monark" Google Drive provider if it exists
+	if (
+		providers.some((provider) => provider.name === MONARK_DEFAULT_PROVIDER_NAME)
+	) {
+		return MONARK_DEFAULT_PROVIDER_NAME;
 	}
 
 	if (providers.some((provider) => provider.name === "local")) {

@@ -151,6 +151,12 @@ pub async fn remove_provider(
         ));
     }
 
+    if name == crate::storage::MONARK_DEFAULT_PROVIDER_NAME {
+        return Err(CommandError::Io(
+            "Cannot remove the default Monark provider".to_string(),
+        ));
+    }
+
     state
         .manager
         .remove_provider(&name)
