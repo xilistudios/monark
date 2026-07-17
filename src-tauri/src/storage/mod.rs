@@ -6,9 +6,11 @@ pub mod providers;
 #[cfg(test)]
 mod tests;
 
-pub use config::{google_drive_config_from_env, ProviderConfig, StorageConfig, MONARK_DEFAULT_PROVIDER_NAME};
-pub use config::set_storage_config_path;
 pub use config::reset_storage_config_path;
+pub use config::set_storage_config_path;
+pub use config::{
+    google_drive_config_from_env, ProviderConfig, StorageConfig, MONARK_DEFAULT_PROVIDER_NAME,
+};
 pub use error::{StorageError, StorageResult};
 pub use manager::StorageManager;
 pub use providers::{StorageProvider, StorageProviderType};

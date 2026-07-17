@@ -131,7 +131,9 @@ impl StorageConfig {
             return false;
         };
 
-        if let Some(ProviderConfig::GoogleDrive { config: existing }) = self.providers.get(MONARK_DEFAULT_PROVIDER_NAME) {
+        if let Some(ProviderConfig::GoogleDrive { config: existing }) =
+            self.providers.get(MONARK_DEFAULT_PROVIDER_NAME)
+        {
             // Provider already exists — update credentials from env but preserve tokens
             let mut updated = existing.clone();
             updated.client_id = env_config.client_id;
@@ -157,16 +159,17 @@ impl StorageConfig {
         // client_id as the env config. If found, update that provider's credentials
         // from env vars but PRESERVE its existing tokens, and do NOT create a duplicate.
         {
-            let existing_name = self.providers.iter().find_map(|(name, provider)| {
-                match provider {
+            let existing_name = self
+                .providers
+                .iter()
+                .find_map(|(name, provider)| match provider {
                     ProviderConfig::GoogleDrive { config: gd_config }
                         if gd_config.client_id == env_config.client_id =>
                     {
                         Some(name.clone())
                     }
                     _ => None,
-                }
-            });
+                });
 
             if let Some(existing_name) = existing_name {
                 // Found a Google Drive provider with the same client_id — update its
