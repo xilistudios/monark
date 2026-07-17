@@ -36,11 +36,11 @@ const isAuthRelatedCloudError = (error: unknown): boolean => {
 
 const isTokenExpired = (tokenExpiresAt?: string | null): boolean => {
 	if (!tokenExpiresAt) {
-		return false;
+		return true; // No token expiration = no valid token = needs refresh
 	}
 
 	const expiresAt = new Date(tokenExpiresAt).getTime();
-	return Number.isNaN(expiresAt) ? false : Date.now() >= expiresAt;
+	return Number.isNaN(expiresAt) ? true : Date.now() >= expiresAt;
 };
 
 export class VaultInstance {
@@ -103,9 +103,7 @@ export class VaultInstance {
 			if (!authInfo) {
 				return { authenticated: false, expired: true };
 			}
-			const expired =
-				Boolean(authInfo.token_expires_at) &&
-				isTokenExpired(authInfo.token_expires_at);
+			const expired = isTokenExpired(authInfo.token_expires_at);
 
 			if (expired) {
 				try {
@@ -113,9 +111,7 @@ export class VaultInstance {
 						await CloudStorageCommands.refreshProviderAuth(providerName);
 					return {
 						authenticated: refreshed.authenticated,
-						expired:
-							Boolean(refreshed.token_expires_at) &&
-							isTokenExpired(refreshed.token_expires_at),
+						expired: isTokenExpired(refreshed.token_expires_at),
 					};
 				} catch (refreshError) {
 					console.warn(
@@ -607,9 +603,7 @@ export class VaultManager {
 				return { authenticated: false, expired: true };
 			}
 
-			const expired =
-				Boolean(authInfo.token_expires_at) &&
-				isTokenExpired(authInfo.token_expires_at);
+			const expired = isTokenExpired(authInfo.token_expires_at);
 
 			if (expired) {
 				try {
@@ -621,9 +615,7 @@ export class VaultManager {
 
 					return {
 						authenticated: refreshed.authenticated,
-						expired:
-							Boolean(refreshed.token_expires_at) &&
-							isTokenExpired(refreshed.token_expires_at),
+						expired: isTokenExpired(refreshed.token_expires_at),
 					};
 				} catch (refreshError) {
 					console.warn(

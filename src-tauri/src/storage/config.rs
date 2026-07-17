@@ -152,7 +152,50 @@ impl StorageConfig {
             return false;
         }
 
-        // Provider doesn't exist — add it
+        // Provider named exactly "Monark" doesn't exist — but before creating it,
+        // scan ALL existing providers for any Google Drive provider with the same
+        // client_id as the env config. If found, update that provider's credentials
+        // from env vars but PRESERVE its existing tokens, and do NOT create a duplicate.
+        {
+            let existing_name = self.providers.iter().find_map(|(name, provider)| {
+                match provider {
+                    ProviderConfig::GoogleDrive { config: gd_config }
+                        if gd_config.client_id == env_config.client_id =>
+                    {
+                        Some(name.clone())
+                    }
+                    _ => None,
+                }
+            });
+
+            if let Some(existing_name) = existing_name {
+                // Found a Google Drive provider with the same client_id — update its
+                // credentials from env but preserve tokens.
+                let existing_config = match self.providers.get(&existing_name) {
+                    Some(ProviderConfig::GoogleDrive { config }) => config.clone(),
+                    _ => return false,
+                };
+
+                let mut updated = existing_config.clone();
+                updated.client_id = env_config.client_id;
+                updated.client_secret = env_config.client_secret;
+                updated.redirect_uri = env_config.redirect_uri;
+
+                if updated.client_id != existing_config.client_id
+                    || updated.client_secret != existing_config.client_secret
+                    || updated.redirect_uri != existing_config.redirect_uri
+                {
+                    self.providers.insert(
+                        existing_name,
+                        ProviderConfig::GoogleDrive { config: updated },
+                    );
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // No existing Google Drive provider with matching client_id — create "Monark"
         self.providers.insert(
             MONARK_DEFAULT_PROVIDER_NAME.to_string(),
             ProviderConfig::GoogleDrive { config: env_config },

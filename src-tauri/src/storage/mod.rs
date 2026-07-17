@@ -27,6 +27,49 @@ pub async fn init_storage_manager() -> Arc<StorageManager> {
         let _ = config.save();
     }
 
+    // One-time migration: Remove duplicate "Monark" provider with no tokens
+    // if another Google Drive provider with the same client_id has valid tokens.
+    // This cleans up the state created by the old bug where `ensure_monark_provider`
+    // would always create a "Monark" entry even when the user had already authenticated
+    // under a different provider name.
+    {
+        let (has_empty_monark, monark_client_id) =
+            match config.providers.get(MONARK_DEFAULT_PROVIDER_NAME) {
+                Some(ProviderConfig::GoogleDrive { config: mc })
+                    if mc.access_token.is_none() && mc.refresh_token.is_none() =>
+                {
+                    (true, mc.client_id.clone())
+                }
+                _ => (false, String::new()),
+            };
+
+        if has_empty_monark {
+            let existing_name = config.providers.iter().find_map(|(name, provider)| {
+                if name == MONARK_DEFAULT_PROVIDER_NAME {
+                    return None;
+                }
+                match provider {
+                    ProviderConfig::GoogleDrive { config: gd_config }
+                        if gd_config.client_id == monark_client_id
+                            && gd_config.access_token.is_some() =>
+                    {
+                        Some(name.clone())
+                    }
+                    _ => None,
+                }
+            });
+
+            if let Some(existing_name) = existing_name {
+                println!(
+                    "[Storage] Removing duplicate Monark provider (no tokens) — existing '{}' provider has valid tokens",
+                    existing_name
+                );
+                config.providers.remove(MONARK_DEFAULT_PROVIDER_NAME);
+                let _ = config.save();
+            }
+        }
+    }
+
     Arc::new(
         StorageManager::new(config)
             .await
