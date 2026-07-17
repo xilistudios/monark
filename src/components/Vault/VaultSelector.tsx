@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -28,6 +28,9 @@ const VaultSelector = ({
 		(state: RootState) => state.vault.currentVaultId,
 	);
 	const loading = useSelector((state: RootState) => state.vault.loading);
+	const cloudVaultsRefreshing = useSelector(
+		(state: RootState) => state.vault.cloudVaultsRefreshing,
+	);
 	const error = useSelector((state: RootState) => state.vault.error);
 	const providers = useSelector((state: RootState) => state.vault.providers);
 	const providerStatus = useSelector(
@@ -35,42 +38,10 @@ const VaultSelector = ({
 	);
 	const context = useContext(VaultModalContext);
 
-	const [cloudVaultsLoading, setCloudVaultsLoading] = useState(false);
 	const [syncingVaults, setSyncingVaults] = useState<Set<string>>(new Set());
 	const [refreshError, setRefreshError] = useState<string | null>(null);
 
-	// Load providers and refresh cloud vaults on mount
-	useEffect(() => {
-		const initializeCloudVaults = async () => {
-			try {
-				setCloudVaultsLoading(true);
-				setRefreshError(null);
-
-				const vaultManager = VaultManager.getInstance();
-
-				// Initialize VaultManager if not already done
-				if (!vaultManager) {
-					console.warn("VaultManager not available");
-					return;
-				}
-
-				// Load providers first
-				await vaultManager.loadProviders();
-
-				// Then refresh cloud vaults
-				await vaultManager.refreshCloudVaults();
-			} catch (error) {
-				console.error("Failed to load cloud vaults:", error);
-				setRefreshError(
-					t("vaultSelector.refreshError", "Failed to refresh cloud vaults"),
-				);
-			} finally {
-				setCloudVaultsLoading(false);
-			}
-		};
-
-		initializeCloudVaults();
-	}, [t]);
+	// Note: Cloud vaults are initialized in Home.tsx — no duplicate init here
 
 	const handleVaultSelect = (vault: Vault) => {
 		dispatch(setCurrentVault(vault.id));
@@ -113,7 +84,6 @@ const VaultSelector = ({
 
 	const handleRefreshCloudVaults = async () => {
 		try {
-			setCloudVaultsLoading(true);
 			setRefreshError(null);
 
 			const vaultManager = VaultManager.getInstance();
@@ -123,8 +93,6 @@ const VaultSelector = ({
 			setRefreshError(
 				t("vaultSelector.refreshError", "Failed to refresh cloud vaults"),
 			);
-		} finally {
-			setCloudVaultsLoading(false);
 		}
 	};
 
@@ -179,9 +147,9 @@ const VaultSelector = ({
 						<li>
 							<button
 								onClick={handleRefreshCloudVaults}
-								disabled={cloudVaultsLoading}
+								disabled={cloudVaultsRefreshing}
 							>
-								{cloudVaultsLoading ? (
+								{cloudVaultsRefreshing ? (
 									<>
 										<span className="loading loading-spinner loading-xs"></span>
 										{t("vaultSelector.syncing")}
@@ -198,7 +166,7 @@ const VaultSelector = ({
 				</div>
 
 				{/* Cloud vaults loading indicator */}
-				{cloudVaultsLoading && (
+				{cloudVaultsRefreshing && (
 					<div className="flex items-center gap-2 text-xs text-base-content/60">
 						<span className="loading loading-spinner loading-xs"></span>
 						{t("vaultSelector.loadingCloudVaults")}

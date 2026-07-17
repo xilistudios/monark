@@ -11,6 +11,7 @@ import {
 	lockVault,
 	removeStorageProvider,
 	setCloudVaults,
+	setCloudVaultsRefreshing,
 	setDefaultStorageProvider,
 	setOAuthState,
 	setProviderStatus,
@@ -41,6 +42,15 @@ const isTokenExpired = (tokenExpiresAt?: string | null): boolean => {
 
 	const expiresAt = new Date(tokenExpiresAt).getTime();
 	return Number.isNaN(expiresAt) ? true : Date.now() >= expiresAt;
+};
+
+const isNetworkError = (error: unknown): boolean => {
+	const message =
+		(error as any)?.message ||
+		(error instanceof Error ? error.message : String(error));
+	return /network|connection|fetch|timeout|ECONNREFUSED|ENOTFOUND|ECONNRESET|EHOSTUNREACH|ENETUNREACH|Failed to fetch|NetworkError|ERR_NETWORK/i.test(
+		message,
+	);
 };
 
 export class VaultInstance {
@@ -964,18 +974,20 @@ export class VaultManager {
 	/**
 	 * Refreshes cloud vault list in Redux state
 	 * Only refreshes vaults from actual cloud providers (not local)
+	 * Preserves cached vaults on network errors
 	 */
 	async refreshCloudVaults(): Promise<void> {
 		if (!this._dispatch || !this._getState) {
 			throw new Error("VaultManager not initialized. Call initialize() first.");
 		}
 
+		this._dispatch(setCloudVaultsRefreshing(true));
+
 		try {
 			// Get providers from state and filter only cloud providers
 			const state = this._getState();
 			if (!state?.vault?.providers) {
-				// No providers configured yet, that's okay
-				this._dispatch(setCloudVaults([]));
+				// No providers configured yet, that's okay — leave cached vaults untouched
 				return;
 			}
 
@@ -983,27 +995,67 @@ export class VaultManager {
 				(p) => p.provider_type !== StorageProviderType.LOCAL,
 			);
 
+			if (cloudProviders.length === 0) {
+				return;
+			}
+
 			// Collect vaults from all cloud providers
 			const allCloudVaults: Vault[] = [];
+			let hadNetworkErrors = false;
+			let hadGenuineAuthErrors = false;
 
 			for (const provider of cloudProviders) {
 				try {
-					const authState = await this.getProviderAuthState(provider.name);
-					if (!authState.authenticated || authState.expired) {
+					let authState: { authenticated: boolean; expired: boolean };
+
+					try {
+						authState = await this.getProviderAuthState(provider.name);
+					} catch (authError) {
+						if (isNetworkError(authError)) {
+							hadNetworkErrors = true;
+							console.warn(
+								`Network error checking auth for provider ${provider.name}, skipping`,
+							);
+							continue;
+						}
+						// Genuine error from auth check — treat as expired
+						hadGenuineAuthErrors = true;
 						this._dispatch(
 							setProviderStatus({
 								providerId: provider.name,
 								status: "expired",
 							}),
 						);
+						await this.promptProviderReauth(provider.name);
+						continue;
+					}
+
+					if (!authState.authenticated || authState.expired) {
+						hadGenuineAuthErrors = true;
+						this._dispatch(
+							setProviderStatus({
+								providerId: provider.name,
+								status: "expired",
+							}),
+						);
+						await this.promptProviderReauth(provider.name);
 						continue;
 					}
 
 					const providerVaults = await this.listCloudVaults(provider.name);
 					allCloudVaults.push(...providerVaults);
 				} catch (error) {
-					// Log but don't fail - one provider failure shouldn't block others
+					if (isNetworkError(error)) {
+						// Network error — skip this provider without clearing existing vaults
+						hadNetworkErrors = true;
+						console.warn(
+							`Network error fetching vaults for provider ${provider.name}, keeping cached data`,
+						);
+						continue;
+					}
+					// Auth-related or other genuine error
 					if (isAuthRelatedCloudError(error)) {
+						hadGenuineAuthErrors = true;
 						this._dispatch(
 							setProviderStatus({
 								providerId: provider.name,
@@ -1019,13 +1071,22 @@ export class VaultManager {
 				}
 			}
 
-			// Update Redux state with collected cloud vaults
-			this._dispatch(setCloudVaults(allCloudVaults));
+			// Only update Redux state if we actually got results or had genuine auth errors.
+			// If allProviders failed due to network errors, keep the cached vaults intact.
+			if (allCloudVaults.length > 0) {
+				this._dispatch(setCloudVaults(allCloudVaults));
+			} else if (hadGenuineAuthErrors && !hadNetworkErrors) {
+				// All providers were genuinely unauthenticated — clear cloud vaults
+				this._dispatch(setCloudVaults([]));
+			}
+			// Otherwise (all network errors, no results) — leave cached vaults in Redux untouched
 		} catch (error) {
 			const errorMessage =
 				(error as any)?.message ||
 				(error instanceof Error ? error.message : String(error));
 			throw new Error(`Failed to refresh cloud vaults: ${errorMessage}`);
+		} finally {
+			this._dispatch(setCloudVaultsRefreshing(false));
 		}
 	}
 

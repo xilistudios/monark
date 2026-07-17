@@ -42,6 +42,7 @@ export interface VaultState {
 	vaults: Vault[];
 	currentVaultId: string | null;
 	loading: boolean;
+	cloudVaultsRefreshing: boolean;
 	error: string | null;
 	// New: Storage provider state
 	providers: StorageProvider[];
@@ -243,6 +244,7 @@ const initialState: VaultState = {
 	vaults: [],
 	currentVaultId: null,
 	loading: false,
+	cloudVaultsRefreshing: false,
 	error: null,
 	providers: [],
 	defaultProvider: null,
@@ -333,6 +335,9 @@ export const vaultSlice = createSlice({
 		},
 		setLoading: (state, action: PayloadAction<boolean>) => {
 			state.loading = action.payload;
+		},
+		setCloudVaultsRefreshing: (state, action: PayloadAction<boolean>) => {
+			state.cloudVaultsRefreshing = action.payload;
 		},
 		setError: (state, action: PayloadAction<string | null>) => {
 			state.error = action.payload;
@@ -735,6 +740,7 @@ export const {
 	setDefaultStorageProvider,
 	setProviderStatus,
 	setCloudVaults,
+	setCloudVaultsRefreshing,
 	syncCloudVault,
 	setOAuthState,
 	clearOAuthState,
