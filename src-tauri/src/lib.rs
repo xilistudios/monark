@@ -1,6 +1,9 @@
 use commands::storage::StorageState;
+#[cfg(desktop)]
 use tauri::image::Image;
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
+#[cfg(desktop)]
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager, WindowEvent};
 
@@ -90,63 +93,67 @@ fn build_app() {
             });
             app.manage(state::ManagedVaultState::new(vault_state_manager));
 
-            // --- System Tray ---
-            let show_i = MenuItem::with_id(app, "show", "Show Monark", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+            // --- Desktop-only features: system tray + close-to-hide ---
+            #[cfg(desktop)]
+            {
+                // System Tray
+                let show_i = MenuItem::with_id(app, "show", "Show Monark", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
-            let tray_icon = Image::from_bytes(include_bytes!("../icons/systray_32.png"))
-                .expect("failed to load tray icon");
+                let tray_icon = Image::from_bytes(include_bytes!("../icons/systray_32.png"))
+                    .expect("failed to load tray icon");
 
-            let app_handle = app.handle().clone();
-            let _tray = TrayIconBuilder::new()
-                .icon(tray_icon)
-                .tooltip("Monark Password Manager")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(move |app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
+                let app_handle = app.handle().clone();
+                let _tray = TrayIconBuilder::new()
+                    .icon(tray_icon)
+                    .tooltip("Monark Password Manager")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(move |app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(move |tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
+
+                // Intercept window close to hide to tray instead of quitting
+                let main_window = app
+                    .get_webview_window("main")
+                    .expect("main window not found");
+                let handle = app_handle.clone();
+                main_window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.hide();
                         }
                     }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(move |tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: tauri::tray::MouseButton::Left,
-                        button_state: tauri::tray::MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
-                        }
-                    }
-                })
-                .build(app)?;
-
-            // --- Intercept window close to hide to tray instead of quitting ---
-            let main_window = app
-                .get_webview_window("main")
-                .expect("main window not found");
-            let handle = app_handle.clone();
-            main_window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    if let Some(window) = handle.get_webview_window("main") {
-                        let _ = window.hide();
-                    }
-                }
-            });
+                });
+            }
 
             Ok(())
         })
