@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useDispatch, useSelector } from 'react-redux';
 import VaultSelector from '../components/Vault/VaultSelector';
 import { AddEntryModal } from '../components/Vault/Modals/AddEntryModal';
@@ -43,6 +44,11 @@ function HomeScreen() {
   const currentVault = vaults.find((v) => v.id === currentVaultId) ?? null;
   const navigationPath = currentVault?.volatile?.navigationPath || '/';
   const effectiveLocked = currentVault ? isVaultLocked(currentVault) : true;
+
+  // TanStack Router hooks for URL search param sync
+  const search = useSearch({ from: '/' });
+  const routerNavigate = useNavigate({ from: '/' });
+  const isSyncingFromUrl = useRef(false);
 
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
@@ -102,6 +108,17 @@ function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  // Sync URL search param → Redux on mount / browser back/forward
+  useEffect(() => {
+    if (search.path !== undefined && currentVault && !effectiveLocked) {
+      const urlPath = search.path.startsWith('/') ? search.path : `/${search.path}`;
+      if (urlPath !== navigationPath) {
+        isSyncingFromUrl.current = true;
+        dispatch(setNavigationPath({ vaultId: currentVault.id, navigationPath: urlPath }));
+      }
+    }
+  }, [search.path, currentVault?.id]);
+
   const currentPath = parseNavigationPath(navigationPath);
 
   const handleNavigate = (path: string[]) => {
@@ -111,6 +128,13 @@ function HomeScreen() {
         setNavigationPath({ vaultId: currentVault.id, navigationPath: newPath })
       );
     }
+    // Push to browser history unless we're syncing from a URL change (back/forward)
+    if (!isSyncingFromUrl.current) {
+      routerNavigate({
+        search: { path: newPath === '/' ? undefined : newPath },
+      });
+    }
+    isSyncingFromUrl.current = false;
   };
 
   const handleUnlockVault = async () => {
