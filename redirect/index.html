@@ -507,19 +507,32 @@
 			console.log('Deep link:', deepLink);
 			updateStatus('Authentication successful');
 
-			// Try to open the deep link (but expect it to fail in browser)
+			// Try to open the deep link
 			setTimeout(() => {
 				try {
-					// Create an invisible iframe to attempt deep link without navigation error
-					const iframe = document.createElement('iframe');
-					iframe.style.display = 'none';
-					iframe.src = deepLink;
-					document.body.appendChild(iframe);
+					// Detect platform for better deep link handling
+					const isAndroid = /Android/i.test(navigator.userAgent);
+					const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-					// Remove iframe after a short delay
-					setTimeout(() => {
-						document.body.removeChild(iframe);
-					}, IFRAME_REMOVAL_DELAY);
+					if (isAndroid) {
+						// On Android, use an intent URI for reliable app opening
+						const intentUri = `intent://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}#Intent;scheme=monark;package=com.monark.app;end`;
+						window.location.href = intentUri;
+					} else if (isIOS) {
+						// On iOS, use window.location.href for custom schemes
+						window.location.href = deepLink;
+					} else {
+						// Desktop: use hidden iframe approach (works on desktop browsers)
+						const iframe = document.createElement('iframe');
+						iframe.style.display = 'none';
+						iframe.src = deepLink;
+						document.body.appendChild(iframe);
+						setTimeout(() => {
+							if (document.body.contains(iframe)) {
+								document.body.removeChild(iframe);
+							}
+						}, IFRAME_REMOVAL_DELAY);
+					}
 				} catch (e) {
 					console.log('Deep link attempt (expected to fail in browser):', e);
 				}
