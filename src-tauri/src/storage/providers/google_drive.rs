@@ -474,9 +474,44 @@ impl StorageProvider for GoogleDriveProvider {
             })?;
 
         if response.status().is_success() {
-            Ok(())
+            return Ok(());
+        }
+
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+
+        // Distinguish transient errors from genuine auth failures to avoid
+        // triggering unnecessary re-authentication flows.
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            // 401 — token is genuinely expired or invalid
+            Err(StorageError::authentication(format!(
+                "Invalid access token (401): {}",
+                error_text
+            )))
+        } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            || (status == reqwest::StatusCode::FORBIDDEN
+                && error_text.to_lowercase().contains("rate"))
+        {
+            // 429 or 403 with rate-limit hint — transient, not an auth problem
+            Err(StorageError::network(format!(
+                "Rate limited during authentication ({}): {}",
+                status, error_text
+            )))
+        } else if status.is_server_error() {
+            // 5xx — server-side issue, transient
+            Err(StorageError::network(format!(
+                "Google Drive server error during authentication ({}): {}",
+                status, error_text
+            )))
         } else {
-            Err(StorageError::authentication("Invalid access token"))
+            // Other client errors (403 without rate-limit, etc.) — treat as auth
+            Err(StorageError::authentication(format!(
+                "Authentication failed ({}): {}",
+                status, error_text
+            )))
         }
     }
 
@@ -485,9 +520,8 @@ impl StorageProvider for GoogleDriveProvider {
     }
 
     async fn list_files(&mut self, folder_id: Option<String>) -> StorageResult<Vec<StorageFile>> {
-        // Ensure token is valid before making API call
-        self.ensure_valid_token().await?;
-
+        // Token validity is ensured by the caller (file_operations.rs calls
+        // ensure_google_drive_token_valid before this method).
         let headers = self.get_auth_headers()?;
 
         let query = if let Some(folder_id) = folder_id {
@@ -536,9 +570,8 @@ impl StorageProvider for GoogleDriveProvider {
     }
 
     async fn create_file(&mut self, request: CreateFileRequest) -> StorageResult<StorageFile> {
-        // Ensure token is valid before making API call
-        self.ensure_valid_token().await?;
-
+        // Token validity is ensured by the caller (file_operations.rs calls
+        // ensure_google_drive_token_valid before this method).
         let headers = self.get_auth_headers()?;
 
         let mut metadata = serde_json::Map::new();
@@ -603,9 +636,8 @@ impl StorageProvider for GoogleDriveProvider {
     }
 
     async fn read_file(&mut self, file_id: String) -> StorageResult<Vec<u8>> {
-        // Ensure token is valid before making API call
-        self.ensure_valid_token().await?;
-
+        // Token validity is ensured by the caller (file_operations.rs calls
+        // ensure_google_drive_token_valid before this method).
         let headers = self.get_auth_headers()?;
 
         let client = get_http_client();
@@ -629,9 +661,8 @@ impl StorageProvider for GoogleDriveProvider {
     }
 
     async fn delete_file(&mut self, file_id: String) -> StorageResult<()> {
-        // Ensure token is valid before making API call
-        self.ensure_valid_token().await?;
-
+        // Token validity is ensured by the caller (file_operations.rs calls
+        // ensure_google_drive_token_valid before this method).
         let headers = self.get_auth_headers()?;
 
         let client = get_http_client();
@@ -650,9 +681,8 @@ impl StorageProvider for GoogleDriveProvider {
     }
 
     async fn update_file(&mut self, request: UpdateFileRequest) -> StorageResult<StorageFile> {
-        // Ensure token is valid before making API call
-        self.ensure_valid_token().await?;
-
+        // Token validity is ensured by the caller (file_operations.rs calls
+        // ensure_google_drive_token_valid before this method).
         let headers = self.get_auth_headers()?;
 
         // For media upload, send raw bytes without multipart
@@ -738,9 +768,8 @@ impl StorageProvider for GoogleDriveProvider {
     }
 
     async fn get_file_info(&mut self, file_id: String) -> StorageResult<StorageFile> {
-        // Ensure token is valid before making API call
-        self.ensure_valid_token().await?;
-
+        // Token validity is ensured by the caller (file_operations.rs calls
+        // ensure_google_drive_token_valid before this method).
         let headers = self.get_auth_headers()?;
 
         let client = get_http_client();

@@ -25,12 +25,24 @@ import type { AppDispatch, RootState } from "../redux/store";
 import { CloudStorageCommands } from "./cloudStorage";
 import VaultCommands from "./commands";
 
-const isAuthRelatedCloudError = (error: unknown): boolean => {
+const getErrorMetadata = (
+	error: unknown,
+): { message: string; status: number | undefined } => {
 	const message =
-		(error as any)?.message ||
-		(error instanceof Error ? error.message : String(error));
+		(error instanceof Error ? error.message : String(error ?? "")) || "";
+	const errorObj = error as Record<string, unknown>;
+	const status =
+		(errorObj?.status as number | undefined) ??
+		(errorObj?.statusCode as number | undefined);
+	return { message, status };
+};
 
-	return /token.*expired|expired.*token|access token has expired|authentication failed|unauthorized|invalid credentials|reauthenticate/i.test(
+const isAuthRelatedCloudError = (error: unknown): boolean => {
+	const { message, status } = getErrorMetadata(error);
+
+	if (status === 401) return true;
+
+	return /invalid_grant|invalid_token|token.*expired|expired.*token|invalid credentials|re-?authenticate/i.test(
 		message,
 	);
 };
@@ -40,15 +52,19 @@ const isTokenExpired = (tokenExpiresAt?: string | null): boolean => {
 		return true; // No token expiration = no valid token = needs refresh
 	}
 
+	const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes, matches backend
 	const expiresAt = new Date(tokenExpiresAt).getTime();
-	return Number.isNaN(expiresAt) ? true : Date.now() >= expiresAt;
+	return Number.isNaN(expiresAt)
+		? true
+		: Date.now() >= expiresAt - TOKEN_EXPIRY_BUFFER_MS;
 };
 
 const isNetworkError = (error: unknown): boolean => {
-	const message =
-		(error as any)?.message ||
-		(error instanceof Error ? error.message : String(error));
-	return /network|connection|fetch|timeout|ECONNREFUSED|ENOTFOUND|ECONNRESET|EHOSTUNREACH|ENETUNREACH|Failed to fetch|NetworkError|ERR_NETWORK/i.test(
+	const { message, status } = getErrorMetadata(error);
+	if (status === 429 || status === 500 || status === 502 || status === 503)
+		return true;
+
+	return /network|timeout|connection|econnrefused|enotfound|econnreset|ehostunreach|enetunreach|fetch failed|networkerror|err_network|temporarily|try again|rate limit|failed to fetch/i.test(
 		message,
 	);
 };
@@ -603,49 +619,110 @@ export class VaultManager {
 		this._instances = new Map();
 	}
 
-	private async getProviderAuthState(
-		providerName: string,
-	): Promise<{ authenticated: boolean; expired: boolean }> {
-		try {
-			const authInfo =
-				await CloudStorageCommands.getProviderAuthInfo(providerName);
-			if (!authInfo) {
-				return { authenticated: false, expired: true };
-			}
+	private async getProviderAuthState(providerName: string): Promise<{
+		authenticated: boolean;
+		expired: boolean;
+		transientError?: boolean;
+	}> {
+		const MAX_RETRIES = 3;
+		const BASE_DELAY_MS = 1000;
 
-			const expired = isTokenExpired(authInfo.token_expires_at);
+		let lastError: unknown = null;
 
-			if (expired) {
-				try {
-					const refreshed =
-						await CloudStorageCommands.refreshProviderAuth(providerName);
-					if (!refreshed) {
-						return { authenticated: false, expired: true };
+		for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				const authInfo =
+					await CloudStorageCommands.getProviderAuthInfo(providerName);
+				if (!authInfo) {
+					return { authenticated: false, expired: true };
+				}
+
+				const expired = isTokenExpired(authInfo.token_expires_at);
+
+				if (expired) {
+					try {
+						const refreshed =
+							await CloudStorageCommands.refreshProviderAuth(providerName);
+						if (!refreshed) {
+							return { authenticated: false, expired: true };
+						}
+
+						return {
+							authenticated: refreshed.authenticated,
+							expired: isTokenExpired(refreshed.token_expires_at),
+						};
+					} catch (refreshError) {
+						if (isAuthRelatedCloudError(refreshError)) {
+							// Genuine auth failure — no point retrying
+							console.warn(
+								`Genuine auth failure refreshing provider ${providerName}:`,
+								refreshError,
+							);
+							return { authenticated: false, expired: true };
+						}
+						// Network or transient error — retry if attempts remain
+						lastError = refreshError;
+						if (attempt < MAX_RETRIES) {
+							const delay = BASE_DELAY_MS * 2 ** attempt;
+							const errorKind = isNetworkError(refreshError)
+								? "Network"
+								: "Transient";
+							console.warn(
+								`${errorKind} error refreshing provider ${providerName}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`,
+								refreshError,
+							);
+							await new Promise<void>((resolve) => setTimeout(resolve, delay));
+							continue;
+						}
+						// All retries exhausted — mark as transient, NOT expired
+						console.warn(
+							`All retries exhausted for provider ${providerName}, marking as transient error`,
+						);
+						return {
+							authenticated: false,
+							expired: false,
+							transientError: true,
+						};
 					}
-
-					return {
-						authenticated: refreshed.authenticated,
-						expired: isTokenExpired(refreshed.token_expires_at),
-					};
-				} catch (refreshError) {
+				}
+				return {
+					authenticated: authInfo.authenticated,
+					expired,
+				};
+			} catch (error) {
+				if (isAuthRelatedCloudError(error)) {
 					console.warn(
-						`Failed to refresh auth for provider ${providerName}:`,
-						refreshError,
+						`Genuine auth failure checking provider ${providerName}:`,
+						error,
 					);
 					return { authenticated: false, expired: true };
 				}
+				// Network or transient error — retry
+				lastError = error;
+				if (attempt < MAX_RETRIES) {
+					const delay = BASE_DELAY_MS * 2 ** attempt;
+					const errorKind = isNetworkError(error) ? "Network" : "Transient";
+					console.warn(
+						`${errorKind} error checking provider ${providerName}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`,
+						error,
+					);
+					await new Promise<void>((resolve) => setTimeout(resolve, delay));
+					continue;
+				}
+				// All retries exhausted — mark as transient, NOT expired
+				console.warn(
+					`All retries exhausted for provider ${providerName}, marking as transient error`,
+				);
+				return { authenticated: false, expired: false, transientError: true };
 			}
-			return {
-				authenticated: authInfo.authenticated,
-				expired,
-			};
-		} catch (error) {
-			console.warn(
-				`Failed to check auth info for provider ${providerName}:`,
-				error,
-			);
-			return { authenticated: false, expired: true };
 		}
+
+		// Should not reach here, but just in case
+		console.warn(
+			`Unexpected fallthrough in getProviderAuthState for ${providerName}`,
+			lastError,
+		);
+		return { authenticated: false, expired: false, transientError: true };
 	}
 
 	private async promptProviderReauth(providerName: string): Promise<void> {
@@ -1006,31 +1083,46 @@ export class VaultManager {
 
 			for (const provider of cloudProviders) {
 				try {
-					let authState: { authenticated: boolean; expired: boolean };
+					let authState: {
+						authenticated: boolean;
+						expired: boolean;
+						transientError?: boolean;
+					};
 
 					try {
 						authState = await this.getProviderAuthState(provider.name);
 					} catch (authError) {
-						if (isNetworkError(authError)) {
+						if (isAuthRelatedCloudError(authError)) {
+							// Genuine auth failure — prompt re-auth
+							hadGenuineAuthErrors = true;
+							this._dispatch(
+								setProviderStatus({
+									providerId: provider.name,
+									status: "expired",
+								}),
+							);
+							await this.promptProviderReauth(provider.name);
+						} else {
+							// Network or unknown error — transient, don't trigger re-auth
 							hadNetworkErrors = true;
 							console.warn(
-								`Network error checking auth for provider ${provider.name}, skipping`,
+								`Transient error checking auth for provider ${provider.name}, skipping`,
 							);
-							continue;
 						}
-						// Genuine error from auth check — treat as expired
-						hadGenuineAuthErrors = true;
-						this._dispatch(
-							setProviderStatus({
-								providerId: provider.name,
-								status: "expired",
-							}),
+						continue;
+					}
+
+					// Handle transient errors returned from retry logic (not thrown)
+					if (authState.transientError) {
+						hadNetworkErrors = true;
+						console.warn(
+							`Transient auth error for provider ${provider.name} after retries, skipping`,
 						);
-						await this.promptProviderReauth(provider.name);
 						continue;
 					}
 
 					if (!authState.authenticated || authState.expired) {
+						// Genuine auth expiration — prompt re-auth
 						hadGenuineAuthErrors = true;
 						this._dispatch(
 							setProviderStatus({
@@ -1045,16 +1137,8 @@ export class VaultManager {
 					const providerVaults = await this.listCloudVaults(provider.name);
 					allCloudVaults.push(...providerVaults);
 				} catch (error) {
-					if (isNetworkError(error)) {
-						// Network error — skip this provider without clearing existing vaults
-						hadNetworkErrors = true;
-						console.warn(
-							`Network error fetching vaults for provider ${provider.name}, keeping cached data`,
-						);
-						continue;
-					}
-					// Auth-related or other genuine error
 					if (isAuthRelatedCloudError(error)) {
+						// Auth-related genuine error — prompt re-auth
 						hadGenuineAuthErrors = true;
 						this._dispatch(
 							setProviderStatus({
@@ -1063,11 +1147,13 @@ export class VaultManager {
 							}),
 						);
 						await this.promptProviderReauth(provider.name);
+					} else {
+						// Network or other transient error — don't trigger re-auth
+						hadNetworkErrors = true;
+						console.warn(
+							`Transient error fetching vaults for provider ${provider.name}, keeping cached data`,
+						);
 					}
-					console.warn(
-						`Failed to refresh vaults for provider ${provider.name}:`,
-						error,
-					);
 				}
 			}
 

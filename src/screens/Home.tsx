@@ -94,16 +94,17 @@ function HomeScreen() {
     initializeApp();
   }, [dispatch]);
 
-  // Set up periodic cloud vault refresh (every 5 minutes)
+  // Set up periodic cloud vault refresh (every 15 minutes, only when tab is visible)
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (document.hidden) return; // Skip if tab not visible
       try {
         const vaultManager = VaultManager.getInstance();
         await vaultManager.refreshCloudVaults();
       } catch (error) {
         console.error('Failed to refresh cloud vaults:', error);
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 15 * 60 * 1000); // 15 minutes
 
     return () => clearInterval(interval);
   }, []);

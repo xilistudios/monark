@@ -139,13 +139,33 @@ impl StorageManager {
             config.default_provider.clone()
         };
 
-        let config = self.config.read().await;
-        if let Some(provider_config) = config.get_provider_config(&provider_name) {
-            let provider = self.create_provider_from_config(provider_config)?;
-            return Ok(provider);
-        }
+        // Clone the ProviderConfig so we can create two instances from it
+        // (Box<dyn StorageProvider> cannot be cloned directly).
+        let provider_config = {
+            let config = self.config.read().await;
+            config
+                .get_provider_config(&provider_name)
+                .cloned()
+                .ok_or_else(|| StorageError::provider_not_supported(&provider_name))?
+        };
 
-        Err(StorageError::provider_not_supported(provider_name))
+        // Create the provider to return to the caller.
+        let provider = self.create_provider_from_config(&provider_config)?;
+        println!(
+            "[StorageManager] Created provider '{}' from config (get_provider_mut)",
+            provider_name
+        );
+
+        // Keep the in-memory HashMap in sync so subsequent lookups reuse
+        // a provider backed by the same (fresh) config.
+        let actual_name = self.resolve_provider_key(&provider_name).await;
+        let mut providers = self.providers.write().await;
+        providers.insert(
+            actual_name,
+            self.create_provider_from_config(&provider_config)?,
+        );
+
+        Ok(provider)
     }
 
     pub async fn list_providers(&self) -> Vec<String> {
