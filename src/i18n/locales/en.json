@@ -304,6 +304,7 @@
         "creditCard": "Credit Card",
         "apiKey": "API Key",
         "sshKey": "SSH Key",
+        "otp": "OTP / 2FA",
         "note": "Note",
         "custom": "Custom"
       },
@@ -418,7 +419,9 @@
         "showButton": "Show",
         "copyButton": "Copy",
         "secretLabel": "Secret",
-        "removeButton": "Remove"
+        "removeButton": "Remove",
+        "otpCopyCode": "Copy code",
+        "otpInvalid": "Invalid OTP secret"
       },
       "tags": {
         "title": "Tags",

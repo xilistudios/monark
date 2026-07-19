@@ -190,6 +190,7 @@ fn build_app() {
             commands::storage::refresh_provider_auth,
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
+            commands::totp::generate_totp,
             state::load_vault_state,
             state::save_vault_state,
         ])

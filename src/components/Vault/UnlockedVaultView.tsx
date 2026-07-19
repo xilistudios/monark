@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useContext, useRef } from 'react';
 import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
-import { AddEntryModal } from './Modals/AddEntryModal';
-import { AddGroupModal } from './Modals/AddGroupModal';
-import { ImportCsvModal } from './Modals/ImportCsvModal';
+
 import { EntryDetailsSidebar } from './EntryDetailsSidebar';
 import { VaultManager } from '../../services/vault';
 
@@ -148,10 +146,7 @@ function UnlockedVaultView({
 
   return (
     <div data-testid="unlocked-vault-view" className={`flex flex-col h-full transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-      {/* Modal components (context-driven, no props) */}
-      <AddEntryModal />
-      <AddGroupModal />
-      <ImportCsvModal />
+
 
       <div className="border-b border-base-300">
         <VaultToolbar

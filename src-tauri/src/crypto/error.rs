@@ -27,4 +27,6 @@ pub enum CryptoError {
     InvalidSaltLength { expected: usize, actual: usize },
     #[error("Random number generation failed: {0}")]
     Rng(String), // Wrap RNG errors if necessary, though OsRng is usually reliable
+    #[error("TOTP error: {0}")]
+    Totp(String),
 }

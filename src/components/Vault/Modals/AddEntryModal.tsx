@@ -87,6 +87,23 @@ export const AddEntryModal = () => {
 			),
 		},
 		{
+			id: "otp",
+			name: t("addEntry.templates.otp"),
+			desc: "Time-based one-time passwords (TOTP) for 2FA.",
+			color: "bg-warning/10 text-warning border-warning/20",
+			icon: (
+				<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<title>{t("addEntry.templates.otp")}</title>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+					/>
+				</svg>
+			),
+		},
+		{
 			id: "apiKey",
 			name: t("addEntry.templates.apiKey"),
 			desc: "Tokens and passwords for external APIs.",
@@ -161,6 +178,11 @@ export const AddEntryModal = () => {
 				setFields([
 					{ title: "Private Key", property: "ssh key", value: "", secret: true },
 					{ title: "Passphrase", property: "password", value: "", secret: true },
+				]);
+				break;
+			case "otp":
+				setFields([
+					{ title: "OTP Secret", property: "otp", value: "", secret: true },
 				]);
 				break;
 			case "apiKey":
