@@ -17,9 +17,15 @@ function SettingsScreen() {
 
   return (
     <main className="p-4 w-full">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">{t('title')}</h1>
-        <Link to="/" className="btn btn-outline btn-sm">
+      <div className="max-w-6xl mx-auto pt-4 px-4 md:px-8">
+        <Link 
+          to="/" 
+          className="inline-flex items-center gap-2 text-sm font-medium text-base-content/50 hover:text-base-content transition-colors duration-200 group w-fit"
+          aria-label={t('backButton')}
+        >
+          <svg className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
           {t('backButton')}
         </Link>
       </div>

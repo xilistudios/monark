@@ -28,32 +28,32 @@ function GeneralSettings() {
 	}, [language, t]);
 
 	return (
-		<section>
-			<div className="mb-6">
-				<h2 className="text-xl font-semibold text-base-content mb-2">
+		<section className="space-y-10 animate-in fade-in duration-300">
+			<div className="border-b border-base-content/10 pb-6">
+				<h2 className="text-2xl font-semibold text-base-content tracking-tight mb-2">
 					{t('general', 'General')}
 				</h2>
-				<p className="text-sm text-base-content/60">
+				<p className="text-base-content/60 text-sm">
 					{t('general.description', 'Manage your application preferences')}
 				</p>
 			</div>
 
-			<div className="bg-base-50 border border-base-200 rounded-xl p-6">
+			<div>
 				<form
-					className="space-y-6"
+					className="space-y-6 max-w-md"
 					aria-label={t("general.languageAriaLabel", "Language Selection")}
 					role="group"
 					aria-labelledby="settingsSection"
 					tabIndex={0}
 				>
-					<div>
-						<label htmlFor="language" className="block text-sm font-medium text-base-content mb-2">
+					<div className="space-y-2">
+						<label htmlFor="language" className="block text-sm font-medium text-base-content">
 							{t("language")}
 						</label>
-						<div className="relative">
+						<div className="relative group">
 							<select
 								id="language"
-								className="w-full px-4 py-3 bg-base-100 border border-base-300 rounded-lg text-base-content focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+								className="w-full px-4 py-2.5 bg-transparent border border-base-content/20 rounded-md text-base-content focus:outline-none focus:ring-1 focus:ring-base-content focus:border-base-content transition-colors duration-200 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:border-base-content/40 text-sm"
 								value={language}
 								onChange={(e) => dispatch(setLanguage(e.target.value))}
 								disabled={loading}
@@ -67,8 +67,8 @@ function GeneralSettings() {
 									</option>
 								))}
 							</select>
-							<div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-base-content/50">
-								<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-base-content/40">
+								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
 								</svg>
 							</div>
@@ -77,11 +77,11 @@ function GeneralSettings() {
 
 					<div id="languageError" role="alert">
 						{error && (
-							<div className="flex items-start gap-3 p-4 bg-error/10 border border-error/20 rounded-lg">
-								<svg className="w-5 h-5 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<div className="flex items-start gap-2 p-3 bg-error/5 text-error text-sm rounded-md">
+								<svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 								</svg>
-								<span className="text-sm text-error">{error}</span>
+								<span>{error}</span>
 							</div>
 						)}
 					</div>

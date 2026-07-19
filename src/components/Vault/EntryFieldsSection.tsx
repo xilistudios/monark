@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Field, FieldType } from '../../interfaces/vault.interface';
+import { OtpFieldView } from './OtpFieldView';
 import { PasswordFieldInput } from './PasswordFieldInput';
 import { PasswordFieldView } from './PasswordFieldView';
 
@@ -55,7 +56,8 @@ const renderFieldInput = (
     key: keyof FormField,
     value: string | boolean
   ) => void,
-  t: (key: string) => string
+  t: (key: string) => string,
+  onCopy: (value: string, fieldName?: string) => Promise<void>
 ) => {
   const baseClasses =
     'w-full px-3 py-2 text-sm border border-base-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary';
@@ -63,7 +65,7 @@ const renderFieldInput = (
 
   if (!editMode) {
     // View mode rendering
-    return renderFieldValue(field);
+    return renderFieldValue(field, onCopy);
   }
 
   switch (field.property) {
@@ -129,7 +131,7 @@ const renderFieldInput = (
 /**
  * Renders the appropriate view component based on field type
  */
-const renderFieldValue = (field: FormField) => {
+const renderFieldValue = (field: FormField, onCopy: (value: string, fieldName?: string) => Promise<void>) => {
 	if (!field.value) {
 		return <p className="text-base-content/40 italic text-xs">No value</p>;
 	}
@@ -173,11 +175,7 @@ const renderFieldValue = (field: FormField) => {
 			return <PasswordFieldView value={field.value} />;
 
 		case "otp":
-			return (
-				<p className="text-primary font-mono text-base font-bold tracking-widest bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 inline-block">
-					{field.value}
-				</p>
-			);
+			return <OtpFieldView secret={field.value} onCopy={onCopy} />;
 
 		case "ssh key":
 			return (
@@ -225,7 +223,7 @@ export function EntryFieldsSection({
 									{field.title || field.property}
 								</span>
 								<div className="text-sm font-semibold text-base-content break-all">
-									{renderFieldValue(field)}
+									{renderFieldValue(field, handleCopy)}
 								</div>
 							</div>
 							<div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
