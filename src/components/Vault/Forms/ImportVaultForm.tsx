@@ -112,6 +112,7 @@ export const ImportVaultForm = ({
 			let vaultPath: string;
 			let finalVaultName: string;
 			let cloudVault: Vault | null = null;
+			let vaultContent: any = null;
 
 			if (importSource === "cloud") {
 				// Import cloud vault
@@ -124,7 +125,7 @@ export const ImportVaultForm = ({
 
 				// Verify the vault can be accessed with the password
 				try {
-					await CloudStorageCommands.readCloudVault({
+					vaultContent = await CloudStorageCommands.readCloudVault({
 						vaultId: cloudVault.id,
 						password,
 						providerName: providerId,
@@ -143,7 +144,7 @@ export const ImportVaultForm = ({
 				finalVaultName = vaultName || extractVaultNameFromPath(filePath);
 
 				// Try to open the vault to verify the password is correct
-				await invoke("read_vault", { filePath, password });
+				vaultContent = await invoke("read_vault", { filePath, password });
 			}
 
 			const newVault: Vault = {
@@ -158,7 +159,7 @@ export const ImportVaultForm = ({
 					importSource === "cloud" ? cloudVault?.cloudMetadata : undefined,
 				volatile: {
 					credential: password,
-					entries: [],
+					entries: vaultContent?.entries || [],
 					navigationPath: "/",
 					encryptedData: undefined,
 				},
