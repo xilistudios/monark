@@ -154,14 +154,6 @@ const VaultSelector = ({
 						)}
 					</button>
 				</div>
-
-				{/* Cloud vaults loading indicator */}
-				{cloudVaultsRefreshing && (
-					<div className="flex items-center gap-2 text-xs text-base-content/60">
-						<span className="loading loading-spinner loading-xs"></span>
-						{t("vaultSelector.loadingCloudVaults")}
-					</div>
-				)}
 			</div>
 
 			{error && (
