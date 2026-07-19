@@ -127,7 +127,8 @@
         "googleStep5": "Agrega la URI de redirección a tu pantalla de consentimiento OAuth",
         "security": "Notas de Seguridad",
         "securityText": "Tus credenciales se almacenan localmente y están encriptadas. Nunca compartas tus secretos de cliente con otros."
-      }
+      },
+      "webdav": "WebDAV"
     },
     "vaultSelector": {
       "autoStorageNote": "Las bóvedas se almacenarán automáticamente en la carpeta \"Monark\" en tu almacenamiento en la nube."
@@ -151,8 +152,20 @@
         "clientIdRequired": "El ID de Cliente es obligatorio",
         "clientSecretRequired": "El Secreto de Cliente es obligatorio",
         "redirectUriRequired": "La URI de Redirección es obligatoria",
-        "addFailed": "Error al agregar el proveedor. Por favor verifica tus credenciales."
-      }
+        "addFailed": "Error al agregar el proveedor. Por favor verifica tus credenciales.",
+        "serverUrlRequired": "La URL del servidor es obligatoria",
+        "usernameRequired": "El nombre de usuario es obligatorio",
+        "passwordRequired": "La contraseña es obligatoria"
+      },
+      "serverUrl": "URL del Servidor",
+      "serverUrlPlaceholder": "https://cloud.example.com/remote.php/dav/files/usuario",
+      "username": "Nombre de Usuario",
+      "usernamePlaceholder": "Tu nombre de usuario WebDAV",
+      "password": "Contraseña",
+      "passwordPlaceholder": "Tu contraseña WebDAV",
+      "basePath": "Ruta Base (opcional)",
+      "basePathPlaceholder": "Monark",
+      "basePathHelp": "Subcarpeta dentro de tu raíz WebDAV para almacenar bóvedas"
     },
     "updates": {
       "title": "Actualizaciones",

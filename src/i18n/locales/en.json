@@ -127,7 +127,8 @@
         "googleStep5": "Add the redirect URI to your OAuth consent screen",
         "security": "Security Notes",
         "securityText": "Your credentials are stored locally and encrypted. Never share your client secrets with others."
-      }
+      },
+      "webdav": "WebDAV"
     },
     "vaultSelector": {
       "autoStorageNote": "Vaults will be automatically stored in the \"Monark\" folder in your cloud storage."
@@ -151,8 +152,20 @@
         "clientIdRequired": "Client ID is required",
         "clientSecretRequired": "Client Secret is required",
         "redirectUriRequired": "Redirect URI is required",
-        "addFailed": "Failed to add provider. Please check your credentials."
-      }
+        "addFailed": "Failed to add provider. Please check your credentials.",
+        "serverUrlRequired": "Server URL is required",
+        "usernameRequired": "Username is required",
+        "passwordRequired": "Password is required"
+      },
+      "serverUrl": "Server URL",
+      "serverUrlPlaceholder": "https://cloud.example.com/remote.php/dav/files/user",
+      "username": "Username",
+      "usernamePlaceholder": "Your WebDAV username",
+      "password": "Password",
+      "passwordPlaceholder": "Your WebDAV password",
+      "basePath": "Base Path (optional)",
+      "basePathPlaceholder": "Monark",
+      "basePathHelp": "Subfolder within your WebDAV root for storing vaults"
     },
     "updates": {
       "title": "Updates",

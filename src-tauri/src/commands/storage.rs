@@ -114,6 +114,7 @@ pub async fn list_providers(
             let provider_type = match provider_config {
                 ProviderConfig::Local { .. } => "local".to_string(),
                 ProviderConfig::GoogleDrive { .. } => "google_drive".to_string(),
+                ProviderConfig::WebDav { .. } => "webdav".to_string(),
             };
 
             provider_infos.push(ProviderInfo {
@@ -203,6 +204,10 @@ pub async fn check_provider_auth_status(
             ProviderConfig::GoogleDrive { config } => {
                 // Provider is authenticated only if it has a non-expired access token
                 Ok(config.access_token.is_some() && !config.is_token_expired())
+            }
+            ProviderConfig::WebDav { config } => {
+                // WebDAV uses Basic auth — authenticated if credentials are present
+                Ok(!config.username.is_empty() && !config.password.is_empty())
             }
             ProviderConfig::Local { .. } => {
                 // Local provider doesn't need authentication
@@ -558,4 +563,26 @@ pub async fn refresh_provider_auth(
         authenticated: true,
         token_expires_at: updated_config.token_expires_at,
     })
+}
+
+#[tauri::command]
+pub async fn test_webdav_connection(
+    server_url: String,
+    username: String,
+    password: String,
+    base_path: String,
+) -> Result<bool, CommandError> {
+    use crate::storage::providers::webdav::{WebDavConfig, WebDavProvider};
+    use crate::storage::StorageProvider;
+    let config = WebDavConfig {
+        server_url,
+        username,
+        password,
+        base_path,
+    };
+    let mut provider = WebDavProvider::new(config);
+    match provider.authenticate().await {
+        Ok(()) => Ok(true),
+        Err(e) => Err(CommandError::Io(format!("WebDAV connection failed: {}", e))),
+    }
 }

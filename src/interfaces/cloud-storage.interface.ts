@@ -13,6 +13,7 @@
 export enum StorageProviderType {
 	LOCAL = "local",
 	GOOGLE_DRIVE = "google_drive",
+	WEB_DAV = "webdav",
 }
 
 /**
@@ -37,6 +38,16 @@ export interface GoogleDriveConfig {
 }
 
 /**
+ * WebDAV configuration matching Rust WebDavConfig struct
+ */
+export interface WebDavConfig {
+	server_url: string;
+	username: string;
+	password: string;
+	base_path: string;
+}
+
+/**
  * Local storage configuration matching Rust Local config variant
  */
 export interface LocalStorageConfig {
@@ -48,7 +59,8 @@ export interface LocalStorageConfig {
  */
 export type ProviderConfig =
 	| { type: StorageProviderType.LOCAL; basePath: string }
-	| { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig };
+	| { type: StorageProviderType.GOOGLE_DRIVE; config: GoogleDriveConfig }
+	| { type: StorageProviderType.WEB_DAV; config: WebDavConfig };
 
 /**
  * Request to add a new storage provider matching Rust AddProviderRequest

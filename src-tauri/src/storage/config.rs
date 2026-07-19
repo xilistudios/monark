@@ -1,4 +1,5 @@
 use super::providers::google_drive::GoogleDriveConfig;
+use super::providers::webdav::WebDavConfig;
 use super::{StorageProviderType, StorageResult};
 use chrono;
 use serde::{Deserialize, Serialize};
@@ -70,6 +71,32 @@ fn load_gd_secrets(provider_name: &str, config: &mut GoogleDriveConfig) {
     }
 }
 
+/// Store sensitive fields of a WebDavConfig in the keychain and return a sanitized copy.
+fn store_and_strip_webdav_secrets(provider_name: &str, config: &WebDavConfig) -> WebDavConfig {
+    let mut sanitized = config.clone();
+    let key_prefix = format!("monark_secret::{}", provider_name);
+    if !config.password.is_empty() {
+        let _ = crate::storage::keychain::set_secret(
+            &format!("{}::password", key_prefix),
+            &config.password,
+        );
+    }
+    sanitized.password = String::new();
+    sanitized
+}
+
+/// Load sensitive fields from keychain and merge them into a WebDavConfig.
+fn load_webdav_secrets(provider_name: &str, config: &mut WebDavConfig) {
+    let key_prefix = format!("monark_secret::{}", provider_name);
+    if let Ok(Some(password)) =
+        crate::storage::keychain::get_secret(&format!("{}::password", key_prefix))
+    {
+        if !password.is_empty() {
+            config.password = password;
+        }
+    }
+}
+
 static STORAGE_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// The name used for the default Google Drive provider created from environment variables.
@@ -95,6 +122,8 @@ pub struct StorageConfig {
 pub enum ProviderConfig {
     Local { base_path: String },
     GoogleDrive { config: GoogleDriveConfig },
+    #[serde(rename = "webdav")]
+    WebDav { config: WebDavConfig },
 }
 
 impl StorageConfig {
@@ -171,6 +200,8 @@ impl StorageConfig {
         for (name, provider) in config.providers.iter_mut() {
             if let ProviderConfig::GoogleDrive { config: gd_config } = provider {
                 load_gd_secrets(name, gd_config);
+            } else if let ProviderConfig::WebDav { config: wd_config } = provider {
+                load_webdav_secrets(name, wd_config);
             }
         }
 
@@ -203,6 +234,9 @@ impl StorageConfig {
                     let sanitized = match v {
                         ProviderConfig::GoogleDrive { config } => ProviderConfig::GoogleDrive {
                             config: store_and_strip_gd_secrets(k, config),
+                        },
+                        ProviderConfig::WebDav { config } => ProviderConfig::WebDav {
+                            config: store_and_strip_webdav_secrets(k, config),
                         },
                         other => other.clone(),
                     };
@@ -341,6 +375,7 @@ impl StorageConfig {
                     || gd_config.refresh_token.is_some()
                     || gd_config.token_expires_at.is_some()
             }
+            ProviderConfig::WebDav { config: wd_config } => !wd_config.password.is_empty(),
             _ => false,
         });
 
@@ -357,6 +392,9 @@ impl StorageConfig {
                     let sanitized_provider = match v {
                         ProviderConfig::GoogleDrive { config } => ProviderConfig::GoogleDrive {
                             config: store_and_strip_gd_secrets(k, config),
+                        },
+                        ProviderConfig::WebDav { config } => ProviderConfig::WebDav {
+                            config: store_and_strip_webdav_secrets(k, config),
                         },
                         other => other.clone(),
                     };
@@ -385,6 +423,7 @@ impl StorageConfig {
         let _ = crate::storage::keychain::delete_secret(&format!("{}::refresh_token", key_prefix));
         let _ =
             crate::storage::keychain::delete_secret(&format!("{}::token_expires_at", key_prefix));
+        let _ = crate::storage::keychain::delete_secret(&format!("{}::password", key_prefix));
     }
 }
 

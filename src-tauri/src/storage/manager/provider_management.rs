@@ -331,6 +331,11 @@ impl StorageManager {
                 let authenticated = config.access_token.is_some() && !config.is_token_expired();
                 Ok((authenticated, config.token_expires_at))
             }
+            ProviderConfig::WebDav { config } => {
+                // WebDAV uses Basic auth — authenticated if credentials are present
+                let authenticated = !config.username.is_empty() && !config.password.is_empty();
+                Ok((authenticated, None))
+            }
             ProviderConfig::Local { .. } => {
                 // Local provider doesn't need authentication
                 Ok((true, None))

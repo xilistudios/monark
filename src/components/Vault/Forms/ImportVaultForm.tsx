@@ -197,49 +197,45 @@ export const ImportVaultForm = ({
 	};
 
 	return (
-		<div className="space-y-4">
-			<h3 className="font-bold text-lg">{t("importVault.title")}</h3>
-
+		<div className="flex flex-col gap-6 pt-2 animate-fade-in w-full">
 			{/* Import Source Selector */}
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("vaultSelector.importSource")}</span>
+			<div className="flex flex-col gap-3 w-full">
+				<label className="text-sm font-medium text-base-content/80 pl-1">
+					{t("vaultSelector.importSource")}
 				</label>
-				<div className="flex gap-4">
-					<label className="flex items-center gap-2 cursor-pointer">
-						<input
-							type="radio"
-							name="importSource"
-							className="radio radio-primary"
-							checked={importSource === "local"}
-							onChange={() => setImportSource("local")}
-						/>
-						<span>{t("vaultSelector.localFile")}</span>
-					</label>
-					<label className="flex items-center gap-2 cursor-pointer">
-						<input
-							type="radio"
-							name="importSource"
-							className="radio radio-primary"
-							checked={importSource === "cloud"}
-							onChange={() => setImportSource("cloud")}
-						/>
-						<span>{t("vaultSelector.cloudStorage")}</span>
-					</label>
+				<div className="grid grid-cols-2 gap-3">
+					<button
+						type="button"
+						className={`btn h-auto py-3 flex flex-col gap-2 transition-all duration-300 ${importSource === "local" ? "btn-primary shadow-lg shadow-primary/20 scale-[1.02]" : "btn-outline border-base-300 hover:border-base-content/30 text-base-content/70"}`}
+						onClick={() => setImportSource("local")}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+						</svg>
+						<span className="font-medium text-sm">{t("vaultSelector.localFile")}</span>
+					</button>
+					<button
+						type="button"
+						className={`btn h-auto py-3 flex flex-col gap-2 transition-all duration-300 ${importSource === "cloud" ? "btn-primary shadow-lg shadow-primary/20 scale-[1.02]" : "btn-outline border-base-300 hover:border-base-content/30 text-base-content/70"}`}
+						onClick={() => setImportSource("cloud")}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+						</svg>
+						<span className="font-medium text-sm">{t("vaultSelector.cloudStorage")}</span>
+					</button>
 				</div>
 			</div>
 
 			{/* Cloud Provider Selector - Only show for cloud import */}
 			{importSource === "cloud" && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">
-							{t("vaultSelector.selectProvider")}
-						</span>
+				<div className="flex flex-col gap-2 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{t("vaultSelector.selectProvider")}
 					</label>
 					{authenticatedProviders.length > 0 ? (
 						<select
-							className="select select-bordered"
+							className="select select-bordered select-sm w-full max-w-xs bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 							value={providerId}
 							onChange={(e) => setProviderId(e.target.value)}
 						>
@@ -251,10 +247,10 @@ export const ImportVaultForm = ({
 							))}
 						</select>
 					) : (
-						<div className="alert alert-warning">
+						<div className="alert alert-warning py-2">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
-								className="stroke-current shrink-0 h-6 w-6"
+								className="stroke-current shrink-0 h-5 w-5"
 								fill="none"
 								viewBox="0 0 24 24"
 							>
@@ -266,8 +262,8 @@ export const ImportVaultForm = ({
 								/>
 							</svg>
 							<div>
-								<p>{t("vaultSelector.noProvidersConfigured")}</p>
-								<p className="text-sm opacity-80">
+								<p className="text-sm">{t("vaultSelector.noProvidersConfigured")}</p>
+								<p className="text-xs opacity-80 mt-1">
 									{t("vaultSelector.goToSettings")}
 								</p>
 							</div>
@@ -278,20 +274,18 @@ export const ImportVaultForm = ({
 
 			{/* Cloud Vault Selection - Only show for cloud import */}
 			{importSource === "cloud" && providerId && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">
-							{t("vaultSelector.selectCloudVault")}
-						</span>
+				<div className="flex flex-col gap-2 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{t("vaultSelector.selectCloudVault")}
 					</label>
 					{loadingCloudVaults ? (
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2 pl-1">
 							<span className="loading loading-spinner loading-sm"></span>
-							<span>{t("vaultSelector.loadingVaults")}</span>
+							<span className="text-sm">{t("vaultSelector.loadingVaults")}</span>
 						</div>
 					) : cloudVaults.length > 0 ? (
 						<select
-							className="select select-bordered"
+							className="select select-bordered select-sm w-full max-w-xs bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 							value={selectedCloudVault?.id || ""}
 							onChange={(e) => handleCloudVaultSelect(e.target.value)}
 						>
@@ -305,10 +299,10 @@ export const ImportVaultForm = ({
 							))}
 						</select>
 					) : (
-						<div className="alert alert-info">
+						<div className="alert alert-info py-2">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
-								className="stroke-current shrink-0 h-6 w-6"
+								className="stroke-current shrink-0 h-5 w-5"
 								fill="none"
 								viewBox="0 0 24 24"
 							>
@@ -319,7 +313,7 @@ export const ImportVaultForm = ({
 									d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 								/>
 							</svg>
-							<span>{t("vaultSelector.noCloudVaults")}</span>
+							<span className="text-sm">{t("vaultSelector.noCloudVaults")}</span>
 						</div>
 					)}
 				</div>
@@ -327,21 +321,21 @@ export const ImportVaultForm = ({
 
 			{/* Local File Selection - Only show for local import */}
 			{importSource === "local" && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">{t("importVault.vaultFile")}</span>
+				<div className="flex flex-col gap-2 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{t("importVault.vaultFile")}
 					</label>
-					<div className="join">
+					<div className="join w-full">
 						<input
 							type="text"
 							placeholder={t("importVault.vaultFilePlaceholder")}
-							className="input input-bordered join-item flex-1"
+							className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300 join-item"
 							value={filePath}
 							onChange={(e) => setFilePath(e.target.value)}
 							readOnly
 						/>
 						<button
-							className="btn join-item"
+							className="btn btn-outline border-base-content/20 hover:border-base-content/40 hover:bg-base-200 text-base-content join-item"
 							onClick={handleSelectFile}
 							type="button"
 						>
@@ -351,44 +345,45 @@ export const ImportVaultForm = ({
 				</div>
 			)}
 
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("importVault.name")}</span>
+			<div className="flex flex-col gap-2 w-full">
+				<label className="text-sm font-medium text-base-content/80 pl-1 flex items-center justify-between w-full">
+					<span>{t("importVault.name")}</span>
+					<span className="text-xs font-normal opacity-70">{t("importVault.fileHelp")}</span>
 				</label>
 				<input
 					type="text"
 					placeholder={t("importVault.namePlaceholder")}
-					className="input input-bordered"
+					className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 					value={vaultName}
 					onChange={(e) => setVaultName(e.target.value)}
 				/>
-				<label className="label">
-					<span className="label-text-alt">{t("importVault.fileHelp")}</span>
-				</label>
 			</div>
 
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("importVault.password")}</span>
+			<div className="flex flex-col gap-2 w-full">
+				<label className="text-sm font-medium text-base-content/80 pl-1">
+					{t("importVault.password")}
 				</label>
 				<input
 					type="password"
 					placeholder={t("importVault.passwordPlaceholder")}
-					className="input input-bordered"
+					className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 				/>
 			</div>
 
 			{error && (
-				<div className="alert alert-error">
-					<span>{error}</span>
+				<div className="alert alert-error py-2">
+					<span className="text-sm">{error}</span>
 				</div>
 			)}
 
-			<div className="modal-action">
+			<div className="modal-action pt-4 flex justify-end gap-3 mt-2">
+				<button className="btn btn-ghost" onClick={onCancel} disabled={loading}>
+					{t("importVault.cancel")}
+				</button>
 				<button
-					className="btn btn-primary"
+					className="btn btn-primary min-w-[120px]"
 					onClick={handleImportVault}
 					disabled={
 						loading ||
@@ -404,9 +399,6 @@ export const ImportVaultForm = ({
 					) : (
 						t("importVault.importVault")
 					)}
-				</button>
-				<button className="btn" onClick={onCancel} disabled={loading}>
-					{t("importVault.cancel")}
 				</button>
 			</div>
 		</div>

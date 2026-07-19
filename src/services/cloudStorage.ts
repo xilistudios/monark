@@ -150,6 +150,35 @@ export class CloudStorageCommands {
 	}
 
 	/**
+	 * Tests a WebDAV connection before saving the provider
+	 * @param serverUrl - WebDAV server URL
+	 * @param username - WebDAV username
+	 * @param password - WebDAV password
+	 * @param basePath - Optional base path within the WebDAV root
+	 * @returns Promise resolving to true if connection succeeds
+	 */
+	static async testWebDavConnection(
+		serverUrl: string,
+		username: string,
+		password: string,
+		basePath: string,
+	): Promise<boolean> {
+		try {
+			return await invoke<boolean>("test_webdav_connection", {
+				serverUrl,
+				username,
+				password,
+				basePath,
+			});
+		} catch (error) {
+			throw CloudStorageCommands.handleError(
+				error,
+				"Failed to test WebDAV connection",
+			);
+		}
+	}
+
+	/**
 	 * Gets provider authentication info including expiration.
 	 * @param providerName - Name of the provider to inspect
 	 */

@@ -1,5 +1,6 @@
 pub mod google_drive;
 pub mod local;
+pub mod webdav;
 
 use crate::storage::StorageResult;
 use async_trait::async_trait;
@@ -11,6 +12,8 @@ use std::collections::HashMap;
 pub enum StorageProviderType {
     Local,
     GoogleDrive,
+    #[serde(rename = "webdav")]
+    WebDav,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,3 +89,4 @@ pub trait StorageProvider: Send + Sync {
 
 pub use google_drive::GoogleDriveProvider;
 pub use local::LocalStorageProvider;
+pub use webdav::WebDavProvider;

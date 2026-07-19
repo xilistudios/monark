@@ -1,4 +1,4 @@
-use super::providers::{GoogleDriveProvider, LocalStorageProvider};
+use super::providers::{GoogleDriveProvider, LocalStorageProvider, WebDavProvider};
 use super::{ProviderConfig, StorageConfig, StorageError, StorageProvider, StorageResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -106,6 +106,7 @@ impl StorageManager {
             ProviderConfig::GoogleDrive { config } => {
                 Ok(Box::new(GoogleDriveProvider::new(config.clone())))
             }
+            ProviderConfig::WebDav { config } => Ok(Box::new(WebDavProvider::new(config.clone()))),
         }
     }
 }

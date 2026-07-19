@@ -24,17 +24,17 @@ export const VaultTabs = ({ onSuccess, onCancel }: VaultTabsProps) => {
 	return (
 		<div className="w-full">
 			{/* Tab Navigation for current vault */}
-			<div role="tablist" className="tabs tabs-boxed mb-6">
+			<div role="tablist" className="flex p-1 bg-base-200/50 rounded-lg w-full mb-2">
 				<button
 					role="tab"
-					className={`tab ${(activeTabs[currentVaultId!] || 'create') === 'create' ? 'tab-active' : ''}`}
+					className={`flex-1 py-2 px-4 rounded-md text-sm transition-all duration-300 ${(activeTabs[currentVaultId!] || 'create') === 'create' ? 'bg-base-100 shadow-sm font-semibold text-base-content' : 'text-base-content/60 hover:text-base-content'}`}
 					onClick={() => handleTabChange(currentVaultId!, 'create')}
 				>
 					{t('vaultSelector.createNew')}
 				</button>
 				<button
 					role="tab"
-					className={`tab ${(activeTabs[currentVaultId!] || 'create') === 'import' ? 'tab-active' : ''}`}
+					className={`flex-1 py-2 px-4 rounded-md text-sm transition-all duration-300 ${(activeTabs[currentVaultId!] || 'create') === 'import' ? 'bg-base-100 shadow-sm font-semibold text-base-content' : 'text-base-content/60 hover:text-base-content'}`}
 					onClick={() => handleTabChange(currentVaultId!, 'import')}
 				>
 					{t('vaultSelector.importExisting')}

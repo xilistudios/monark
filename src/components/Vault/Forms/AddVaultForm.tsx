@@ -298,19 +298,21 @@ export const AddVaultForm = ({
 	};
 
 	return (
-		<div className="space-y-4 p-4">
-			<h3 className="font-bold text-lg">
-				{isEditMode ? t("editVault.title") : t("addVault.title")}
-			</h3>
+		<div className="flex flex-col gap-6 pt-2 animate-fade-in w-full">
+			{isEditMode && (
+				<h3 className="font-bold text-2xl text-base-content mb-2">
+					{t("editVault.title")}
+				</h3>
+			)}
 
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">{t("addVault.name")}</span>
+			<div className="flex flex-col gap-2 w-full">
+				<label className="text-sm font-medium text-base-content/80 pl-1">
+					{t("addVault.name")}
 				</label>
 				<input
 					type="text"
 					placeholder={t("addVault.namePlaceholder")}
-					className="input input-bordered"
+					className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 					value={vaultName}
 					onChange={(e) => {
 						setVaultName(e.target.value);
@@ -321,33 +323,31 @@ export const AddVaultForm = ({
 
 			{/* Storage Location Selector - Only show in create mode */}
 			{!isEditMode && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">
-							{t("vaultSelector.storageLocation")}
-						</span>
+				<div className="flex flex-col gap-3 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{t("vaultSelector.storageLocation")}
 					</label>
-					<div className="flex gap-4">
-						<label className="flex items-center gap-2 cursor-pointer">
-							<input
-								type="radio"
-								name="storageType"
-								className="radio radio-primary"
-								checked={storageType === "local"}
-								onChange={() => setStorageType("local")}
-							/>
-							<span>{t("vaultSelector.local")}</span>
-						</label>
-						<label className="flex items-center gap-2 cursor-pointer">
-							<input
-								type="radio"
-								name="storageType"
-								className="radio radio-primary"
-								checked={storageType === "cloud"}
-								onChange={() => setStorageType("cloud")}
-							/>
-							<span>{t("vaultSelector.cloud")}</span>
-						</label>
+					<div className="grid grid-cols-2 gap-3">
+						<button
+							type="button"
+							className={`btn h-auto py-3 flex flex-col gap-2 transition-all duration-300 ${storageType === "local" ? "btn-primary shadow-lg shadow-primary/20 scale-[1.02]" : "btn-outline border-base-300 hover:border-base-content/30 text-base-content/70"}`}
+							onClick={() => setStorageType("local")}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+							</svg>
+							<span className="font-medium text-sm">{t("vaultSelector.local")}</span>
+						</button>
+						<button
+							type="button"
+							className={`btn h-auto py-3 flex flex-col gap-2 transition-all duration-300 ${storageType === "cloud" ? "btn-primary shadow-lg shadow-primary/20 scale-[1.02]" : "btn-outline border-base-300 hover:border-base-content/30 text-base-content/70"}`}
+							onClick={() => setStorageType("cloud")}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+							</svg>
+							<span className="font-medium text-sm">{t("vaultSelector.cloud")}</span>
+						</button>
 					</div>
 				</div>
 			)}
@@ -355,16 +355,14 @@ export const AddVaultForm = ({
 			{/* Cloud Provider Selector - Only show for cloud storage */}
 			{!isEditMode && storageType === "cloud" && (
 				<>
-					<div className="form-control">
-						<label className="label">
-							<span className="label-text">
-								{t("vaultSelector.selectProvider")}
-							</span>
+					<div className="flex flex-col gap-2 w-full">
+						<label className="text-sm font-medium text-base-content/80 pl-1">
+							{t("vaultSelector.selectProvider")}
 						</label>
 						{authenticatedProviders.length > 0 ? (
 							<>
 								<select
-									className="select select-bordered"
+									className="select select-bordered select-sm w-full max-w-xs bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 									value={providerId}
 									onChange={(e) => setProviderId(e.target.value)}
 								>
@@ -378,13 +376,13 @@ export const AddVaultForm = ({
 
 								{/* Storage location info */}
 								{providerId && (
-									<div className="mt-4">
-										<div className="alert alert-info">
+									<div className="mt-2">
+										<div className="alert alert-info py-2">
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												fill="none"
 												viewBox="0 0 24 24"
-												className="stroke-current shrink-0 w-6 h-6"
+												className="stroke-current shrink-0 w-5 h-5"
 											>
 												<path
 													strokeLinecap="round"
@@ -393,7 +391,7 @@ export const AddVaultForm = ({
 													d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 												></path>
 											</svg>
-											<span>
+											<span className="text-sm">
 												{t(
 													"vaultSelector.autoStorageNote",
 													'Vaults will be automatically stored in the "Monark" folder in your cloud storage.',
@@ -404,10 +402,10 @@ export const AddVaultForm = ({
 								)}
 							</>
 						) : (
-							<div className="alert alert-warning">
+							<div className="alert alert-warning py-2">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
-									className="stroke-current shrink-0 h-6 w-6"
+									className="stroke-current shrink-0 h-5 w-5"
 									fill="none"
 									viewBox="0 0 24 24"
 								>
@@ -419,8 +417,8 @@ export const AddVaultForm = ({
 									/>
 								</svg>
 								<div>
-									<p>{t("vaultSelector.noProvidersConfigured")}</p>
-									<p className="text-sm opacity-80">
+									<p className="text-sm">{t("vaultSelector.noProvidersConfigured")}</p>
+									<p className="text-xs opacity-80 mt-1">
 										{t("vaultSelector.goToSettings")}
 									</p>
 								</div>
@@ -432,20 +430,20 @@ export const AddVaultForm = ({
 
 			{/* File Path - Only show for local storage and not on mobile */}
 			{!isEditMode && !mobile && storageType === "local" && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">{t("addVault.filePath")}</span>
+				<div className="flex flex-col gap-2 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{t("addVault.filePath")}
 					</label>
-					<div className="join">
+					<div className="join w-full">
 						<input
 							type="text"
 							placeholder={t("addVault.filePathPlaceholder")}
-							className="input input-bordered join-item flex-1"
+							className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300 join-item"
 							value={filePath}
 							onChange={(e) => setFilePath(e.target.value)}
 						/>
 						<button
-							className="btn join-item"
+							className="btn btn-outline border-base-content/20 hover:border-base-content/40 hover:bg-base-200 text-base-content join-item"
 							onClick={handleSelectFile}
 							type="button"
 						>
@@ -457,27 +455,27 @@ export const AddVaultForm = ({
 
 			{/* Edit mode file path display */}
 			{isEditMode && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">{t("addVault.filePath")}</span>
+				<div className="flex flex-col gap-2 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{t("addVault.filePath")}
 					</label>
 					<input
 						type="text"
-						className="input input-bordered"
+						className="input input-bordered w-full bg-base-200/50"
 						value={vault?.path || ""}
 						disabled
 					/>
-					<div className="text-xs text-base-content opacity-60 mt-1">
+					<div className="text-xs text-base-content opacity-60 ml-1">
 						{t("editVault.filePathHelp")}
 					</div>
 				</div>
 			)}
 
 			{isEditMode && vault?.isLocked && (
-				<div className="alert alert-warning mb-4">
+				<div className="alert alert-warning py-2 mb-2">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						className="stroke-current shrink-0 h-6 w-6"
+						className="stroke-current shrink-0 h-5 w-5"
 						fill="none"
 						viewBox="0 0 24 24"
 					>
@@ -488,15 +486,14 @@ export const AddVaultForm = ({
 							d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
 						/>
 					</svg>
-					<span>{t("editVault.errors.vaultLocked")}</span>
+					<span className="text-sm">{t("editVault.errors.vaultLocked")}</span>
 				</div>
 			)}
-			<div className="form-control">
-				<label className="label">
-					<span className="label-text">
-						{isEditMode ? t("editVault.newPassword") : t("addVault.password")}
-						{!isEditMode && " *"}
-					</span>
+
+			<div className="flex flex-col gap-2 w-full">
+				<label className="text-sm font-medium text-base-content/80 pl-1">
+					{isEditMode ? t("editVault.newPassword") : t("addVault.password")}
+					{!isEditMode && " *"}
 				</label>
 				<input
 					type="password"
@@ -505,7 +502,7 @@ export const AddVaultForm = ({
 							? t("editVault.newPasswordPlaceholder")
 							: t("addVault.passwordPlaceholder")
 					}
-					className="input input-bordered"
+					className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 					value={password}
 					onChange={(e) => {
 						setPassword(e.target.value);
@@ -514,7 +511,7 @@ export const AddVaultForm = ({
 					disabled={isEditMode && vault?.isLocked}
 				/>
 				{isEditMode && (
-					<div className="text-xs text-base-content opacity-60 mt-1">
+					<div className="text-xs text-base-content opacity-60 ml-1">
 						{t("editVault.passwordHelp")}
 					</div>
 				)}
@@ -522,14 +519,12 @@ export const AddVaultForm = ({
 
 			{/* Password confirmation field */}
 			{(password || !isEditMode) && (
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">
-							{isEditMode
-								? t("editVault.confirmNewPassword")
-								: t("addVault.confirmPassword")}
-							{!isEditMode && " *"}
-						</span>
+				<div className="flex flex-col gap-2 w-full">
+					<label className="text-sm font-medium text-base-content/80 pl-1">
+						{isEditMode
+							? t("editVault.confirmNewPassword")
+							: t("addVault.confirmPassword")}
+						{!isEditMode && " *"}
 					</label>
 					<input
 						type="password"
@@ -538,7 +533,7 @@ export const AddVaultForm = ({
 								? t("editVault.confirmNewPasswordPlaceholder")
 								: t("addVault.confirmPasswordPlaceholder")
 						}
-						className="input input-bordered"
+						className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 						value={confirmPassword}
 						onChange={(e) => {
 							setConfirmPassword(e.target.value);
@@ -550,16 +545,16 @@ export const AddVaultForm = ({
 			)}
 
 			{error && (
-				<div className="alert alert-error">
-					<span>{JSON.stringify(error.toString())}</span>
+				<div className="alert alert-error py-2">
+					<span className="text-sm">{JSON.stringify(error.toString())}</span>
 				</div>
 			)}
 
 			{success && (
-				<div className="alert alert-success">
+				<div className="alert alert-success py-2">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						className="stroke-current shrink-0 h-6 w-6"
+						className="stroke-current shrink-0 h-5 w-5"
 						fill="none"
 						viewBox="0 0 24 24"
 					>
@@ -570,13 +565,16 @@ export const AddVaultForm = ({
 							d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
 						/>
 					</svg>
-					<span>{success}</span>
+					<span className="text-sm">{success}</span>
 				</div>
 			)}
 
-			<div className="modal-action">
+			<div className="modal-action pt-4 flex justify-end gap-3 mt-2">
+				<button className="btn btn-ghost" onClick={onCancel} disabled={loading}>
+					{t("addVault.cancel")}
+				</button>
 				<button
-					className="btn btn-primary"
+					className="btn btn-primary min-w-[120px]"
 					onClick={handleSubmit}
 					disabled={loading}
 				>
@@ -590,9 +588,6 @@ export const AddVaultForm = ({
 					) : (
 						t("addVault.createVault")
 					)}
-				</button>
-				<button className="btn" onClick={onCancel} disabled={loading}>
-					{t("addVault.cancel")}
 				</button>
 			</div>
 		</div>

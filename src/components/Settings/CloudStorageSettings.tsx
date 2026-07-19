@@ -152,6 +152,8 @@ export const CloudStorageSettings = () => {
 		switch (type) {
 			case "google_drive":
 				return t("cloudStorage.googleDrive", "Google Drive");
+			case "webdav":
+				return t("cloudStorage.webdav", "WebDAV");
 			default:
 				return type;
 		}
@@ -311,8 +313,10 @@ export const CloudStorageSettings = () => {
 
 										{!isLocalProvider &&
 											status === "authenticated" &&
-											provider.provider_type ===
-												StorageProviderType.GOOGLE_DRIVE && (
+											(provider.provider_type ===
+												StorageProviderType.GOOGLE_DRIVE ||
+												provider.provider_type ===
+													StorageProviderType.WEB_DAV) && (
 												<button
 													className="px-3 py-2 bg-base-100 border border-base-300 text-base-content rounded-lg text-sm font-medium hover:bg-base-200 hover:border-base-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 													onClick={() => handleAuthenticate(provider)}

@@ -124,6 +124,18 @@ export class VaultInstance {
 			if (!authInfo) {
 				return { authenticated: false, expired: true };
 			}
+
+			// Providers with no token_expires_at (e.g. WebDAV with Basic auth) use
+			// stateless credentials that never expire. If the backend reports
+			// authenticated=true, the provider is authenticated and not expired.
+			// Skip the OAuth token-expiry check and refresh flow for these providers.
+			if (authInfo.token_expires_at == null) {
+				return {
+					authenticated: authInfo.authenticated,
+					expired: false,
+				};
+			}
+
 			const expired = isTokenExpired(authInfo.token_expires_at);
 
 			if (expired) {
@@ -630,6 +642,17 @@ export class VaultManager {
 					await CloudStorageCommands.getProviderAuthInfo(providerName);
 				if (!authInfo) {
 					return { authenticated: false, expired: true };
+				}
+
+				// Providers with no token_expires_at (e.g. WebDAV with Basic auth) use
+				// stateless credentials that never expire. If the backend reports
+				// authenticated=true, the provider is authenticated and not expired.
+				// Skip the OAuth token-expiry check and refresh flow for these providers.
+				if (authInfo.token_expires_at == null) {
+					return {
+						authenticated: authInfo.authenticated,
+						expired: false,
+					};
 				}
 
 				const expired = isTokenExpired(authInfo.token_expires_at);
