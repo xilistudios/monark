@@ -34,7 +34,7 @@ type ProviderStatus =
 	| "error";
 
 /** The name of the default Monark Google Drive provider (protected, cannot be removed). */
-const MONARK_DEFAULT_PROVIDER_NAME = "Monark";
+const MONARK_DEFAULT_PROVIDER_NAME = "Google Drive";
 
 export const CloudStorageSettings = () => {
 	const { t } = useTranslation("settings");
@@ -62,12 +62,17 @@ export const CloudStorageSettings = () => {
 			provider.name,
 		);
 		setAuthenticatingProvider(provider.name);
-		dispatch(
-			setProviderStatus({
-				providerId: provider.name,
-				status: "authenticating",
-			}),
-		);
+
+		// Only set to authenticating for non-Google Drive providers, 
+		// otherwise VaultManager's startProviderReauth will instantly abort.
+		if (provider.provider_type !== StorageProviderType.GOOGLE_DRIVE) {
+			dispatch(
+				setProviderStatus({
+					providerId: provider.name,
+					status: "authenticating",
+				}),
+			);
+		}
 
 		try {
 			// Check if this is a Google Drive provider

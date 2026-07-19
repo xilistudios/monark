@@ -31,6 +31,9 @@ pub enum StorageError {
 
     #[error("Operation failed: {0}")]
     OperationFailed(String),
+
+    #[error("Keychain error: {0}")]
+    Keychain(String),
 }
 
 impl StorageError {
@@ -64,6 +67,10 @@ impl StorageError {
 
     pub fn operation_failed(msg: impl Into<String>) -> Self {
         Self::OperationFailed(msg.into())
+    }
+
+    pub fn keychain(msg: impl Into<String>) -> Self {
+        Self::Keychain(msg.into())
     }
 }
 

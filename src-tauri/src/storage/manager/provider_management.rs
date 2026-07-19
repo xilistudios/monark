@@ -80,6 +80,15 @@ impl StorageManager {
             config.save()?;
         }
 
+        // Clean up any secrets stored in the OS keychain for this provider
+        crate::storage::StorageConfig::delete_provider_secrets(name);
+
+        // Clean up any tokens stored in the keychain for this provider
+        if let Ok(mut token_store) = crate::storage::TokenStore::load() {
+            token_store.remove_tokens(name);
+            let _ = token_store.save();
+        }
+
         Ok(())
     }
 
@@ -228,9 +237,21 @@ impl StorageManager {
                     provider_name.to_string(),
                 ));
             }
-            println!("Saving config to disk...");
-            config.save()?;
-            println!("Config saved successfully");
+
+            // Persist changes
+            if provider_name == crate::storage::MONARK_DEFAULT_PROVIDER_NAME {
+                // For the built-in provider, save only tokens to the token store
+                // (credentials are embedded in the binary, never written to disk).
+                let mut token_store = crate::storage::TokenStore::load()?;
+                token_store.set_monark_tokens((&new_config).into());
+                token_store.save()?;
+                println!("Saved Monark OAuth tokens to token store");
+            } else {
+                // For user-added providers, save the full config
+                println!("Saving config to disk...");
+                config.save()?;
+                println!("Config saved successfully");
+            }
         }
 
         {
