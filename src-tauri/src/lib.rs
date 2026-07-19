@@ -81,6 +81,10 @@ fn build_app() {
                 .path()
                 .resolve("storage_config.json", BaseDirectory::AppData)?;
             storage::set_storage_config_path(config_path);
+            let token_path = app
+                .path()
+                .resolve("provider_tokens.json", BaseDirectory::AppData)?;
+            storage::set_token_store_path(token_path);
             let storage_manager = tauri::async_runtime::block_on(storage::init_storage_manager());
 
             #[cfg(desktop)]

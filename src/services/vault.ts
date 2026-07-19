@@ -90,13 +90,8 @@ export class VaultInstance {
 			state: null,
 			isOpen: false,
 		};
-		const currentStatus = state.vault.providerStatus[providerName];
 
 		if (oauthState.isOpen && oauthState.providerName === providerName) {
-			return;
-		}
-
-		if (currentStatus === "authenticating") {
 			return;
 		}
 

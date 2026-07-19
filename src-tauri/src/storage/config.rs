@@ -1,14 +1,79 @@
 use super::providers::google_drive::GoogleDriveConfig;
 use super::{StorageProviderType, StorageResult};
+use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+/// Store sensitive fields of a GoogleDriveConfig in the keychain and return a sanitized copy.
+fn store_and_strip_gd_secrets(
+    provider_name: &str,
+    config: &GoogleDriveConfig,
+) -> GoogleDriveConfig {
+    let mut sanitized = config.clone();
+    let key_prefix = format!("monark_secret::{}", provider_name);
+    if !config.client_secret.is_empty() {
+        let _ = crate::storage::keychain::set_secret(
+            &format!("{}::client_secret", key_prefix),
+            &config.client_secret,
+        );
+    }
+    if let Some(ref token) = config.access_token {
+        let _ =
+            crate::storage::keychain::set_secret(&format!("{}::access_token", key_prefix), token);
+    }
+    if let Some(ref token) = config.refresh_token {
+        let _ =
+            crate::storage::keychain::set_secret(&format!("{}::refresh_token", key_prefix), token);
+    }
+    if let Some(expiry) = config.token_expires_at {
+        let _ = crate::storage::keychain::set_secret(
+            &format!("{}::token_expires_at", key_prefix),
+            &expiry.to_rfc3339(),
+        );
+    }
+    // Clear secrets from the copy that will be written to disk
+    sanitized.client_secret = String::new();
+    sanitized.access_token = None;
+    sanitized.refresh_token = None;
+    sanitized.token_expires_at = None;
+    sanitized
+}
+
+/// Load sensitive fields from keychain and merge them into a GoogleDriveConfig.
+fn load_gd_secrets(provider_name: &str, config: &mut GoogleDriveConfig) {
+    let key_prefix = format!("monark_secret::{}", provider_name);
+    if let Ok(Some(secret)) =
+        crate::storage::keychain::get_secret(&format!("{}::client_secret", key_prefix))
+    {
+        if !secret.is_empty() {
+            config.client_secret = secret;
+        }
+    }
+    if let Ok(Some(token)) =
+        crate::storage::keychain::get_secret(&format!("{}::access_token", key_prefix))
+    {
+        config.access_token = Some(token);
+    }
+    if let Ok(Some(token)) =
+        crate::storage::keychain::get_secret(&format!("{}::refresh_token", key_prefix))
+    {
+        config.refresh_token = Some(token);
+    }
+    if let Ok(Some(expiry_str)) =
+        crate::storage::keychain::get_secret(&format!("{}::token_expires_at", key_prefix))
+    {
+        if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(&expiry_str) {
+            config.token_expires_at = Some(expiry.with_timezone(&chrono::Utc));
+        }
+    }
+}
+
 static STORAGE_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// The name used for the default Google Drive provider created from environment variables.
-pub const MONARK_DEFAULT_PROVIDER_NAME: &str = "Monark";
+pub const MONARK_DEFAULT_PROVIDER_NAME: &str = "Google Drive";
 
 pub fn set_storage_config_path(path: PathBuf) {
     let _ = STORAGE_CONFIG_PATH.set(path);
@@ -89,7 +154,7 @@ impl StorageConfig {
         })
     }
 
-    /// Load configuration from disk
+    /// Load configuration from disk, merging secrets from the OS keychain.
     pub fn load() -> StorageResult<Self> {
         let config_path = Self::config_file_path();
 
@@ -100,12 +165,24 @@ impl StorageConfig {
 
         let config_str = std::fs::read_to_string(&config_path)?;
 
-        let config: StorageConfig = serde_json::from_str(&config_str)?;
+        let mut config: StorageConfig = serde_json::from_str(&config_str)?;
+
+        // Merge secrets from keychain into each Google Drive provider
+        for (name, provider) in config.providers.iter_mut() {
+            if let ProviderConfig::GoogleDrive { config: gd_config } = provider {
+                load_gd_secrets(name, gd_config);
+            }
+        }
 
         Ok(config)
     }
 
-    /// Save configuration to disk
+    /// Save configuration to disk.
+    ///
+    /// The built-in "Monark" Google Drive provider (whose credentials are
+    /// embedded in the binary) is **never** written to disk.
+    /// Sensitive fields (client_secret, tokens) for user-added Google Drive
+    /// providers are stored in the OS keychain and stripped before writing.
     pub fn save(&self) -> StorageResult<()> {
         let config_path = Self::config_file_path();
 
@@ -114,7 +191,39 @@ impl StorageConfig {
             std::fs::create_dir_all(parent)?;
         }
 
-        let config_str = serde_json::to_string_pretty(self)?;
+        // Filter out the built-in Monark provider — its credentials are embedded
+        // in the binary and must never be written to disk.
+        // For remaining Google Drive providers, strip secrets into keychain.
+        let to_save = StorageConfig {
+            providers: self
+                .providers
+                .iter()
+                .filter(|(name, _)| name.as_str() != MONARK_DEFAULT_PROVIDER_NAME)
+                .map(|(k, v)| {
+                    let sanitized = match v {
+                        ProviderConfig::GoogleDrive { config } => ProviderConfig::GoogleDrive {
+                            config: store_and_strip_gd_secrets(k, config),
+                        },
+                        other => other.clone(),
+                    };
+                    (k.clone(), sanitized)
+                })
+                .collect(),
+            default_provider: if self.default_provider == MONARK_DEFAULT_PROVIDER_NAME {
+                // If the built-in was the default, fall back to "local" or the
+                // first remaining provider.
+                self.providers
+                    .keys()
+                    .find(|k| k.as_str() != MONARK_DEFAULT_PROVIDER_NAME)
+                    .cloned()
+                    .unwrap_or_else(|| "local".to_string())
+            } else {
+                self.default_provider.clone()
+            },
+            vault_folder: self.vault_folder.clone(),
+        };
+
+        let config_str = serde_json::to_string_pretty(&to_save)?;
 
         std::fs::write(&config_path, config_str)?;
 
@@ -204,6 +313,78 @@ impl StorageConfig {
             ProviderConfig::GoogleDrive { config: env_config },
         );
         true
+    }
+
+    /// One-time migration: move secrets from plaintext on disk into the OS keychain.
+    ///
+    /// Loads the raw config from disk (without keychain merging), checks if any
+    /// Google Drive provider still has non-empty secrets, and if so strips them
+    /// into the keychain and re-saves the sanitized config.
+    ///
+    /// Returns `Ok(true)` if migration happened, `Ok(false)` if no migration was needed.
+    pub fn migrate_secrets_from_disk() -> Result<bool, String> {
+        let config_path = Self::config_file_path();
+        if !config_path.exists() {
+            return Ok(false);
+        }
+
+        let config_str = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read config: {}", e))?;
+        let config: StorageConfig = serde_json::from_str(&config_str)
+            .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+        // Check if any Google Drive provider has secrets on disk
+        let needs_migration = config.providers.iter().any(|(_, provider)| match provider {
+            ProviderConfig::GoogleDrive { config: gd_config } => {
+                !gd_config.client_secret.is_empty()
+                    || gd_config.access_token.is_some()
+                    || gd_config.refresh_token.is_some()
+                    || gd_config.token_expires_at.is_some()
+            }
+            _ => false,
+        });
+
+        if !needs_migration {
+            return Ok(false);
+        }
+
+        // Strip secrets into keychain and build sanitized config
+        let sanitized = StorageConfig {
+            providers: config
+                .providers
+                .iter()
+                .map(|(k, v)| {
+                    let sanitized_provider = match v {
+                        ProviderConfig::GoogleDrive { config } => ProviderConfig::GoogleDrive {
+                            config: store_and_strip_gd_secrets(k, config),
+                        },
+                        other => other.clone(),
+                    };
+                    (k.clone(), sanitized_provider)
+                })
+                .collect(),
+            default_provider: config.default_provider.clone(),
+            vault_folder: config.vault_folder.clone(),
+        };
+
+        let sanitized_str = serde_json::to_string_pretty(&sanitized)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        std::fs::write(&config_path, sanitized_str)
+            .map_err(|e| format!("Failed to write config: {}", e))?;
+
+        Ok(true)
+    }
+
+    /// Delete all keychain entries for a given provider.
+    ///
+    /// Call this when a provider is removed to clean up its secrets from the keychain.
+    pub fn delete_provider_secrets(provider_name: &str) {
+        let key_prefix = format!("monark_secret::{}", provider_name);
+        let _ = crate::storage::keychain::delete_secret(&format!("{}::client_secret", key_prefix));
+        let _ = crate::storage::keychain::delete_secret(&format!("{}::access_token", key_prefix));
+        let _ = crate::storage::keychain::delete_secret(&format!("{}::refresh_token", key_prefix));
+        let _ =
+            crate::storage::keychain::delete_secret(&format!("{}::token_expires_at", key_prefix));
     }
 }
 

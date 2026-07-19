@@ -114,7 +114,7 @@ const normalizeProviderStatus = (
 	);
 };
 
-const MONARK_DEFAULT_PROVIDER_NAME = "Monark";
+const MONARK_DEFAULT_PROVIDER_NAME = "Google Drive";
 
 const resolveDefaultProvider = (
 	providers: StorageProvider[],
