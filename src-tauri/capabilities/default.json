@@ -19,7 +19,24 @@
     "updater:allow-download-and-install",
     "fs:allow-app-read",
     "os:default",
-    "http:default"
+    "http:default",
+    "biometry:default",
+    {
+      "identifier": "biometry:allow-set-data",
+      "allow": [{ "domain": "com.monark.app" }]
+    },
+    {
+      "identifier": "biometry:allow-get-data",
+      "allow": [{ "domain": "com.monark.app" }]
+    },
+    {
+      "identifier": "biometry:allow-remove-data",
+      "allow": [{ "domain": "com.monark.app" }]
+    },
+    {
+      "identifier": "biometry:allow-has-data",
+      "allow": [{ "domain": "com.monark.app" }]
+    }
   ],
   "remote": {
     "urls": [

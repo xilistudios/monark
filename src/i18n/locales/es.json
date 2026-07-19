@@ -5,6 +5,26 @@
   "edit": "Editar",
   "close": "Cerrar",
   "delete": "Eliminar",
+  "biometric": {
+    "title": "Desbloqueo Biométrico",
+    "enable": "Habilitar desbloqueo biométrico",
+    "disable": "Deshabilitar desbloqueo biométrico",
+    "notAvailable": "La biometría no está disponible en este dispositivo",
+    "promptEnable": "Habilitar desbloqueo biométrico para {{vaultName}}",
+    "promptUnlock": "Desbloquear {{vaultName}}",
+    "enabled": "El desbloqueo biométrico está habilitado para este vault",
+    "disabled": "El desbloqueo biométrico está deshabilitado",
+    "enableFailed": "Error al habilitar el desbloqueo biométrico",
+    "disableFailed": "Error al deshabilitar el desbloqueo biométrico",
+    "unlockFailed": "La autenticación biométrica falló. Por favor ingrese su contraseña.",
+    "fallbackPrompt": "Usar contraseña",
+    "unlocking": "Autenticando...",
+    "unlock": "Desbloquear con biometría",
+    "tapToUnlock": "Toca para desbloquear con biometría",
+    "or": "o",
+    "usePasswordInstead": "Usar contraseña",
+    "unlockReason": "Desbloquear vault {{name}}"
+  },
   "vault": {
     "delete": {
       "confirmTitle": "Eliminar Bóveda",

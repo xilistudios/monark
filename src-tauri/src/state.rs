@@ -48,6 +48,8 @@ pub struct VaultSummary {
     #[serde(default)]
     pub cloud_metadata: Option<CloudMetadata>,
     #[serde(default)]
+    pub biometric_enabled: bool,
+    #[serde(default)]
     pub volatile: Option<VaultVolatile>,
 }
 
@@ -62,6 +64,7 @@ impl Default for VaultSummary {
             storage_type: StorageType::Local,
             provider_id: None,
             cloud_metadata: None,
+            biometric_enabled: false,
             volatile: None,
         }
     }

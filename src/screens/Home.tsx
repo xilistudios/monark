@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useDispatch, useSelector } from 'react-redux';
@@ -32,6 +32,7 @@ import {
 } from '../utils/vaultNavigation';
 import UnlockedVaultView from '../components/Vault/UnlockedVaultView';
 import { LockedVaultView } from '../components/Vault/LockedVaultView';
+import { retrieveVaultPassword } from '../services/biometric';
 
 function HomeScreen() {
   const { t } = useTranslation('home');
@@ -53,6 +54,7 @@ function HomeScreen() {
   const [password, setPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [vaultToDelete, setVaultToDelete] = useState<Vault | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -172,6 +174,50 @@ function HomeScreen() {
     }
   };
 
+  const handleBiometricUnlock = useCallback(async () => {
+    if (!currentVault) return;
+
+    setBiometricLoading(true);
+    setUnlockError('');
+
+    try {
+      const retrievedPassword = await retrieveVaultPassword(
+        currentVault.id,
+        t('biometric.unlockReason').replace('{name}', currentVault.name),
+      );
+
+      if (!retrievedPassword) {
+        // User cancelled biometric or it failed — fall back silently
+        setBiometricLoading(false);
+        return;
+      }
+
+      // Use the retrieved password to unlock the vault
+      if (isCloudVault(currentVault)) {
+        setCloudUnlockMessage(t('vaultSelector.downloadingFromCloud'));
+      }
+
+      const vaultInstance = VaultManager.getInstance().getInstance(
+        currentVault.id,
+      );
+      if (vaultInstance) {
+        await vaultInstance.unlock(retrievedPassword);
+        dispatch(setVaultLocked({ vaultId: currentVault.id, isLocked: false }));
+        dispatch(
+          setNavigationPath({ vaultId: currentVault.id, navigationPath: '/' }),
+        );
+      }
+      setPassword('');
+      setCloudUnlockMessage('');
+    } catch (err) {
+      console.error('Biometric unlock failed:', err);
+      setUnlockError(t('errors.unlockFailed'));
+      setCloudUnlockMessage('');
+    } finally {
+      setBiometricLoading(false);
+    }
+  }, [currentVault, dispatch, t]);
+
   /**
    * Handles vault locking by dispatching the lockVault action.
    * Clears password and unlock error states after locking.
@@ -247,10 +293,13 @@ function HomeScreen() {
           id: currentVault.id,
           name: currentVault.name,
           isCloudVault: isCloudVault(currentVault),
+          biometricEnabled: currentVault.biometricEnabled,
         }}
         password={password}
         setPassword={setPassword}
         handleUnlockVault={handleUnlockVault}
+        handleBiometricUnlock={handleBiometricUnlock}
+        biometricLoading={biometricLoading}
         unlockError={unlockError || (typeof error === 'string' ? error : '')}
         loading={loading}
         cloudUnlockMessage={cloudUnlockMessage}

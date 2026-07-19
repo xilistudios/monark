@@ -5,6 +5,26 @@
   "edit": "Edit",
   "close": "Close",
   "delete": "Delete",
+  "biometric": {
+    "title": "Biometric Unlock",
+    "enable": "Enable biometric unlock",
+    "disable": "Disable biometric unlock",
+    "notAvailable": "Biometrics are not available on this device",
+    "promptEnable": "Enable biometric unlock for {{vaultName}}",
+    "promptUnlock": "Unlock {{vaultName}}",
+    "enabled": "Biometric unlock is enabled for this vault",
+    "disabled": "Biometric unlock is disabled",
+    "enableFailed": "Failed to enable biometric unlock",
+    "disableFailed": "Failed to disable biometric unlock",
+    "unlockFailed": "Biometric authentication failed. Please enter your password.",
+    "fallbackPrompt": "Use password instead",
+    "unlocking": "Authenticating...",
+    "unlock": "Unlock with biometric",
+    "tapToUnlock": "Tap to unlock with biometrics",
+    "or": "or",
+    "usePasswordInstead": "Use password instead",
+    "unlockReason": "Unlock {{name}} vault"
+  },
   "vault": {
     "delete": {
       "confirmTitle": "Delete Vault",

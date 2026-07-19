@@ -23,6 +23,10 @@ interface Vault {
  * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 import { useContext } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { setVaultBiometricEnabled } from '../../redux/actions/vault';
+import type { RootState } from '../../redux/store';
+import { BiometricSettings } from '../Settings/BiometricSettings';
 import { VaultModalContext } from './VaultContext';
 
 /**
@@ -36,6 +40,7 @@ import { VaultModalContext } from './VaultContext';
  * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 const VaultToolbar = ({
+  currentVault,
   currentPath,
   handleLockVault,
   t,
@@ -53,6 +58,12 @@ const VaultToolbar = ({
       'VaultModalContext must be used within a VaultModalProvider'
     );
   const { openAddEntryModal, openAddGroupModal, openImportCsvModal } = context;
+  const dispatch = useDispatch();
+  const currentVaultFromRedux = useSelector((state: RootState) =>
+    state.vault.vaults.find((v) => v.id === currentVault.id)
+  );
+  const biometricEnabled = currentVaultFromRedux?.biometricEnabled ?? false;
+  const vaultPassword = currentVaultFromRedux?.volatile?.credential ?? "";
 
 	return (
 		<div className="flex items-center justify-between px-6 py-3.5 bg-base-100">
@@ -144,7 +155,26 @@ const VaultToolbar = ({
 					</svg>
 				</button>
 			</div>
-			<div className="flex items-center">
+			<div className="flex items-center gap-2">
+				<details className="dropdown dropdown-end">
+					<summary className="btn btn-ghost btn-sm btn-circle text-base-content/70 hover:text-base-content hover:bg-base-200/80 transition-all duration-150">
+						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="img" aria-label={t("biometric.title")}>
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.056c1.543-.74 3.146.734 2.405 2.405a1.724 1.724 0 001.056 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.056 2.573c.74 1.543-.734 3.146-2.405 2.405a1.724 1.724 0 00-2.573 1.056c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.056c-1.543.74-3.146-.734-2.405-2.405a1.724 1.724 0 00-1.056-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.056-2.573c-.74-1.543.734-3.146 2.405-2.405a1.724 1.724 0 002.573-1.056z" />
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+						</svg>
+					</summary>
+					<div className="dropdown-content z-50 w-72 p-4 shadow-lg bg-base-100 rounded-box border border-base-300">
+						<h3 className="text-sm font-semibold mb-3">{t("biometric.title")}</h3>
+						<BiometricSettings
+							vaultId={currentVault.id}
+							vaultName={currentVault.id}
+							vaultPassword={vaultPassword}
+							biometricEnabled={biometricEnabled}
+							onToggle={(enabled) => dispatch(setVaultBiometricEnabled({ vaultId: currentVault.id, enabled }))}
+							t={t}
+						/>
+					</div>
+				</details>
 				<button
 					className="btn btn-ghost btn-sm text-error/80 hover:text-error hover:bg-error/10 border border-error/15 hover:border-error/30 active:scale-95 transition-all duration-150"
 					onClick={handleLockVault}
