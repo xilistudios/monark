@@ -71,29 +71,19 @@ export function BiometricSettings({
 	if (!available) return null;
 
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-2">
-					<svg
-						className="w-5 h-5 text-base-content/70"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-						role="img"
-						aria-label={t("biometric.title")}
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-							d="M12 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm0 1c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"
-						/>
-					</svg>
-					<span className="text-sm font-medium">{t("biometric.title")}</span>
+		<div className="flex flex-col gap-2 bg-base-200/30 p-5 rounded-xl border border-base-200/50">
+			<div className="flex items-center justify-between gap-4">
+				<div>
+					<h4 className="text-sm font-medium">{t("biometric.title")}</h4>
+					<p className="text-xs text-base-content/60 mt-0.5">
+						{biometricEnabled ? t("biometric.enabled") : "Use biometric authentication"}
+					</p>
 				</div>
-				<label className="swap">
+				<div className="flex items-center gap-3">
+					{loading && <span className="loading loading-spinner loading-xs text-base-content/50"></span>}
 					<input
 						type="checkbox"
+						className="toggle toggle-sm"
 						checked={biometricEnabled}
 						disabled={loading}
 						onChange={(e) => {
@@ -101,18 +91,11 @@ export function BiometricSettings({
 							else handleDisable();
 						}}
 					/>
-					<div className="swap-on btn btn-sm btn-primary">ON</div>
-					<div className="swap-off btn btn-sm btn-ghost">OFF</div>
-				</label>
-			</div>
-			{loading && <span className="loading loading-spinner loading-sm"></span>}
-			{error && (
-				<div className="alert alert-error py-1 px-2 text-xs">
-					<span>{error}</span>
 				</div>
-			)}
-			{biometricEnabled && !error && (
-				<p className="text-xs text-base-content/60">{t("biometric.enabled")}</p>
+			</div>
+			
+			{error && (
+				<p className="text-xs text-error font-medium">{error}</p>
 			)}
 		</div>
 	);

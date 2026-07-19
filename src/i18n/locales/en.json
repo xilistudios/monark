@@ -516,6 +516,46 @@
     },
     "editGroup": {
       "title": "Edit Group"
+    },
+    "vaultSettings": {
+      "title": "Vault Settings",
+      "back": "Back to Vault",
+      "general": {
+        "title": "General",
+        "vaultName": "Vault Name",
+        "storageType": "Storage Type",
+        "filePath": "File Path",
+        "provider": "Provider",
+        "lastSync": "Last Synced",
+        "save": "Save",
+        "saving": "Saving...",
+        "nameSaved": "Vault name updated"
+      },
+      "security": {
+        "title": "Security",
+        "newPassword": "New Password",
+        "newPasswordPlaceholder": "Enter new password",
+        "confirmPassword": "Confirm Password",
+        "confirmPasswordPlaceholder": "Confirm new password",
+        "passwordHelp": "Leave empty to keep the current password",
+        "change": "Change Password",
+        "changing": "Changing...",
+        "passwordChanged": "Password changed successfully",
+        "passwordMismatch": "Passwords do not match"
+      },
+      "cloudSync": {
+        "title": "Cloud Sync",
+        "syncNow": "Sync Now",
+        "syncing": "Syncing...",
+        "lastSync": "Last Synced",
+        "providerStatus": "Provider Status",
+        "migrateToLocal": "Migrate to Local"
+      },
+      "dangerZone": {
+        "title": "Danger Zone",
+        "deleteVault": "Delete Vault",
+        "deleteVaultDescription": "Permanently delete this vault and optionally its file from disk. This action cannot be undone."
+      }
     }
   }
 }

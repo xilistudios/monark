@@ -23,10 +23,6 @@ interface Vault {
  * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 import { useContext } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { setVaultBiometricEnabled } from '../../redux/actions/vault';
-import type { RootState } from '../../redux/store';
-import { BiometricSettings } from '../Settings/BiometricSettings';
 import { VaultModalContext } from './VaultContext';
 
 /**
@@ -45,12 +41,14 @@ const VaultToolbar = ({
   handleLockVault,
   t,
   onSearchToggle,
+  onOpenSettings,
 }: {
   currentVault: Vault;
   currentPath: string[];
   handleLockVault: () => void;
   t: (key: string) => string;
   onSearchToggle: () => void;
+  onOpenSettings: () => void;
 }) => {
   const context = useContext(VaultModalContext);
   if (!context)
@@ -58,12 +56,6 @@ const VaultToolbar = ({
       'VaultModalContext must be used within a VaultModalProvider'
     );
   const { openAddEntryModal, openAddGroupModal, openImportCsvModal } = context;
-  const dispatch = useDispatch();
-  const currentVaultFromRedux = useSelector((state: RootState) =>
-    state.vault.vaults.find((v) => v.id === currentVault.id)
-  );
-  const biometricEnabled = currentVaultFromRedux?.biometricEnabled ?? false;
-  const vaultPassword = currentVaultFromRedux?.volatile?.credential ?? "";
 
 	return (
 		<div className="flex items-center justify-between px-6 py-3.5 bg-base-100">
@@ -156,25 +148,33 @@ const VaultToolbar = ({
 				</button>
 			</div>
 			<div className="flex items-center gap-2">
-				<details className="dropdown dropdown-end">
-					<summary className="btn btn-ghost btn-sm btn-circle text-base-content/70 hover:text-base-content hover:bg-base-200/80 transition-all duration-150">
-						<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="img" aria-label={t("biometric.title")}>
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.056c1.543-.74 3.146.734 2.405 2.405a1.724 1.724 0 001.056 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.056 2.573c.74 1.543-.734 3.146-2.405 2.405a1.724 1.724 0 00-2.573 1.056c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.056c-1.543.74-3.146-.734-2.405-2.405a1.724 1.724 0 00-1.056-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.056-2.573c-.74-1.543.734-3.146 2.405-2.405a1.724 1.724 0 002.573-1.056z" />
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-						</svg>
-					</summary>
-					<div className="dropdown-content z-50 w-72 p-4 shadow-lg bg-base-100 rounded-box border border-base-300">
-						<h3 className="text-sm font-semibold mb-3">{t("biometric.title")}</h3>
-						<BiometricSettings
-							vaultId={currentVault.id}
-							vaultName={currentVault.id}
-							vaultPassword={vaultPassword}
-							biometricEnabled={biometricEnabled}
-							onToggle={(enabled) => dispatch(setVaultBiometricEnabled({ vaultId: currentVault.id, enabled }))}
-							t={t}
+				<button
+					className="btn btn-ghost btn-sm btn-circle text-base-content/70 hover:text-base-content hover:bg-base-200/80 transition-all duration-150"
+					onClick={onOpenSettings}
+					type="button"
+					title={t("vaultSettings.title")}
+					aria-label={t("vaultSettings.title")}
+				>
+					<svg
+						className="w-5 h-5"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
 						/>
-					</div>
-				</details>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+						/>
+					</svg>
+				</button>
 				<button
 					className="btn btn-ghost btn-sm text-error/80 hover:text-error hover:bg-error/10 border border-error/15 hover:border-error/30 active:scale-95 transition-all duration-150"
 					onClick={handleLockVault}

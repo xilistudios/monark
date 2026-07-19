@@ -314,6 +314,7 @@ function HomeScreen() {
         entries={entries}
         handleNavigate={handleNavigate}
         handleLockVault={handleLockVault}
+        onDeleteVault={handleDeleteVault}
         t={t}
       />
     );

@@ -2,21 +2,13 @@
 
 import { useState, useEffect, useContext, useRef } from 'react';
 import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
+import type { Vault } from '../../redux/actions/vault';
 
 import { EntryDetailsSidebar } from './EntryDetailsSidebar';
 import { VaultManager } from '../../services/vault';
+import { VaultSettingsPanel } from './VaultSettingsPanel';
 
 import VaultSearchBar from './VaultSearchBar';
-/**
- * Vault interface for unlocked vault view props.
- */
-interface Vault {
-  id: string;
-  volatile: {
-    navigationPath?: string;
-    entries: Entry[];
-  };
-}
 import VaultToolbar from './VaultToolbar';
 import VaultBreadcrumbs from './VaultBreadcrumbs';
 import VaultTree from './VaultTree';
@@ -48,6 +40,7 @@ export interface UnlockedVaultViewProps {
   entries: Entry[];
   handleNavigate: (path: string[]) => void;
   handleLockVault: () => void;
+  onDeleteVault: (vault: Vault) => void;
   t: (key: string) => string;
 }
 
@@ -66,12 +59,14 @@ function UnlockedVaultView({
   entries,
   handleNavigate,
   handleLockVault,
+  onDeleteVault,
   t,
 }: UnlockedVaultViewProps) {
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const isSearchingRef = useRef(false);
   const { setIsSearchModalOpen } = useContext(VaultModalContext)!;
   useEffect(() => {
@@ -155,8 +150,19 @@ function UnlockedVaultView({
           handleLockVault={handleLockVault}
           t={t}
           onSearchToggle={() => setIsSearchModalOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
       </div>
+      {isSettingsOpen ? (
+        <VaultSettingsPanel
+          vault={currentVault}
+          onClose={() => setIsSettingsOpen(false)}
+          onDeleteVault={(vault) => {
+            setIsSettingsOpen(false);
+            onDeleteVault(vault);
+          }}
+        />
+      ) : (
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* Left column: Breadcrumbs + VaultTree always visible */}
         <div
@@ -284,6 +290,7 @@ function UnlockedVaultView({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
