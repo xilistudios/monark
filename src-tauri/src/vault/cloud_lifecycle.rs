@@ -8,7 +8,14 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+static CLOUD_CACHE_BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set the cloud cache base directory. Called from Tauri `.setup()`.
+pub fn set_cloud_cache_path(path: PathBuf) {
+    let _ = CLOUD_CACHE_BASE_DIR.set(path);
+}
 
 const CURRENT_VAULT_VERSION: &str = "1.0";
 const KEY_LENGTH: usize = 32;
@@ -38,10 +45,13 @@ fn sanitize_path_component(input: &str) -> String {
 }
 
 fn cloud_cache_file_path(provider: &str, vault_id: &str) -> PathBuf {
-    let base_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    let base_dir = CLOUD_CACHE_BASE_DIR.get().cloned().unwrap_or_else(|| {
+        dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("monark")
+            .join("cloud_cache")
+    });
     base_dir
-        .join("monark")
-        .join("cloud_cache")
         .join(sanitize_path_component(provider))
         .join(format!("{}.monark", sanitize_path_component(vault_id)))
 }
@@ -58,9 +68,19 @@ fn cache_vault_bytes(provider: &str, vault_id: &str, data: &[u8]) -> Result<(), 
         })?;
     }
 
-    fs::write(&path, data).map_err(|e| {
+    // Atomic write: write to temp file, then rename.
+    // This prevents corruption if the app is killed mid-write (common on mobile).
+    let tmp_path = path.with_extension("monark.tmp");
+    fs::write(&tmp_path, data).map_err(|e| {
         CommandError::Io(format!(
-            "Failed to write cached cloud vault '{}': {}",
+            "Failed to write cached cloud vault to temp file '{}': {}",
+            tmp_path.display(),
+            e
+        ))
+    })?;
+    fs::rename(&tmp_path, &path).map_err(|e| {
+        CommandError::Io(format!(
+            "Failed to rename cached cloud vault '{}': {}",
             path.display(),
             e
         ))

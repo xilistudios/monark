@@ -27,9 +27,23 @@ pub fn mobile_main() {
     build_app();
 }
 
-fn build_app() {
-    let vault_state_manager = state::VaultStateManager::new();
+/// Recursively copy a directory and all its contents.
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
 
+fn build_app() {
     let builder = tauri::Builder::default();
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -86,6 +100,55 @@ fn build_app() {
                 .path()
                 .resolve("provider_tokens.json", BaseDirectory::AppData)?;
             storage::set_token_store_path(token_path);
+
+            // Set vault state path using Tauri's path API (correct on mobile)
+            let vault_state_path = app
+                .path()
+                .resolve("monark/vault_state.json", BaseDirectory::AppData)?;
+            state::set_vault_state_path(vault_state_path.clone());
+
+            // Set cloud cache base directory using Tauri's path API
+            let cloud_cache_path = app
+                .path()
+                .resolve("monark/cloud_cache", BaseDirectory::AppData)?;
+            vault::cloud_lifecycle::set_cloud_cache_path(cloud_cache_path.clone());
+
+            // Migration: if new vault_state.json doesn't exist, try old dirs::data_dir() location
+            if !vault_state_path.exists() {
+                if let Some(old_data_dir) = dirs::data_dir() {
+                    let old_vault_state = old_data_dir.join("monark").join("vault_state.json");
+                    if old_vault_state.exists() {
+                        if let Some(parent) = vault_state_path.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        let _ = std::fs::copy(&old_vault_state, &vault_state_path);
+                        println!(
+                            "[migration] Migrated vault_state.json from {} to {}",
+                            old_vault_state.display(),
+                            vault_state_path.display()
+                        );
+                    }
+                }
+            }
+
+            // Migration: if new cloud_cache doesn't exist, try old dirs::data_dir() location
+            if !cloud_cache_path.exists() {
+                if let Some(old_data_dir) = dirs::data_dir() {
+                    let old_cloud_cache = old_data_dir.join("monark").join("cloud_cache");
+                    if old_cloud_cache.exists() {
+                        if let Some(parent) = cloud_cache_path.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        let _ = copy_dir_recursive(&old_cloud_cache, &cloud_cache_path);
+                        println!(
+                            "[migration] Migrated cloud cache from {} to {}",
+                            old_cloud_cache.display(),
+                            cloud_cache_path.display()
+                        );
+                    }
+                }
+            }
+
             let storage_manager = tauri::async_runtime::block_on(storage::init_storage_manager());
 
             #[cfg(desktop)]
@@ -96,6 +159,9 @@ fn build_app() {
             app.manage(StorageState {
                 manager: storage_manager,
             });
+
+            // Create vault state manager with the correct (Tauri-resolved) path
+            let vault_state_manager = state::VaultStateManager::with_path(vault_state_path);
             app.manage(state::ManagedVaultState::new(vault_state_manager));
 
             // --- Desktop-only features: system tray + close-to-hide ---

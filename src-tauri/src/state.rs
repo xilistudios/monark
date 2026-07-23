@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Error as IoError, ErrorKind};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tauri::State;
 use tokio::fs;
 use tokio::sync::RwLock;
@@ -106,6 +106,14 @@ pub struct VaultStateData {
     pub provider_status: HashMap<String, String>,
 }
 
+static VAULT_STATE_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set the vault state file path. Called from Tauri `.setup()` with the app's
+/// AppData directory so the path is correct on mobile (Android/iOS).
+pub fn set_vault_state_path(path: PathBuf) {
+    let _ = VAULT_STATE_PATH.set(path);
+}
+
 pub struct VaultStateManager {
     data: RwLock<VaultStateData>,
     volatile: RwLock<HashMap<String, VaultVolatile>>,
@@ -113,11 +121,13 @@ pub struct VaultStateManager {
 }
 
 impl VaultStateManager {
-    fn default_path() -> PathBuf {
-        dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("monark")
-            .join("vault_state.json")
+    pub fn default_path() -> PathBuf {
+        VAULT_STATE_PATH.get().cloned().unwrap_or_else(|| {
+            dirs::data_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("monark")
+                .join("vault_state.json")
+        })
     }
 
     pub fn new() -> Arc<Self> {
@@ -144,9 +154,14 @@ impl VaultStateManager {
             fs::create_dir_all(parent).await?;
         }
 
-        let payload = serde_json::to_string_pretty(&state)
+        let payload = serde_json::to_string_pretty(state)
             .map_err(|err| IoError::new(ErrorKind::Other, err))?;
-        fs::write(&self.path, payload).await
+
+        // Atomic write: write to temp file, then rename.
+        // This prevents corruption if the app is killed mid-write (common on mobile).
+        let tmp_path = self.path.with_extension("json.tmp");
+        fs::write(&tmp_path, &payload).await?;
+        fs::rename(&tmp_path, &self.path).await
     }
 
     pub async fn get(&self) -> VaultStateData {
