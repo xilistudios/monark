@@ -120,10 +120,16 @@ pub struct StorageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProviderConfig {
-    Local { base_path: String },
-    GoogleDrive { config: GoogleDriveConfig },
+    Local {
+        base_path: String,
+    },
+    GoogleDrive {
+        config: GoogleDriveConfig,
+    },
     #[serde(rename = "webdav")]
-    WebDav { config: WebDavConfig },
+    WebDav {
+        config: WebDavConfig,
+    },
 }
 
 impl StorageConfig {

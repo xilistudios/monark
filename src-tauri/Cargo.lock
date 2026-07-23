@@ -2713,6 +2713,7 @@ dependencies = [
  "hex",
  "hmac",
  "keyring",
+ "keyring-core",
  "mockito",
  "quick-xml 0.36.2",
  "rand 0.8.5",
