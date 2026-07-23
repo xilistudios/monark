@@ -5,6 +5,26 @@
   "edit": "Editar",
   "close": "Cerrar",
   "delete": "Eliminar",
+  "biometric": {
+    "title": "Desbloqueo Biométrico",
+    "enable": "Habilitar desbloqueo biométrico",
+    "disable": "Deshabilitar desbloqueo biométrico",
+    "notAvailable": "La biometría no está disponible en este dispositivo",
+    "promptEnable": "Habilitar desbloqueo biométrico para {{vaultName}}",
+    "promptUnlock": "Desbloquear {{vaultName}}",
+    "enabled": "El desbloqueo biométrico está habilitado para este vault",
+    "disabled": "El desbloqueo biométrico está deshabilitado",
+    "enableFailed": "Error al habilitar el desbloqueo biométrico",
+    "disableFailed": "Error al deshabilitar el desbloqueo biométrico",
+    "unlockFailed": "La autenticación biométrica falló. Por favor ingrese su contraseña.",
+    "fallbackPrompt": "Usar contraseña",
+    "unlocking": "Autenticando...",
+    "unlock": "Desbloquear con biometría",
+    "tapToUnlock": "Toca para desbloquear con biometría",
+    "or": "o",
+    "usePasswordInstead": "Usar contraseña",
+    "unlockReason": "Desbloquear vault {{name}}"
+  },
   "vault": {
     "delete": {
       "confirmTitle": "Eliminar Bóveda",
@@ -495,6 +515,46 @@
     },
     "editGroup": {
       "title": "Editar Grupo"
+    },
+    "vaultSettings": {
+      "title": "Ajustes del Vault",
+      "back": "Volver al Vault",
+      "general": {
+        "title": "General",
+        "vaultName": "Nombre del Vault",
+        "storageType": "Tipo de Almacenamiento",
+        "filePath": "Ruta del Archivo",
+        "provider": "Proveedor",
+        "lastSync": "Última Sincronización",
+        "save": "Guardar",
+        "saving": "Guardando...",
+        "nameSaved": "Nombre del vault actualizado"
+      },
+      "security": {
+        "title": "Seguridad",
+        "newPassword": "Nueva Contraseña",
+        "newPasswordPlaceholder": "Ingrese nueva contraseña",
+        "confirmPassword": "Confirmar Contraseña",
+        "confirmPasswordPlaceholder": "Confirme la nueva contraseña",
+        "passwordHelp": "Dejar vacío para mantener la contraseña actual",
+        "change": "Cambiar Contraseña",
+        "changing": "Cambiando...",
+        "passwordChanged": "Contraseña cambiada exitosamente",
+        "passwordMismatch": "Las contraseñas no coinciden"
+      },
+      "cloudSync": {
+        "title": "Sincronización en la Nube",
+        "syncNow": "Sincronizar Ahora",
+        "syncing": "Sincronizando...",
+        "lastSync": "Última Sincronización",
+        "providerStatus": "Estado del Proveedor",
+        "migrateToLocal": "Migrar a Local"
+      },
+      "dangerZone": {
+        "title": "Zona de Peligro",
+        "deleteVault": "Eliminar Vault",
+        "deleteVaultDescription": "Eliminar permanentemente este vault y opcionalmente su archivo del disco. Esta acción no se puede deshacer."
+      }
     }
   }
 }

@@ -157,6 +157,7 @@ export const ImportVaultForm = ({
 				providerId: importSource === "cloud" ? providerId : undefined,
 				cloudMetadata:
 					importSource === "cloud" ? cloudVault?.cloudMetadata : undefined,
+				biometricEnabled: false,
 				volatile: {
 					credential: password,
 					entries: vaultContent?.entries || [],

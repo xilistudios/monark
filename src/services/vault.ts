@@ -23,6 +23,7 @@ import {
 } from "../redux/actions/vault";
 import type { AppDispatch, RootState } from "../redux/store";
 import { CloudStorageCommands } from "./cloudStorage";
+import { storeVaultPassword, deleteVaultPassword } from "./biometric";
 import VaultCommands from "./commands";
 
 const getErrorMetadata = (
@@ -575,6 +576,17 @@ export class VaultInstance {
 			this.dispatch(
 				setVaultCredential({ vaultId: this.id, credential: newPassword }),
 			);
+
+			// After successful password change, re-store biometric data if enabled
+			if (this.vault.biometricEnabled) {
+				try {
+					await storeVaultPassword(this.vault.id, newPassword);
+				} catch (e) {
+					console.error("Failed to re-store biometric data after password change:", e);
+					// If re-store fails, disable biometric to avoid stale data
+					await deleteVaultPassword(this.vault.id);
+				}
+			}
 		} catch (error) {
 			const errorMessage =
 				(error as any)?.message ||
@@ -1048,6 +1060,7 @@ export class VaultManager {
 					provider: metadata.providerName,
 					lastSync: metadata.modifiedAt,
 				},
+				biometricEnabled: false,
 				isLocked: true,
 				volatile: {
 					entries: [],
@@ -1277,6 +1290,7 @@ export class VaultManager {
 				storageType,
 				providerId: storageType === "cloud" ? providerId : undefined,
 				cloudMetadata,
+				biometricEnabled: false,
 				isLocked: true,
 				lastAccessed: new Date().toISOString(),
 				volatile: {

@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { StorageProvider } from "../../interfaces/cloud-storage.interface";
 import { StorageProviderType } from "../../interfaces/cloud-storage.interface";
 import type { Entry } from "../../interfaces/vault.interface";
+import { deleteVaultPassword } from "../../services/biometric";
 import VaultCommands from "../../services/commands";
 import { VaultManager } from "../../services/vault";
 import { isVaultLocked, VaultStateCommands } from "../../services/vaultState";
@@ -20,6 +21,8 @@ export interface Vault {
 		provider: string;
 		lastSync?: string;
 	};
+	// Biometric unlock opt-in flag (persisted, no secrets)
+	biometricEnabled: boolean;
 	// Multi-vault runtime state persisted via Rust backend
 	volatile: {
 		credential: string;
@@ -179,6 +182,7 @@ export const loadVaultStateFromSettings = async (): Promise<
 					lastAccessed: vault.lastAccessed || undefined,
 					// If we don't have a runtime credential, always treat as locked.
 					isLocked: effectiveLocked,
+					biometricEnabled: vault.biometricEnabled ?? false,
 					volatile: {
 						entries: Array.isArray(rawVolatile.entries)
 							? rawVolatile.entries
@@ -270,6 +274,7 @@ export const vaultSlice = createSlice({
 				...action.payload,
 				storageType: action.payload.storageType || "local",
 				lastAccessed: action.payload.lastAccessed || new Date().toISOString(),
+				biometricEnabled: action.payload.biometricEnabled ?? false,
 				volatile: {
 					entries: action.payload.volatile?.entries || [],
 					credential: action.payload.volatile?.credential || "",
@@ -507,6 +512,21 @@ export const vaultSlice = createSlice({
 				);
 			}
 		},
+		setVaultBiometricEnabled: (
+			state,
+			action: PayloadAction<{ vaultId: string; enabled: boolean }>,
+		) => {
+			const vault = state.vaults.find((v) => v.id === action.payload.vaultId);
+			if (vault) {
+				vault.biometricEnabled = action.payload.enabled;
+				void persistVaultState(
+					state.vaults,
+					state.providers,
+					state.defaultProvider,
+					state.providerStatus,
+				);
+			}
+		},
 		// Storage Provider Actions
 		/**
 		 * Set the list of storage providers
@@ -693,6 +713,15 @@ export const deleteVault = (vaultId: string, deleteFile: boolean = false) => {
 			throw new Error("Vault not found");
 		}
 
+		// Clean up biometric data if enabled
+		if (vault.biometricEnabled) {
+			try {
+				await deleteVaultPassword(vaultId);
+			} catch (e) {
+				console.error("Failed to clean up biometric data:", e);
+			}
+		}
+
 		let fileDeletionError: Error | null = null;
 
 		// If deleteFile is true, attempt to delete the file from storage
@@ -734,6 +763,7 @@ export const {
 	setNavigationPath,
 	setVaultEntries,
 	setVaultLocked,
+	setVaultBiometricEnabled,
 	setStorageProviders,
 	addStorageProvider,
 	removeStorageProvider,
@@ -787,6 +817,7 @@ export const createCloudVault = (
 			provider: providerId,
 			lastSync: new Date().toISOString(),
 		},
+		biometricEnabled: false,
 		isLocked: true,
 		volatile: {
 			credential: password || "",

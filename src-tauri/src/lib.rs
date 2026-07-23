@@ -69,6 +69,7 @@ fn build_app() {
 
     builder
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_biometry::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())
