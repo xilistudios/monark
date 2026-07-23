@@ -36,7 +36,7 @@ import { VaultModalContext } from './VaultContext';
  * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 const VaultToolbar = ({
-  currentVault,
+  currentVault: _currentVault,
   currentPath,
   handleLockVault,
   t,
