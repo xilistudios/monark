@@ -1,6 +1,7 @@
 // src/components/Vault/LockedVaultView.tsx
 
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Vault type for LockedVaultView.
@@ -43,6 +44,7 @@ export function LockedVaultView({
   cloudUnlockMessage,
   t,
 }: LockedVaultViewProps) {
+  const { t: tBiometric } = useTranslation();
   const [isVisible, setIsVisible] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
@@ -89,14 +91,14 @@ export function LockedVaultView({
                 {biometricLoading ? (
                   <>
                     <span className="loading loading-spinner loading-lg" role="status"></span>
-                    <p className="text-base-content/70">{t('biometric.unlocking')}</p>
+                    <p className="text-base-content/70">{tBiometric('biometric.unlocking')}</p>
                   </>
                 ) : (
                   <>
                     <button
                       className="btn btn-circle btn-lg btn-primary"
                       onClick={handleBiometricUnlock}
-                      aria-label={t('biometric.unlock')}
+                      aria-label={tBiometric('biometric.unlock')}
                     >
                       <svg
                         className="w-8 h-8"
@@ -113,19 +115,19 @@ export function LockedVaultView({
                       </svg>
                     </button>
                     <p className="text-base-content/70 text-sm">
-                      {t('biometric.tapToUnlock')}
+                      {tBiometric('biometric.tapToUnlock')}
                     </p>
                   </>
                 )}
               </div>
 
-              <div className="divider text-xs">{t('biometric.or')}</div>
+              <div className="divider text-xs">{tBiometric('biometric.or')}</div>
 
               <button
                 className="btn btn-ghost btn-sm w-full"
                 onClick={() => setShowPasswordForm(true)}
               >
-                {t('biometric.usePasswordInstead')}
+                {tBiometric('biometric.usePasswordInstead')}
               </button>
             </>
           )}

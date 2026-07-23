@@ -1,12 +1,3 @@
-// Mock the commands before importing vault service
-vi.mock("../../services/commands", () => ({
-	default: {
-		read: vi.fn(),
-		write: vi.fn(),
-		delete: vi.fn(),
-	},
-}));
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
 	CloudVaultMetadata,
@@ -62,7 +53,9 @@ const mockVaultActions = vi.hoisted(() => ({
 	setVaultLocked: vi.fn(),
 }));
 
-vi.mock("../../services/commands", () => mockVaultCommands);
+vi.mock("../../services/commands", () => ({
+	default: mockVaultCommands,
+}));
 vi.mock("../../services/cloudStorage", () => ({
 	CloudStorageCommands: mockCloudStorageCommands,
 }));
@@ -212,7 +205,7 @@ describe("VaultInstance", () => {
 			);
 
 			await expect(vaultInstance.unlock("wrong-password")).rejects.toThrow(
-				"Failed to unlock vault: Error: Invalid password",
+				"Failed to unlock vault: Invalid password",
 			);
 		});
 	});
@@ -465,6 +458,7 @@ describe("VaultManager", () => {
 			},
 		} as RootState;
 
+		mockGetState.mockReturnValue(mockState);
 		vaultManager.initialize(mockDispatch, mockGetState);
 	});
 
@@ -542,7 +536,7 @@ describe("VaultManager", () => {
 				token_expires_at: new Date(Date.now() - 60_000).toISOString(),
 			});
 			vi.mocked(CloudStorageCommands.refreshProviderAuth).mockRejectedValue(
-				new Error("refresh failed"),
+				new Error("invalid_grant"),
 			);
 
 			await vaultManager.loadProviders();
@@ -568,25 +562,23 @@ describe("VaultManager", () => {
 
 	describe("addProvider", () => {
 		it("should add provider successfully", async () => {
-			const config: {
-				type: StorageProviderType.GOOGLE_DRIVE;
-				config: GoogleDriveConfig;
-			} = {
-				type: StorageProviderType.GOOGLE_DRIVE,
+			const request = {
+				name: 'google-drive',
 				config: {
-					client_id: "test",
-					client_secret: "test",
-					redirect_uri: "test",
+					type: StorageProviderType.GOOGLE_DRIVE,
+					config: {
+						client_id: "test",
+						client_secret: "test",
+						redirect_uri: "test",
+					},
 				},
 			};
 			vi.mocked(CloudStorageCommands.addProvider).mockResolvedValue(undefined);
 			vi.mocked(CloudStorageCommands.listProviders).mockResolvedValue([]);
 
-			await vaultManager.addProvider(config);
+			await vaultManager.addProvider(request);
 
-			expect(CloudStorageCommands.addProvider).toHaveBeenCalledWith(
-				expect.objectContaining({ config }),
-			);
+			expect(CloudStorageCommands.addProvider).toHaveBeenCalledWith(request);
 			expect(CloudStorageCommands.listProviders).toHaveBeenCalled();
 		});
 	});
@@ -963,8 +955,8 @@ describe("VaultManager", () => {
 				const vaultInstance = vaultManager.getInstance("token-expire-vault");
 
 				// Mock token expiration during update
-				vi.mocked(CloudStorageCommands.updateCloudVault).mockRejectedValue(
-					new Error("Token expired"),
+				vi.mocked(CloudStorageCommands.writeCloudVault).mockRejectedValue(
+					new Error("invalid_grant"),
 				);
 
 				const newEntry: Entry = {

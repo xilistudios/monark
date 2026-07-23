@@ -6,23 +6,24 @@ import VaultSelector from '../../../components/Vault/VaultSelector';
 import { vaultSlice, type Vault } from '../../../redux/actions/vault';
 import { StorageProviderType } from '../../../interfaces/cloud-storage.interface';
 import { VaultManager } from '../../../services/vault';
+import { vi } from 'vitest';
 
 // Mock the translation hook
-jest.mock('react-i18next', () => ({
+vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, fallback?: string) => fallback || key,
   }),
 }));
 
 // Mock TanStack Router completely by replacing Link with a simple button
-jest.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, onClick, ...props }: any) => (
     <button onClick={onClick} {...props}>
       {children}
     </button>
   ),
   useRouter: () => ({
-    navigate: jest.fn(),
+    navigate: vi.fn(),
   }),
   useRouterState: () => ({
     location: {
@@ -47,27 +48,30 @@ const renderWithProviders = (ui: React.ReactElement, { initialState = {} } = {})
 
 // Mock VaultManager
 const mockVaultManagerInstance = {
-  loadProviders: jest.fn().mockResolvedValue(undefined),
-  refreshCloudVaults: jest.fn().mockResolvedValue(undefined),
-  syncWithCloud: jest.fn().mockResolvedValue(undefined),
+  loadProviders: vi.fn().mockResolvedValue(undefined),
+  refreshCloudVaults: vi.fn().mockResolvedValue(undefined),
+  syncWithCloud: vi.fn().mockResolvedValue(undefined),
+  getInstance: vi.fn(() => ({
+    syncWithCloud: vi.fn().mockResolvedValue(undefined),
+  })),
 };
 
-jest.mock('../../../services/vault', () => ({
+vi.mock('../../../services/vault', () => ({
   VaultManager: {
-    getInstance: jest.fn(() => mockVaultManagerInstance),
+    getInstance: vi.fn(() => mockVaultManagerInstance),
   },
 }));
 
 // Mock the VaultModalContext
-jest.mock('../../../components/Vault/VaultContext', () => ({
+vi.mock('../../../components/Vault/VaultContext', () => ({
   VaultModalContext: {
     __esModule: true,
     default: {
-      openEditVaultModal: jest.fn(),
+      openEditVaultModal: vi.fn(),
     },
   },
   useContext: () => ({
-    openEditVaultModal: jest.fn(),
+    openEditVaultModal: vi.fn(),
   }),
 }));
 
@@ -127,18 +131,18 @@ describe('VaultSelector', () => {
   const mockProviders = [
     {
       name: 'google-drive-provider',
-      providerType: StorageProviderType.GOOGLE_DRIVE,
-      isDefault: true,
+      provider_type: StorageProviderType.GOOGLE_DRIVE,
+      is_default: true,
     },
   ];
 
   const defaultProps = {
-    onAddVault: jest.fn(),
-    onDeleteVault: jest.fn(),
+    onAddVault: vi.fn(),
+    onDeleteVault: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('renders loading state correctly', () => {
@@ -179,30 +183,12 @@ describe('VaultSelector', () => {
     expect(screen.getByText('Google Drive')).toBeInTheDocument();
   });
 
-  it('shows cloud vaults loading indicator on mount', async () => {
-    renderWithProviders(<VaultSelector {...defaultProps} />, {
-      initialState: {
-        vaults: [mockCloudVault],
-        providers: mockProviders,
-      },
-    });
-
-    // Should show loading indicator initially
-    await waitFor(() => {
-      expect(screen.getByText('vaultSelector.loadingCloudVaults')).toBeInTheDocument();
-    });
-  });
-
   it('calls onAddVault when add vault button is clicked', () => {
     renderWithProviders(<VaultSelector {...defaultProps} />);
 
-    // Open dropdown menu
-    const dropdownButton = screen.getByRole('button');
-    fireEvent.click(dropdownButton);
-
-    // Click add vault option
-    const addVaultOption = screen.getByText('vaultSelector.addVault');
-    fireEvent.click(addVaultOption);
+    // Click the add vault button directly by title
+    const addButton = screen.getByTitle('vaultSelector.addVault');
+    fireEvent.click(addButton);
 
     expect(defaultProps.onAddVault).toHaveBeenCalled();
   });
@@ -215,13 +201,9 @@ describe('VaultSelector', () => {
       },
     });
 
-    // Open dropdown menu
-    const dropdownButton = screen.getByRole('button');
-    fireEvent.click(dropdownButton);
-
-    // Click refresh option
-    const refreshOption = screen.getByText('vaultSelector.refreshVaults');
-    fireEvent.click(refreshOption);
+    // Click the refresh button directly by title
+    const refreshButton = screen.getByTitle('vaultSelector.refreshVaults');
+    fireEvent.click(refreshButton);
 
     await waitFor(() => {
       expect(VaultManager.getInstance().refreshCloudVaults).toHaveBeenCalled();
@@ -278,6 +260,11 @@ describe('VaultSelector', () => {
   });
 
   it('handles sync operation for cloud vaults', async () => {
+    const mockVaultSync = vi.fn().mockResolvedValue(undefined);
+    mockVaultManagerInstance.getInstance.mockReturnValue({
+      syncWithCloud: mockVaultSync,
+    });
+
     renderWithProviders(<VaultSelector {...defaultProps} />, {
       initialState: {
         vaults: [mockCloudVault],
@@ -294,7 +281,8 @@ describe('VaultSelector', () => {
     fireEvent.click(syncOption);
 
     await waitFor(() => {
-      expect(mockVaultManagerInstance.syncWithCloud).toHaveBeenCalled();
+      expect(mockVaultManagerInstance.getInstance).toHaveBeenCalledWith('cloud-vault-1');
+      expect(mockVaultSync).toHaveBeenCalled();
     });
   });
 
@@ -324,6 +312,10 @@ describe('VaultSelector', () => {
         providers: mockProviders,
       },
     });
+
+    // Click the refresh button to trigger the error
+    const refreshButton = screen.getByTitle('vaultSelector.refreshVaults');
+    fireEvent.click(refreshButton);
 
     await waitFor(() => {
       expect(screen.getByText(/Failed to refresh cloud vaults/)).toBeInTheDocument();

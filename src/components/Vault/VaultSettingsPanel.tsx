@@ -330,7 +330,6 @@ export function VaultSettingsPanel({
 												setVaultBiometricEnabled({ vaultId: vault.id, enabled }),
 											)
 										}
-										t={t}
 									/>
 								</div>
 							</div>

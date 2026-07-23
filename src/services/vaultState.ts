@@ -8,6 +8,7 @@ export interface PersistedVault {
   path: string;
   lastAccessed?: string;
   isLocked: boolean;
+  biometricEnabled: boolean;
   storageType: 'local' | 'cloud';
   providerId?: string;
   cloudMetadata?: {
@@ -42,6 +43,7 @@ const mapVaultToPersisted = (vault: Vault): PersistedVault => ({
   path: vault.path,
   lastAccessed: vault.lastAccessed,
   isLocked: vault.isLocked,
+  biometricEnabled: vault.biometricEnabled,
   storageType: vault.storageType,
   providerId: vault.providerId,
   cloudMetadata: vault.cloudMetadata,

@@ -9,6 +9,11 @@ import vaultReducer from '../../../redux/actions/vault'
 import type { StorageProvider, Vault } from '../../../interfaces/cloud-storage.interface'
 import { StorageProviderType } from '../../../interfaces/cloud-storage.interface'
 
+// Mock @tauri-apps/plugin-os
+vi.mock('@tauri-apps/plugin-os', () => ({
+  platform: () => 'linux',
+}))
+
 // Mock Tauri APIs
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
@@ -18,14 +23,28 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
 
+// Mock CloudStorageCommands (used by ImportVaultForm for readCloudVault)
+vi.mock('../../../services/cloudStorage', () => ({
+  CloudStorageCommands: {
+    readCloudVault: vi.fn(),
+  },
+}))
+
+// Consistent VaultManager mock instance (hoisted so it's available in vi.mock factory)
+const { mockVaultManagerInstance } = vi.hoisted(() => {
+  return {
+    mockVaultManagerInstance: {
+      listCloudVaults: vi.fn(),
+      initialize: vi.fn(),
+      unlock: vi.fn(),
+      createVault: vi.fn(),
+    },
+  }
+})
+
 vi.mock('../../../services/vault', () => ({
   VaultManager: {
-    getInstance: vi.fn(() => ({
-      listCloudVaults: vi.fn(),
-      getInstance: vi.fn(() => ({
-        unlock: vi.fn(),
-      })),
-    })),
+    getInstance: vi.fn(() => mockVaultManagerInstance),
   },
 }))
 
@@ -87,12 +106,12 @@ describe('ImportVaultForm with Cloud Storage', () => {
           providers: [
             {
               name: 'google-drive',
-              providerType: StorageProviderType.GOOGLE_DRIVE,
+              provider_type: StorageProviderType.GOOGLE_DRIVE,
               isDefault: false,
             },
             {
               name: 'dropbox',
-              providerType: StorageProviderType.LOCAL,
+              provider_type: StorageProviderType.LOCAL,
               isDefault: false,
             },
           ],
@@ -130,8 +149,9 @@ describe('ImportVaultForm with Cloud Storage', () => {
     it('should default to local file import', () => {
       renderComponent()
       
-      const localRadio = screen.getByDisplayValue('local')
-      expect(localRadio).toBeChecked()
+      // Component uses buttons, not radio inputs - check button has primary class
+      const localButton = screen.getByText('Local File').closest('button')
+      expect(localButton?.className).toContain('btn-primary')
     })
 
     it('should show file selection for local import', () => {
@@ -144,8 +164,8 @@ describe('ImportVaultForm with Cloud Storage', () => {
     it('should hide file selection when cloud storage is selected', async () => {
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         expect(screen.queryByText('Vault File')).not.toBeInTheDocument()
@@ -158,19 +178,21 @@ describe('ImportVaultForm with Cloud Storage', () => {
     it('should show provider selector when cloud storage is selected', async () => {
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
-        expect(screen.getByText('Select Provider')).toBeInTheDocument()
+        // "Select Provider" appears in both a label and an option placeholder
+        const matches = screen.getAllByText('Select Provider')
+        expect(matches.length).toBeGreaterThanOrEqual(1)
       })
     })
 
     it('should only show authenticated providers', async () => {
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const select = screen.getByDisplayValue('Select Provider')
@@ -208,8 +230,8 @@ describe('ImportVaultForm with Cloud Storage', () => {
         </Provider>
       )
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         expect(screen.getByText('No cloud storage providers configured')).toBeInTheDocument()
@@ -220,13 +242,12 @@ describe('ImportVaultForm with Cloud Storage', () => {
 
   describe('Cloud Vault Selection', () => {
     it('should show cloud vault selector when provider is selected', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      vi.mocked(listCloudVaults).mockResolvedValue(mockCloudVaults)
+      mockVaultManagerInstance.listCloudVaults.mockResolvedValue(mockCloudVaults)
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -234,20 +255,23 @@ describe('ImportVaultForm with Cloud Storage', () => {
       })
       
       await waitFor(() => {
-        expect(screen.getByText('Select Cloud Vault')).toBeInTheDocument()
-        expect(screen.getByText('Cloud Vault 1')).toBeInTheDocument()
-        expect(screen.getByText('Cloud Vault 2')).toBeInTheDocument()
+        // "Select Cloud Vault" appears in both a label and an option placeholder
+        const matches = screen.getAllByText('Select Cloud Vault')
+        expect(matches.length).toBeGreaterThanOrEqual(1)
+        expect(screen.getByText(/Cloud Vault 1/)).toBeInTheDocument()
+        expect(screen.getByText(/Cloud Vault 2/)).toBeInTheDocument()
       })
     })
 
     it('should show loading state while fetching cloud vaults', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      vi.mocked(listCloudVaults).mockImplementation(() => new Promise(resolve => setTimeout(() => resolve(mockCloudVaults), 100)))
+      mockVaultManagerInstance.listCloudVaults.mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve(mockCloudVaults), 100))
+      )
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -262,13 +286,12 @@ describe('ImportVaultForm with Cloud Storage', () => {
     })
 
     it('should show message when no cloud vaults found', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      vi.mocked(listCloudVaults).mockResolvedValue([])
+      mockVaultManagerInstance.listCloudVaults.mockResolvedValue([])
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -281,13 +304,12 @@ describe('ImportVaultForm with Cloud Storage', () => {
     })
 
     it('should auto-fill vault name when cloud vault is selected', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      vi.mocked(listCloudVaults).mockResolvedValue(mockCloudVaults)
+      mockVaultManagerInstance.listCloudVaults.mockResolvedValue(mockCloudVaults)
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -310,25 +332,21 @@ describe('ImportVaultForm with Cloud Storage', () => {
     it('should validate required fields for local import', async () => {
       renderComponent()
       
+      // Button should be disabled when no file is selected for local import
       const importButton = screen.getByText('Import Vault')
-      fireEvent.click(importButton)
-      
-      await waitFor(() => {
-        expect(screen.getByText('Please fill in all fields')).toBeInTheDocument()
-      })
+      expect(importButton).toBeDisabled()
     })
 
     it('should validate provider and vault selection for cloud import', async () => {
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
+        // Button should be disabled when no vault is selected for cloud import
         const importButton = screen.getByText('Import Vault')
-        fireEvent.click(importButton)
-        
-        expect(screen.getByText('Please fill in all fields')).toBeInTheDocument()
+        expect(importButton).toBeDisabled()
       })
     })
 
@@ -352,13 +370,12 @@ describe('ImportVaultForm with Cloud Storage', () => {
     })
 
     it('should enable import button when all fields are filled for cloud import', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      vi.mocked(listCloudVaults).mockResolvedValue(mockCloudVaults)
+      mockVaultManagerInstance.listCloudVaults.mockResolvedValue(mockCloudVaults)
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -392,14 +409,18 @@ describe('ImportVaultForm with Cloud Storage', () => {
       const browseButton = screen.getByText('Browse')
       fireEvent.click(browseButton)
       
+      // Wait for filePath to be set by the open mock
       await waitFor(() => {
-        fireEvent.change(screen.getByPlaceholderText('Enter password'), {
-          target: { value: 'password123' }
-        })
-        
         const importButton = screen.getByText('Import Vault')
-        fireEvent.click(importButton)
+        expect(importButton).not.toBeDisabled()
       })
+      
+      fireEvent.change(screen.getByPlaceholderText('Enter password'), {
+        target: { value: 'password123' }
+      })
+      
+      const importButton = screen.getByText('Import Vault')
+      fireEvent.click(importButton)
       
       await waitFor(() => {
         expect(invoke).toHaveBeenCalledWith('read_vault', {
@@ -410,27 +431,15 @@ describe('ImportVaultForm with Cloud Storage', () => {
     })
 
     it('should handle cloud vault import', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      const vaultManager = vi.mocked(listCloudVaults)
-      vaultManager.mockResolvedValue(mockCloudVaults)
+      const { CloudStorageCommands } = await import('../../../services/cloudStorage')
+      vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({ entries: [] })
       
-      const mockVaultInstance = {
-        unlock: vi.fn().mockResolvedValue(undefined),
-      }
-      
-      const vaultManagerMock = {
-        getInstance: vi.fn().mockReturnValue(mockVaultInstance),
-        listCloudVaults: vaultManager,
-      }
-      
-      vi.doMock('../../../services/vault', () => ({
-        VaultManager: vaultManagerMock,
-      }))
+      mockVaultManagerInstance.listCloudVaults.mockResolvedValue(mockCloudVaults)
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -444,26 +453,29 @@ describe('ImportVaultForm with Cloud Storage', () => {
         fireEvent.change(screen.getByPlaceholderText('Enter password'), {
           target: { value: 'password123' }
         })
-        
-        const importButton = screen.getByText('Import Vault')
-        fireEvent.click(importButton)
       })
       
+      const importButton = screen.getByText('Import Vault')
+      fireEvent.click(importButton)
+      
       await waitFor(() => {
-        expect(mockVaultInstance.unlock).toHaveBeenCalledWith('password123')
+        expect(CloudStorageCommands.readCloudVault).toHaveBeenCalledWith({
+          vaultId: 'cloud-vault-1',
+          password: 'password123',
+          providerName: 'google-drive',
+        })
       })
     })
   })
 
   describe('Error Handling', () => {
     it('should show error when cloud vault listing fails', async () => {
-      const { listCloudVaults } = await import('../../../services/vault')
-      vi.mocked(listCloudVaults).mockRejectedValue(new Error('Failed to load vaults'))
+      mockVaultManagerInstance.listCloudVaults.mockRejectedValue(new Error('Failed to load vaults'))
       
       renderComponent()
       
-      const cloudRadio = screen.getByDisplayValue('cloud')
-      fireEvent.click(cloudRadio)
+      const cloudButton = screen.getByText('Cloud Storage')
+      fireEvent.click(cloudButton)
       
       await waitFor(() => {
         const providerSelect = screen.getByDisplayValue('Select Provider')
@@ -487,14 +499,18 @@ describe('ImportVaultForm with Cloud Storage', () => {
       const browseButton = screen.getByText('Browse')
       fireEvent.click(browseButton)
       
+      // Wait for filePath to be set by the open mock
       await waitFor(() => {
-        fireEvent.change(screen.getByPlaceholderText('Enter password'), {
-          target: { value: 'wrongpassword' }
-        })
-        
         const importButton = screen.getByText('Import Vault')
-        fireEvent.click(importButton)
+        expect(importButton).not.toBeDisabled()
       })
+      
+      fireEvent.change(screen.getByPlaceholderText('Enter password'), {
+        target: { value: 'wrongpassword' }
+      })
+      
+      const importButton = screen.getByText('Import Vault')
+      fireEvent.click(importButton)
       
       await waitFor(() => {
         expect(screen.getByText('Error importing vault')).toBeInTheDocument()

@@ -107,8 +107,12 @@ describe('Cloud Vault Integration', () => {
       }
     );
     vi.mocked(CloudStorageCommands.readCloudVault).mockImplementation(
-      async (vaultId, providerName) => {
-        await mockInvoke('read_cloud_vault', { vaultId, providerName });
+      async (requestOrVaultId: any, _maybeProviderName?: any) => {
+        if (typeof requestOrVaultId === 'string') {
+          await mockInvoke('read_cloud_vault', { vaultId: requestOrVaultId, providerName: _maybeProviderName });
+        } else {
+          await mockInvoke('read_cloud_vault', { vaultId: requestOrVaultId.vaultId, providerName: requestOrVaultId.providerName });
+        }
         return mockVaultContent;
       }
     );
@@ -124,35 +128,57 @@ describe('Cloud Vault Integration', () => {
           });
           return requestOrVaultId;
         } else {
-          // Request object form: ({ vaultName, password, vaultContent, providerName })
+          // Request object form: ({ vaultId?, vaultName, password, vaultContent, providerName, parentId? })
           const request = requestOrVaultId;
           await mockInvoke('write_cloud_vault', {
+            vaultId: request.vaultId,
             vaultName: request.vaultName,
             password: request.password,
             vaultContent: request.vaultContent,
             providerName: request.providerName,
             parentId: request.parentId,
           });
-          return 'generated-vault-id';
+          return request.vaultId || 'generated-vault-id';
         }
       }
     );
     vi.mocked(CloudStorageCommands.updateCloudVault).mockImplementation(
-      async (vaultId, vaultContent, providerName) => {
-        await mockInvoke('update_cloud_vault', {
-          vaultId,
-          vaultContent,
-          providerName,
-        });
+      async (requestOrVaultId: any, vaultContent?: any, providerName?: any) => {
+        if (typeof requestOrVaultId === 'string') {
+          await mockInvoke('update_cloud_vault', {
+            vaultId: requestOrVaultId,
+            vaultContent,
+            providerName,
+          });
+        } else {
+          await mockInvoke('update_cloud_vault', {
+            vaultId: requestOrVaultId.vaultId,
+            vaultContent: requestOrVaultId.vaultContent,
+            providerName: requestOrVaultId.providerName,
+          });
+        }
         return undefined;
       }
     );
     vi.mocked(CloudStorageCommands.deleteCloudVault).mockImplementation(
-      async (vaultId, providerName) => {
-        await mockInvoke('delete_cloud_vault', { vaultId, providerName });
+      async (requestOrVaultId: any, providerName?: any) => {
+        if (typeof requestOrVaultId === 'string') {
+          await mockInvoke('delete_cloud_vault', { vaultId: requestOrVaultId, providerName });
+        } else {
+          await mockInvoke('delete_cloud_vault', { vaultId: requestOrVaultId.vaultId, providerName: requestOrVaultId.providerName });
+        }
         return undefined;
       }
     );
+
+    vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
+      authenticated: true,
+      token_expires_at: null,
+    });
+    vi.mocked(CloudStorageCommands.refreshProviderAuth).mockResolvedValue({
+      authenticated: true,
+      token_expires_at: null,
+    });
 
     // Create Redux store
     store = configureStore({
@@ -174,16 +200,22 @@ describe('Cloud Vault Integration', () => {
 
 	afterEach(() => {
 		resetAllMocks()
+		// Clear VaultManager singleton instance cache between tests
+		const vm = VaultManager.getInstance();
+		(vm as any)._instances = new Map();
 	})
 
 	describe('Provider Management Flow', () => {
     it('should add a new Google Drive provider', async () => {
-      const providerConfig = {
-        type: StorageProviderType.GOOGLE_DRIVE,
-        config: mockGoogleDriveConfig,
+      const providerRequest = {
+        name: 'google-drive-primary',
+        config: {
+          type: StorageProviderType.GOOGLE_DRIVE,
+          config: mockGoogleDriveConfig,
+        },
       };
 
-      await vaultManager.addProvider(providerConfig);
+      await vaultManager.addProvider(providerRequest);
 
       // Verify the provider was added via Tauri command
       expect(verifyInvokeCall('add_provider')).toBe(true);
@@ -335,7 +367,7 @@ describe('Cloud Vault Integration', () => {
           'Test Vault',
           'test-password',
           'cloud',
-          'non-existent-provider'
+          undefined
         )
       ).rejects.toThrow('Provider ID is required for cloud vaults');
     });
@@ -385,7 +417,7 @@ describe('Cloud Vault Integration', () => {
       const state = store.getState().vault;
       expect(state.vaults).toHaveLength(2);
       expect(state.vaults[0]).toMatchObject({
-        name: 'Personal Vault',
+        name: 'Personal Vault.monark',
         storageType: 'cloud',
         providerId: 'google-drive-primary',
       });
@@ -773,6 +805,7 @@ describe('Cloud Vault Integration', () => {
 		it('should handle sync for locked vault', async () => {
 			const lockedVault = {
 				...cloudVault,
+				id: 'sync-locked-vault',
 				isLocked: true,
 				volatile: {
 					...cloudVault.volatile,
@@ -781,7 +814,7 @@ describe('Cloud Vault Integration', () => {
 			}
 
 			store.dispatch(addVault(lockedVault));
-      const lockedVaultInstance = vaultManager.getInstance('sync-test-vault')!;
+      const lockedVaultInstance = vaultManager.getInstance('sync-locked-vault')!;
 
 			await expect(lockedVaultInstance.syncWithCloud()).rejects.toThrow('Vault must be unlocked to sync')
 		})

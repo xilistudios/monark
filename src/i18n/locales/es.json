@@ -13,7 +13,7 @@
     "promptEnable": "Habilitar desbloqueo biométrico para {{vaultName}}",
     "promptUnlock": "Desbloquear {{vaultName}}",
     "enabled": "El desbloqueo biométrico está habilitado para este vault",
-    "disabled": "El desbloqueo biométrico está deshabilitado",
+    "disabled": "Usar autenticación biométrica",
     "enableFailed": "Error al habilitar el desbloqueo biométrico",
     "disableFailed": "Error al deshabilitar el desbloqueo biométrico",
     "unlockFailed": "La autenticación biométrica falló. Por favor ingrese su contraseña.",

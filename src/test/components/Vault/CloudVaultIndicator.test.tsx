@@ -69,8 +69,8 @@ describe('CloudVaultIndicator', () => {
   const mockProviders = [
     {
       name: 'google-drive-provider',
-      providerType: StorageProviderType.GOOGLE_DRIVE,
-      isDefault: true,
+      provider_type: StorageProviderType.GOOGLE_DRIVE,
+      is_default: true,
     },
   ];
 
@@ -281,8 +281,8 @@ describe('CloudVaultIndicator', () => {
     it('handles cloud vault with different provider types', () => {
       const localProvider = {
         name: 'local-provider',
-        providerType: StorageProviderType.LOCAL,
-        isDefault: false,
+        provider_type: StorageProviderType.LOCAL,
+        is_default: false,
       };
 
       const cloudVaultWithLocalProvider: Vault = {
@@ -426,8 +426,8 @@ describe('CloudVaultIndicator', () => {
       
       const longProvider = {
         name: longProviderName,
-        providerType: StorageProviderType.GOOGLE_DRIVE,
-        isDefault: false,
+        provider_type: StorageProviderType.GOOGLE_DRIVE,
+        is_default: false,
       };
       
       const store = createMockStore({ providers: [longProvider] });
@@ -441,8 +441,8 @@ describe('CloudVaultIndicator', () => {
       // Should show cloud icon
       expect(screen.getByTitle('vaultSelector.cloudVault')).toBeInTheDocument();
       
-      // Should show provider name (truncated or full depending on implementation)
-      expect(screen.getByText(longProviderName)).toBeInTheDocument();
+      // Should show provider name (Google Drive for GOOGLE_DRIVE type)
+      expect(screen.getByText('Google Drive')).toBeInTheDocument();
     });
   });
 });

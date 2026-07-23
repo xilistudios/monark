@@ -76,21 +76,16 @@ describe('Vault Password Change', () => {
     it('should change password for cloud vault successfully', async () => {
       const vaultInstance = new VaultInstance(mockVault, mockDispatch, mockGetState);
       
-      mockCloudStorageCommands.writeCloudVault.mockResolvedValue('test-vault-id');
+      mockCloudStorageCommands.changeCloudVaultPassword.mockResolvedValue(undefined);
       
       await vaultInstance.changePassword('new-password');
       
-      expect(mockCloudStorageCommands.writeCloudVault).toHaveBeenCalledWith({
-        vaultId: 'test-vault-id',
-        vaultName: 'Test Vault',
-        password: 'new-password',
-        vaultContent: {
-          updated_at: expect.any(String),
-          hmac: '',
-          entries: mockVault.volatile!.entries,
-        },
-        providerName: 'test-provider',
-      });
+      expect(mockCloudStorageCommands.changeCloudVaultPassword).toHaveBeenCalledWith(
+        'test-vault-id',
+        'old-password',
+        'new-password',
+        'test-provider',
+      );
       
       expect(mockSyncCloudVault).toHaveBeenCalledWith('test-vault-id');
       expect(mockSetVaultCredential).toHaveBeenCalledWith({
@@ -176,7 +171,7 @@ describe('Vault Password Change', () => {
     it('should throw error if cloud vault update fails', async () => {
       const vaultInstance = new VaultInstance(mockVault, mockDispatch, mockGetState);
       
-      mockCloudStorageCommands.writeCloudVault.mockRejectedValue(
+      mockCloudStorageCommands.changeCloudVaultPassword.mockRejectedValue(
         new Error('Cloud storage error')
       );
       

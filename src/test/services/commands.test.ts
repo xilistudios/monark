@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import VaultCommands from '../../../services/commands';
+import VaultCommands from '../../services/commands';
 import type {
 	CloudVaultOperation,
 	CreateCloudVaultRequest,
 	UpdateCloudVaultRequest,
 	DeleteCloudVaultRequest,
 	CloudVaultMetadata
-} from '../../../interfaces/cloud-storage.interface';
-import { StorageProviderType } from '../../../interfaces/cloud-storage.interface';
-import type { VaultContent } from '../../../interfaces/vault.interface';
+} from '../../interfaces/cloud-storage.interface';
+import { StorageProviderType } from '../../interfaces/cloud-storage.interface';
+import type { VaultContent } from '../../interfaces/vault.interface';
 
 // Mock the Tauri invoke function
 vi.mock('@tauri-apps/api/core', () => ({
@@ -115,10 +115,11 @@ describe('VaultCommands', () => {
 			const result = await VaultCommands.writeCloudVault(request);
 
 			expect(mockInvoke).toHaveBeenCalledWith('write_cloud_vault', {
+				vaultId: request.vaultId,
 				vaultName: request.vaultName,
 				password: request.password,
 				vaultContent: request.vaultContent,
-				providerName: request.providerName
+				providerName: request.providerName,
 			});
 			expect(result).toBe('vault-1');
 		});
@@ -140,10 +141,11 @@ describe('VaultCommands', () => {
 			await VaultCommands.updateCloudVault(request);
 
 			expect(mockInvoke).toHaveBeenCalledWith('write_cloud_vault', {
-				vaultName: '', // Empty name indicates update
+				vaultId: request.vaultId,
+				vaultName: '',
 				password: request.password,
 				vaultContent: request.vaultContent,
-				providerName: request.providerName
+				providerName: request.providerName,
 			});
 		});
 
@@ -255,7 +257,11 @@ describe('VaultCommands', () => {
 				vaultId: vaultPath,
 				vaultName,
 				password,
-				vaultContent,
+				vaultContent: {
+					updatedAt: vaultContent.updated_at,
+					hmac: vaultContent.hmac,
+					entries: vaultContent.entries,
+				},
 				providerName
 			});
 			expect(result).toBe('vault-1');
@@ -398,10 +404,11 @@ describe('VaultCommands', () => {
 			await VaultCommands.updateCloudVault(request);
 
 			expect(mockInvoke).toHaveBeenCalledWith('write_cloud_vault', {
-				vaultName: '', // Should be empty for updates
+				vaultId: request.vaultId,
+				vaultName: '',
 				password: request.password,
 				vaultContent: request.vaultContent,
-				providerName: request.providerName
+				providerName: request.providerName,
 			});
 		});
 

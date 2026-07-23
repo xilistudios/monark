@@ -182,7 +182,8 @@ describe('CloudStorageCommands', () => {
 				vaultName: request.vaultName,
 				password: request.password,
 				vaultContent: request.vaultContent,
-				providerName: request.providerName
+				providerName: request.providerName,
+				vaultId: request.vaultId,
 			});
 			expect(result).toBe('vault-1');
 		});
@@ -203,8 +204,8 @@ describe('CloudStorageCommands', () => {
 
 			await CloudStorageCommands.updateCloudVault(request);
 
-			expect(mockInvoke).toHaveBeenCalledWith('write_cloud_vault', {
-				vaultName: '', // Empty for updates
+			expect(mockInvoke).toHaveBeenCalledWith('update_cloud_vault', {
+				vaultId: request.vaultId,
 				password: request.password,
 				vaultContent: request.vaultContent,
 				providerName: request.providerName

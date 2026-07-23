@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
 	authenticate,
 	checkBiometricAvailability,
@@ -12,7 +13,6 @@ interface BiometricSettingsProps {
 	vaultPassword: string;
 	biometricEnabled: boolean;
 	onToggle: (enabled: boolean) => void;
-	t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 export function BiometricSettings({
@@ -21,8 +21,8 @@ export function BiometricSettings({
 	vaultPassword,
 	biometricEnabled,
 	onToggle,
-	t,
 }: BiometricSettingsProps) {
+	const { t } = useTranslation();
 	const [available, setAvailable] = useState<boolean | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function BiometricSettings({
 				<div>
 					<h4 className="text-sm font-medium">{t("biometric.title")}</h4>
 					<p className="text-xs text-base-content/60 mt-0.5">
-						{biometricEnabled ? t("biometric.enabled") : "Use biometric authentication"}
+						{biometricEnabled ? t("biometric.enabled") : t("biometric.disabled")}
 					</p>
 				</div>
 				<div className="flex items-center gap-3">
