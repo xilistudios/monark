@@ -1,6 +1,6 @@
 [package]
 name = "monark"
-version = "0.2.0"
+version = "0.2.1"
 description = "Password Manager"
 authors = ["you"]
 edition = "2021"
@@ -65,6 +65,7 @@ keyring = { version = "4", features = ["v1"] }
 [target.'cfg(target_os = "android")'.dependencies]
 keyring = { version = "4", default-features = false, features = ["v1", "android-native-keyring-store"] }
 keyring-core = "1"
+android-native-keyring-store = "1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2.2.0"

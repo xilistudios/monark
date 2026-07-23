@@ -2702,8 +2702,9 @@ dependencies = [
 
 [[package]]
 name = "monark"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
+ "android-native-keyring-store",
  "argon2",
  "async-trait",
  "base64 0.22.1",
