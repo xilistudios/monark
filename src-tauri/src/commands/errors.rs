@@ -42,8 +42,8 @@ impl From<IoError> for CommandError {
 }
 
 impl From<CryptoError> for CommandError {
-    fn from(_err: CryptoError) -> Self {
-        CommandError::Crypto("Cryptographic operation failed".to_string())
+    fn from(err: CryptoError) -> Self {
+        CommandError::Crypto(err.to_string())
     }
 }
 
