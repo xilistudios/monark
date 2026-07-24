@@ -22,7 +22,7 @@ export function BiometricSettings({
 	biometricEnabled,
 	onToggle,
 }: BiometricSettingsProps) {
-	const { t } = useTranslation();
+	const { t } = useTranslation('biometric');
 	const [available, setAvailable] = useState<boolean | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);

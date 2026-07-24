@@ -44,7 +44,7 @@ export function LockedVaultView({
   cloudUnlockMessage,
   t,
 }: LockedVaultViewProps) {
-  const { t: tBiometric } = useTranslation();
+  const { t: tBiometric } = useTranslation('biometric');
   const [isVisible, setIsVisible] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
