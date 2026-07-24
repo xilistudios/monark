@@ -53,13 +53,6 @@ export function LockedVaultView({
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-trigger biometric unlock on mount if enabled
-  useEffect(() => {
-    if (currentVault?.biometricEnabled && handleBiometricUnlock && !showPasswordForm) {
-      handleBiometricUnlock();
-    }
-  }, [currentVault?.id, currentVault?.biometricEnabled]);
-
   if (!currentVault) return null;
 
   const showBiometric = currentVault.biometricEnabled && handleBiometricUnlock && !showPasswordForm;
