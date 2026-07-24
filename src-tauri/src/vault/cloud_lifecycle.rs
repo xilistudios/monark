@@ -9,6 +9,7 @@ use chrono::Utc;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use zeroize::Zeroize;
 
 static CLOUD_CACHE_BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -59,43 +60,22 @@ fn cloud_cache_file_path(provider: &str, vault_id: &str) -> PathBuf {
 fn cache_vault_bytes(provider: &str, vault_id: &str, data: &[u8]) -> Result<(), CommandError> {
     let path = cloud_cache_file_path(provider, vault_id);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            CommandError::Io(format!(
-                "Failed to create cloud cache directory '{}': {}",
-                parent.display(),
-                e
-            ))
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|_e| CommandError::Io("Failed to create cloud cache directory".to_string()))?;
     }
 
     // Atomic write: write to temp file, then rename.
     // This prevents corruption if the app is killed mid-write (common on mobile).
     let tmp_path = path.with_extension("monark.tmp");
-    fs::write(&tmp_path, data).map_err(|e| {
-        CommandError::Io(format!(
-            "Failed to write cached cloud vault to temp file '{}': {}",
-            tmp_path.display(),
-            e
-        ))
-    })?;
-    fs::rename(&tmp_path, &path).map_err(|e| {
-        CommandError::Io(format!(
-            "Failed to rename cached cloud vault '{}': {}",
-            path.display(),
-            e
-        ))
-    })
+    fs::write(&tmp_path, data)
+        .map_err(|_e| CommandError::Io("Failed to write cached cloud vault".to_string()))?;
+    fs::rename(&tmp_path, &path)
+        .map_err(|_e| CommandError::Io("Failed to rename cached cloud vault".to_string()))
 }
 
 fn load_cached_vault(provider: &str, vault_id: &str) -> Result<Vec<u8>, CommandError> {
     let path = cloud_cache_file_path(provider, vault_id);
-    fs::read(&path).map_err(|e| {
-        CommandError::Io(format!(
-            "Failed to read cached cloud vault '{}': {}",
-            path.display(),
-            e
-        ))
-    })
+    fs::read(&path).map_err(|_e| CommandError::Io("Failed to read cached cloud vault".to_string()))
 }
 
 fn map_provider_name_for_cache(provider_name: &str) -> String {
@@ -153,7 +133,7 @@ pub async fn write_cloud_vault(
         storage_manager
             .ensure_vault_folder(provider_name.clone())
             .await
-            .map_err(|e| CommandError::Io(format!("Failed to ensure vault folder: {}", e)))?
+            .map_err(|_e| CommandError::Io("Failed to ensure vault folder".to_string()))?
     };
 
     let vault_file_name = format!("{}.{}", vault_name, VAULT_EXTENSION);
@@ -173,7 +153,7 @@ pub async fn write_cloud_vault(
     let existing_vaults = storage_manager
         .list_vaults(provider_name.clone())
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to list vaults".to_string()))?;
 
     println!(
         "[write_cloud_vault] Found {} existing vaults",
@@ -266,17 +246,13 @@ pub async fn read_cloud_vault(
                             "[read_cloud_vault] Cached copy unavailable for vault '{}': {}",
                             vault_id, cache_err
                         );
-                        return Err(CommandError::Io(format!(
-                            "Failed to read vault file ({}); no cached copy available",
-                            err
-                        )));
+                        return Err(CommandError::Io(
+                            "Failed to read vault file; no cached copy available".to_string(),
+                        ));
                     }
                 }
             } else {
-                return Err(CommandError::Io(format!(
-                    "Failed to read vault file: {}",
-                    err
-                )));
+                return Err(CommandError::Io("Failed to read vault file".to_string()));
             }
         }
     };
@@ -287,17 +263,17 @@ pub async fn read_cloud_vault(
 
     let vault_nonce = URL_SAFE_NO_PAD
         .decode(&vault_file.vault.nonce)
-        .map_err(|e| CommandError::Crypto(format!("Failed to decode vault nonce: {}", e)))?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault nonce".to_string()))?;
 
     let vault_ciphertext = URL_SAFE_NO_PAD
         .decode(&vault_file.vault.ciphertext)
-        .map_err(|e| CommandError::Crypto(format!("Failed to decode vault ciphertext: {}", e)))?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault ciphertext".to_string()))?;
 
     let vault_json_bytes =
         crypto::chacha::decrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_ciphertext)?;
 
     serde_json::from_slice(&vault_json_bytes)
-        .map_err(|e| CommandError::Io(format!("Failed to deserialize vault: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))
 }
 
 #[tauri::command(async)]
@@ -313,7 +289,7 @@ pub async fn delete_cloud_vault(
     storage_manager
         .delete_file(vault_id, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to delete vault: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to delete vault".to_string()))?;
 
     let cache_path = cloud_cache_file_path(&provider_cache_key, &cached_vault_id);
     if cache_path.exists() {
@@ -344,7 +320,7 @@ pub async fn change_cloud_vault_password(
     let vault_data = storage_manager
         .read_file(vault_id.clone(), provider_name.clone())
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to read existing vault: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to read existing vault".to_string()))?;
 
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
 
@@ -360,7 +336,7 @@ pub async fn change_cloud_vault_password(
         parallelism: ARGON2_PARALLELISM,
     };
 
-    let new_kdf_key = crypto::argon2::derive_key_argon2id(
+    let mut new_kdf_key = crypto::argon2::derive_key_argon2id(
         new_password.as_bytes(),
         &user_salt,
         argon2_params.memory_cost_kib,
@@ -373,6 +349,7 @@ pub async fn change_cloud_vault_password(
     let mk_nonce = crypto::random::generate_nonce()?;
     let mk_ciphertext =
         crypto::chacha::encrypt_xchacha20poly1305(&new_kdf_key, &mk_nonce, &master_key)?;
+    new_kdf_key.zeroize(); // Clear intermediate key material from memory
     let new_credentials = EncryptedData {
         nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
         ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
@@ -395,7 +372,7 @@ pub async fn change_cloud_vault_password(
     storage_manager
         .update_file(update_request, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to update vault file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to update vault file".to_string()))?;
 
     // Update the local cache
     if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, &vault_id, &cached_bytes) {
@@ -418,7 +395,7 @@ pub async fn list_cloud_vaults(
     storage_manager
         .list_vaults(provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to list vaults".to_string()))
 }
 
 async fn create_new_cloud_vault(
@@ -444,7 +421,7 @@ async fn create_new_cloud_vault(
         parallelism: ARGON2_PARALLELISM,
     };
 
-    let kdf_key = crypto::argon2::derive_key_argon2id(
+    let mut kdf_key = crypto::argon2::derive_key_argon2id(
         password.as_bytes(),
         &user_salt,
         argon2_params.memory_cost_kib,
@@ -456,6 +433,7 @@ async fn create_new_cloud_vault(
     let mk_nonce = crypto::random::generate_nonce()?;
     let mk_ciphertext =
         crypto::chacha::encrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &master_key)?;
+    kdf_key.zeroize(); // Clear intermediate key material from memory
     let credentials = EncryptedData {
         nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
         ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
@@ -493,7 +471,7 @@ async fn create_new_cloud_vault(
     let created_file = storage_manager
         .create_file(create_request, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to create vault file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to create vault file".to_string()))?;
 
     if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, &created_file.id, &cached_bytes)
     {
@@ -517,7 +495,7 @@ async fn update_existing_cloud_vault(
     let vault_data = storage_manager
         .read_file(vault_id.to_string(), provider_name.clone())
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to read existing vault: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to read existing vault".to_string()))?;
 
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
 
@@ -544,7 +522,7 @@ async fn update_existing_cloud_vault(
     storage_manager
         .update_file(update_request, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to update vault file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to update vault file".to_string()))?;
 
     if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, vault_id, &cached_bytes) {
         println!(
@@ -559,7 +537,7 @@ async fn update_existing_cloud_vault(
 fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> {
     // Convert bytes to string
     let vault_data_str = String::from_utf8(vault_data.to_vec())
-        .map_err(|e| CommandError::Io(format!("Failed to convert vault data to string: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to convert vault data".to_string()))?;
 
     // Parse the signed content
     let parsed_content = crate::io::signature::parse_content(&vault_data_str);
@@ -567,13 +545,11 @@ fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> 
     // Base64 decode the content
     let decoded_content = URL_SAFE_NO_PAD
         .decode(&parsed_content.content)
-        .map_err(|e| {
-            CommandError::Crypto(format!("Failed to base64 decode vault content: {}", e))
-        })?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault content".to_string()))?;
 
     // Deserialize into VaultFile
     serde_json::from_slice(&decoded_content)
-        .map_err(|e| CommandError::Io(format!("Failed to deserialize vault file: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to deserialize vault file".to_string()))
 }
 
 fn create_vault_bytes(vault_file: &VaultFile) -> Result<Vec<u8>, CommandError> {
@@ -587,9 +563,9 @@ fn derive_and_decrypt_master_key(
 ) -> Result<[u8; KEY_LENGTH], CommandError> {
     let user_salt = URL_SAFE_NO_PAD
         .decode(&vault_file.argon2_params.salt)
-        .map_err(|e| CommandError::Crypto(format!("Failed to decode salt: {}", e)))?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode salt".to_string()))?;
 
-    let kdf_key = crypto::argon2::derive_key_argon2id(
+    let mut kdf_key = crypto::argon2::derive_key_argon2id(
         password.as_bytes(),
         &user_salt,
         vault_file.argon2_params.memory_cost_kib,
@@ -600,15 +576,14 @@ fn derive_and_decrypt_master_key(
 
     let mk_nonce = URL_SAFE_NO_PAD
         .decode(&vault_file.credentials.nonce)
-        .map_err(|e| CommandError::Crypto(format!("Failed to decode master key nonce: {}", e)))?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode master key nonce".to_string()))?;
     let mk_ciphertext = URL_SAFE_NO_PAD
         .decode(&vault_file.credentials.ciphertext)
-        .map_err(|e| {
-            CommandError::Crypto(format!("Failed to decode master key ciphertext: {}", e))
-        })?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode master key ciphertext".to_string()))?;
 
     let master_key_vec =
         crypto::chacha::decrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &mk_ciphertext)?;
+    kdf_key.zeroize(); // Clear intermediate key material from memory
 
     master_key_vec
         .try_into()

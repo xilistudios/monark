@@ -12,7 +12,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("test_vault.vault")
+            .join("test_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -41,7 +41,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let subdir = temp_dir.path().join("nested_dir");
         let file_path = subdir
-            .join("test_vault.vault")
+            .join("test_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -50,6 +50,9 @@ mod tests {
         // Ensure the directory and file do not exist before creation
         assert!(!subdir.exists());
         assert!(!std::path::Path::new(&file_path).exists());
+
+        // Create the parent directory so validation can canonicalize it
+        std::fs::create_dir_all(&subdir).expect("Failed to create subdirectory");
 
         let vault = Vault {
             updated_at: Utc::now(),
@@ -70,7 +73,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("existing_vault.vault")
+            .join("existing_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -101,7 +104,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("test_vault.vault")
+            .join("test_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -132,7 +135,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("test_vault.vault")
+            .join("test_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -162,17 +165,26 @@ mod tests {
 
     #[test]
     fn test_open_vault_nonexistent_file() -> Result<(), CommandError> {
-        let file_path = "/nonexistent/path/vault.vault".to_string();
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("nonexistent_vault.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
         let password = "test_password".to_string();
 
         // Attempt to open a nonexistent vault
         let result = lifecycle::read_vault(file_path, password);
 
-        // Should fail with an IO error
+        // Should fail with a validation or IO error
         assert!(result.is_err());
         match result {
-            Err(CommandError::Io(_)) => {} // Expected
-            _ => panic!("Expected CommandError::Io"),
+            Err(CommandError::Validation(_)) | Err(CommandError::Io(_)) => {} // Expected
+            other => panic!(
+                "Expected CommandError::Validation or CommandError::Io, got {:?}",
+                other
+            ),
         }
 
         Ok(())
@@ -182,7 +194,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("test_vault.vault")
+            .join("test_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -225,7 +237,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("test_vault.vault")
+            .join("test_vault.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -254,7 +266,7 @@ mod tests {
         let temp_dir = tempdir().expect("Failed to create temporary directory");
         let file_path = temp_dir
             .path()
-            .join("update_nonexistent.vault")
+            .join("update_nonexistent.monark")
             .to_str()
             .unwrap()
             .to_string();
@@ -316,8 +328,14 @@ mod tests {
 
         let result = lifecycle::delete_vault(file_path.clone());
         match result {
-            Err(CommandError::Io(msg)) => assert_eq!(msg, "Invalid vault file extension"),
-            _ => panic!("Expected CommandError::Io with 'Invalid vault file extension'"),
+            Err(CommandError::Validation(msg)) => {
+                assert!(
+                    msg.contains(".monark"),
+                    "Expected validation error about .monark extension, got: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandError::Validation about .monark extension"),
         }
         // File should still exist
         assert!(std::path::Path::new(&file_path).exists());
@@ -325,11 +343,23 @@ mod tests {
 
     #[test]
     fn test_delete_vault_nonexistent_file() {
-        let file_path = "/nonexistent/path/does_not_exist.monark".to_string();
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("does_not_exist.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
         let result = lifecycle::delete_vault(file_path);
         match result {
-            Err(CommandError::Io(msg)) => assert_eq!(msg, "Vault file does not exist"),
-            _ => panic!("Expected CommandError::Io with 'Vault file does not exist'"),
+            Err(CommandError::NotFound(msg)) => {
+                assert!(
+                    msg.contains("does not exist"),
+                    "Expected 'does not exist' error, got: {}",
+                    msg
+                );
+            }
+            other => panic!("Expected CommandError::NotFound, got {:?}", other),
         }
     }
     #[test]

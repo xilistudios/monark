@@ -22,6 +22,23 @@ impl LocalStorageProvider {
         }
     }
 
+    async fn atomic_write(path: &Path, content: &[u8]) -> StorageResult<()> {
+        let tmp_path = path.with_extension("monark.tmp");
+        fs::write(&tmp_path, content)
+            .await
+            .map_err(StorageError::Io)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600))
+                .map_err(StorageError::Io)?;
+        }
+        fs::rename(&tmp_path, path)
+            .await
+            .map_err(StorageError::Io)?;
+        Ok(())
+    }
+
     fn resolve_path(&self, path: &str) -> PathBuf {
         if path.starts_with('/') {
             self.base_path.join(path.trim_start_matches('/'))
@@ -129,9 +146,7 @@ impl StorageProvider for LocalStorageProvider {
             fs::create_dir_all(parent).await.map_err(StorageError::Io)?;
         }
 
-        fs::write(&file_path, &request.content)
-            .await
-            .map_err(StorageError::Io)?;
+        Self::atomic_write(&file_path, &request.content).await?;
 
         self.file_to_storage_file(&file_path)
     }
@@ -163,9 +178,7 @@ impl StorageProvider for LocalStorageProvider {
             return Err(StorageError::file_not_found(file_path.to_string_lossy()));
         }
 
-        fs::write(&file_path, &request.content)
-            .await
-            .map_err(StorageError::Io)?;
+        Self::atomic_write(&file_path, &request.content).await?;
 
         self.file_to_storage_file(&file_path)
     }

@@ -4,14 +4,47 @@ use crate::storage::providers::{
     CreateFileRequest, CreateFolderRequest, StorageFile, UpdateFileRequest,
 };
 use crate::storage::{ProviderConfig, StorageConfig, StorageManager};
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 use tauri::State;
 
 // Global state for storage manager
 pub struct StorageState {
     pub manager: Arc<StorageManager>,
+}
+
+/// Pending OAuth state entry for CSRF protection and PKCE.
+struct OAuthPendingState {
+    created_at: Instant,
+    code_verifier: String,
+}
+
+/// In-memory store for pending OAuth states (state → pending entry).
+/// Entries expire after 5 minutes and are single-use.
+fn oauth_state_store() -> &'static Mutex<HashMap<String, OAuthPendingState>> {
+    static STORE: OnceLock<Mutex<HashMap<String, OAuthPendingState>>> = OnceLock::new();
+    STORE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Generate a PKCE (code_verifier, code_challenge) pair using S256.
+fn generate_pkce_pair() -> (String, String) {
+    use rand::RngCore;
+    use sha2::{Digest, Sha256};
+
+    let mut verifier_bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut verifier_bytes);
+    let code_verifier = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(verifier_bytes);
+
+    let mut hasher = Sha256::new();
+    hasher.update(code_verifier.as_bytes());
+    let challenge_bytes = hasher.finalize();
+    let code_challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(challenge_bytes);
+
+    (code_verifier, code_challenge)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -137,7 +170,7 @@ pub async fn add_provider(
         .manager
         .add_provider(request.name, request.config)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to add provider: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to add provider".to_string()))?;
     Ok(())
 }
 
@@ -162,7 +195,7 @@ pub async fn remove_provider(
         .manager
         .remove_provider(&name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to remove provider: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to remove provider".to_string()))?;
     Ok(())
 }
 
@@ -175,7 +208,7 @@ pub async fn set_default_provider(
         .manager
         .set_default_provider(name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to set default provider: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to set default provider".to_string()))?;
     Ok(())
 }
 
@@ -188,7 +221,7 @@ pub async fn authenticate_provider(
         .manager
         .authenticate(provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to authenticate provider: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to authenticate provider".to_string()))?;
     Ok(())
 }
 
@@ -229,7 +262,7 @@ pub async fn list_files(
         .manager
         .list_files(folder_id, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to list files: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to list files".to_string()))
 }
 
 #[tauri::command]
@@ -243,7 +276,7 @@ pub async fn create_file(
         .manager
         .create_file(create_request, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to create file: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to create file".to_string()))
 }
 
 #[tauri::command]
@@ -256,7 +289,7 @@ pub async fn read_file(
         .manager
         .read_file(file_id, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to read file: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to read file".to_string()))
 }
 
 #[tauri::command]
@@ -269,7 +302,7 @@ pub async fn delete_file(
         .manager
         .delete_file(file_id, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to delete file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to delete file".to_string()))?;
     Ok(())
 }
 
@@ -284,7 +317,7 @@ pub async fn update_file(
         .manager
         .update_file(update_request, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to update file: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to update file".to_string()))
 }
 
 #[tauri::command]
@@ -298,7 +331,7 @@ pub async fn create_folder(
         .manager
         .create_folder(create_request, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to create folder: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to create folder".to_string()))
 }
 
 #[tauri::command]
@@ -311,7 +344,7 @@ pub async fn delete_folder(
         .manager
         .delete_folder(folder_id, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to delete folder: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to delete folder".to_string()))?;
     Ok(())
 }
 
@@ -325,7 +358,7 @@ pub async fn get_file_info(
         .manager
         .get_file_info(file_id, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to get file info: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to get file info".to_string()))
 }
 
 #[tauri::command]
@@ -338,7 +371,7 @@ pub async fn search_files(
         .manager
         .search_files(query, provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to search files: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to search files".to_string()))
 }
 
 #[tauri::command]
@@ -350,7 +383,7 @@ pub async fn list_vaults(
         .manager
         .list_vaults(provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to list vaults: {}", e)))
+        .map_err(|_e| CommandError::Io("Failed to list vaults".to_string()))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -375,6 +408,21 @@ pub async fn get_google_drive_oauth_url(
             // Generate a random state for CSRF protection
             let oauth_state = format!("{}", uuid::Uuid::new_v4());
 
+            // Generate PKCE pair
+            let (code_verifier, code_challenge) = generate_pkce_pair();
+
+            // Store state with code_verifier for later validation (5-min expiry)
+            {
+                let mut store = oauth_state_store().lock().unwrap();
+                store.insert(
+                    oauth_state.clone(),
+                    OAuthPendingState {
+                        created_at: Instant::now(),
+                        code_verifier,
+                    },
+                );
+            }
+
             // Build OAuth URL
             let scopes = "https://www.googleapis.com/auth/drive.file";
             // Only force consent prompt when we don't already have a refresh token,
@@ -386,11 +434,12 @@ pub async fn get_google_drive_oauth_url(
             };
 
             let auth_url = format!(
-                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&state={}{}",
+                "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&state={}&code_challenge={}&code_challenge_method=S256{}",
                 urlencoding::encode(&gd_config.client_id),
                 urlencoding::encode(&gd_config.redirect_uri),
                 urlencoding::encode(scopes),
                 &oauth_state,
+                &code_challenge,
                 prompt_param,
             );
 
@@ -416,37 +465,47 @@ pub async fn handle_google_drive_oauth_callback(
     state: State<'_, StorageState>,
 ) -> Result<(), CommandError> {
     println!(
-        "OAuth callback received: provider={}, code={}, state={}",
-        request.provider_name,
-        &request.code[..10.min(request.code.len())],
-        request.state
+        "OAuth callback received for provider: {}",
+        request.provider_name
     );
+
+    // Validate OAuth state (CSRF protection): must exist, not expired (5 min), single-use
+    const STATE_EXPIRY: std::time::Duration = std::time::Duration::from_secs(300);
+    let code_verifier = {
+        let mut store = oauth_state_store().lock().unwrap();
+        match store.remove(&request.state) {
+            Some(entry) => {
+                if entry.created_at.elapsed() > STATE_EXPIRY {
+                    return Err(CommandError::Io(
+                        "Invalid or expired OAuth state".to_string(),
+                    ));
+                }
+                entry.code_verifier
+            }
+            None => {
+                return Err(CommandError::Io(
+                    "Invalid or expired OAuth state".to_string(),
+                ));
+            }
+        }
+    };
 
     // Get the provider config
     let config = state.manager.get_config().await;
     let provider_config = config
         .get_provider_config(&request.provider_name)
-        .ok_or_else(|| {
-            println!("Provider not found: {}", request.provider_name);
-            CommandError::Io("Provider not found".to_string())
-        })?;
+        .ok_or_else(|| CommandError::Io("Provider not found".to_string()))?;
 
     let gd_config = match provider_config {
         ProviderConfig::GoogleDrive { config } => config.clone(),
         _ => {
-            println!("Provider is not Google Drive: {}", request.provider_name);
             return Err(CommandError::Io("Provider is not Google Drive".to_string()));
         }
     };
 
     let redirect_uri = effective_google_drive_redirect_uri(&gd_config);
 
-    println!(
-        "Exchanging code for tokens with redirect_uri: {}",
-        redirect_uri
-    );
-
-    // Exchange authorization code for tokens
+    // Exchange authorization code for tokens (with PKCE code_verifier)
     let client = reqwest::Client::new();
     let params = [
         ("client_id", gd_config.client_id.as_str()),
@@ -454,6 +513,7 @@ pub async fn handle_google_drive_oauth_callback(
         ("code", request.code.as_str()),
         ("redirect_uri", redirect_uri.as_str()),
         ("grant_type", "authorization_code"),
+        ("code_verifier", code_verifier.as_str()),
     ];
 
     let response = client
@@ -461,24 +521,16 @@ pub async fn handle_google_drive_oauth_callback(
         .form(&params)
         .send()
         .await
-        .map_err(|e| {
-            println!("Failed to exchange code for tokens: {}", e);
-            CommandError::Io(format!("Failed to exchange code for tokens: {}", e))
-        })?;
+        .map_err(|_e| CommandError::Io("Failed to exchange OAuth code".to_string()))?;
 
     let status = response.status();
-    println!("Token exchange response status: {}", status);
 
     if !status.is_success() {
-        let error_text = response
+        let _error_text = response
             .text()
             .await
             .unwrap_or_else(|_| "Unknown error".to_string());
-        println!("Token exchange failed: {}", error_text);
-        return Err(CommandError::Io(format!(
-            "Token exchange failed: {}",
-            error_text
-        )));
+        return Err(CommandError::Io("OAuth token exchange failed".to_string()));
     }
 
     #[derive(Deserialize)]
@@ -488,15 +540,10 @@ pub async fn handle_google_drive_oauth_callback(
         expires_in: u64,
     }
 
-    let token_response: TokenResponse = response.json().await.map_err(|e| {
-        println!("Failed to parse token response: {}", e);
-        CommandError::Io(format!("Failed to parse token response: {}", e))
-    })?;
-
-    println!(
-        "Tokens received successfully, expires_in: {}",
-        token_response.expires_in
-    );
+    let token_response: TokenResponse = response
+        .json()
+        .await
+        .map_err(|_e| CommandError::Io("Failed to parse token response".to_string()))?;
 
     // Update the provider config with the new tokens
     let new_config = GoogleDriveConfig {
@@ -515,12 +562,8 @@ pub async fn handle_google_drive_oauth_callback(
         .manager
         .update_google_drive_config(&request.provider_name, new_config)
         .await
-        .map_err(|e| {
-            println!("Failed to update provider config: {}", e);
-            CommandError::Io(format!("Failed to update provider config: {}", e))
-        })?;
+        .map_err(|_e| CommandError::Io("Failed to update provider config".to_string()))?;
 
-    println!("OAuth callback completed successfully");
     Ok(())
 }
 
@@ -539,7 +582,7 @@ pub async fn get_provider_auth_info(
         .manager
         .get_provider_auth_info(&provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to get provider auth info: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to get provider auth info".to_string()))?;
 
     Ok(ProviderAuthInfo {
         authenticated,
@@ -557,7 +600,7 @@ pub async fn refresh_provider_auth(
         .manager
         .ensure_google_drive_token_valid(&provider_name)
         .await
-        .map_err(|e| CommandError::Io(format!("Failed to refresh provider auth: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to refresh provider auth".to_string()))?;
 
     Ok(ProviderAuthInfo {
         authenticated: true,
@@ -583,6 +626,6 @@ pub async fn test_webdav_connection(
     let mut provider = WebDavProvider::new(config);
     match provider.authenticate().await {
         Ok(()) => Ok(true),
-        Err(e) => Err(CommandError::Io(format!("WebDAV connection failed: {}", e))),
+        Err(_e) => Err(CommandError::Io("WebDAV connection failed".to_string())),
     }
 }

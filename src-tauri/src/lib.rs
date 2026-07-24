@@ -149,7 +149,7 @@ fn build_app() {
                 }
             }
 
-            let storage_manager = tauri::async_runtime::block_on(storage::init_storage_manager());
+            let storage_manager = tauri::async_runtime::block_on(storage::init_storage_manager())?;
 
             #[cfg(desktop)]
             let _ = app

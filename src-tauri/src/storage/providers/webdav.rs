@@ -17,6 +17,7 @@ static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 fn get_http_client() -> &'static reqwest::Client {
     HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::limited(3))
             .timeout(std::time::Duration::from_secs(30))
             .user_agent("Monark-App/1.0")
             .build()
@@ -24,7 +25,7 @@ fn get_http_client() -> &'static reqwest::Client {
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct WebDavConfig {
     pub server_url: String,
     pub username: String,
@@ -167,6 +168,23 @@ fn strip_namespace_prefixes(xml: &str) -> String {
     result
 }
 
+impl std::fmt::Debug for WebDavConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebDavConfig")
+            .field("server_url", &self.server_url)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .field("base_path", &self.base_path)
+            .finish()
+    }
+}
+
+/// Check that a relative path extracted from a server-provided href does not
+/// contain `..` traversal components (M1 path-traversal guard).
+fn is_safe_relative_path(path: &str) -> bool {
+    !path.split('/').any(|component| component == "..")
+}
+
 impl WebDavProvider {
     pub fn new(config: WebDavConfig) -> Self {
         Self { config }
@@ -273,6 +291,11 @@ impl WebDavProvider {
 
         // Extract relative path as the file id
         let relative_path = self.extract_relative_path(href);
+
+        // M1: Reject server-provided hrefs that contain path traversal components
+        if !is_safe_relative_path(&relative_path) {
+            return None;
+        }
 
         // Skip the collection itself when listing (but keep it for get_file_info)
         // We use is_self flag for this
@@ -439,6 +462,7 @@ impl WebDavProvider {
             let relative_path = self.extract_relative_path(&href);
             if relative_path.is_empty()
                 || href.trim_end_matches('/') == folder_url.trim_end_matches('/')
+                || !is_safe_relative_path(&relative_path)
             {
                 continue;
             }

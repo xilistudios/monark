@@ -20,7 +20,7 @@
     "fs:allow-app-read",
     "os:default",
     "http:default",
-    "biometry:default",
+    "biometry:allow-authenticate",
     {
       "identifier": "biometry:allow-set-data",
       "allow": [{ "domain": "com.monark.app" }]

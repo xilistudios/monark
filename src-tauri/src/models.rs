@@ -39,22 +39,25 @@ pub struct EncryptedData {
 
 // Section 4: In-Memory Vault Structure (decrypted JSON content)
 
-// Vault itself doesn't need Zeroize derive; sensitive parts are handled within or are keys managed by AppState
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+// Vault contains decrypted sensitive data (entries with passwords). Derive Zeroize so the
+// in-memory representation is scrubbed when dropped.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "snake_case")]
 pub struct Vault {
+    #[zeroize(skip)]
     pub updated_at: DateTime<Utc>,
-    pub hmac: String, // hmac signature of the vault
+    pub hmac: String,
     // Group structure doesn't contain secrets directly, entries do.
     pub entries: Vec<Entry>,
 }
 
 // Section 4.1: Entry enum with Group/Data variants
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 #[serde(tag = "entry_type", rename_all = "snake_case")]
 pub enum Entry {
     Group {
+        #[zeroize(skip)]
         id: Uuid,
         name: String,
         data_type: String,
@@ -62,10 +65,13 @@ pub enum Entry {
     },
     #[serde(rename = "entry")]
     Data {
+        #[zeroize(skip)]
         id: Uuid,
         name: String,
         data_type: String,
+        #[zeroize(skip)]
         created_at: DateTime<Utc>,
+        #[zeroize(skip)]
         updated_at: DateTime<Utc>,
         fields: Vec<Field>,
         tags: Vec<String>,
@@ -129,8 +135,8 @@ impl From<Vault> for DecryptedVault {
     fn from(vault: Vault) -> Self {
         DecryptedVault {
             updated_at: vault.updated_at.to_rfc3339(),
-            hmac: vault.hmac,
-            entries: vault.entries,
+            hmac: vault.hmac.clone(),
+            entries: vault.entries.clone(),
         }
     }
 }

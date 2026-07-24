@@ -440,12 +440,19 @@
 			return param && param.trim().length > 0;
 		}
 
+		// XSS-safe HTML escaping
+		function escapeHtml(str) {
+			const div = document.createElement('div');
+			div.textContent = str;
+			return div.innerHTML;
+		}
+
 		function showError(title, message) {
 			contentEl.innerHTML = `
 				<div class="icon-large error">⚠️</div>
-				<h1>${title}</h1>
-				<p>${message}</p>
-				<div class="status error status-centered">${errorDescription || error || 'Unknown error'}</div>
+				<h1>${escapeHtml(title)}</h1>
+				<p>${escapeHtml(message)}</p>
+				<div class="status error status-centered">${escapeHtml(errorDescription || error || 'Unknown error')}</div>
 				<button class="button button-secondary" onclick="window.close()" aria-label="Close window">Close Window</button>
 			`;
 		}
@@ -504,7 +511,6 @@
 			// Build the deep link URL
 			const deepLink = `monark://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
 
-			console.log('Deep link:', deepLink);
 			updateStatus('Authentication successful');
 
 			// Try to open the deep link
@@ -542,11 +548,9 @@
 			}, DEEP_LINK_DELAY);
 		}
 
-		// Log for debugging
-		console.log('OAuth Redirect Handler');
-		console.log('Code:', code ? code.substring(0, 20) + '...' : 'missing');
-		console.log('State:', state);
-		console.log('Error:', error);
+			// Log for debugging (without leaking credentials)
+			console.log('OAuth Redirect Handler: authentication completed');
+			console.log('Error:', error);
 	</script>
 </body>
 

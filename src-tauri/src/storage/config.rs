@@ -1,6 +1,6 @@
 use super::providers::google_drive::GoogleDriveConfig;
 use super::providers::webdav::WebDavConfig;
-use super::{StorageProviderType, StorageResult};
+use super::{StorageError, StorageProviderType, StorageResult};
 use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,38 +8,44 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// Store sensitive fields of a GoogleDriveConfig in the keychain and return a sanitized copy.
+///
+/// Returns `Err` if any keychain write fails, ensuring secrets are never
+/// silently lost.
 fn store_and_strip_gd_secrets(
     provider_name: &str,
     config: &GoogleDriveConfig,
-) -> GoogleDriveConfig {
-    let mut sanitized = config.clone();
+) -> StorageResult<GoogleDriveConfig> {
+    let sanitized = config.clone();
     let key_prefix = format!("monark_secret::{}", provider_name);
     if !config.client_secret.is_empty() {
-        let _ = crate::storage::keychain::set_secret(
+        crate::storage::keychain::set_secret(
             &format!("{}::client_secret", key_prefix),
             &config.client_secret,
-        );
+        )
+        .map_err(StorageError::Keychain)?;
     }
     if let Some(ref token) = config.access_token {
-        let _ =
-            crate::storage::keychain::set_secret(&format!("{}::access_token", key_prefix), token);
+        crate::storage::keychain::set_secret(&format!("{}::access_token", key_prefix), token)
+            .map_err(StorageError::Keychain)?;
     }
     if let Some(ref token) = config.refresh_token {
-        let _ =
-            crate::storage::keychain::set_secret(&format!("{}::refresh_token", key_prefix), token);
+        crate::storage::keychain::set_secret(&format!("{}::refresh_token", key_prefix), token)
+            .map_err(StorageError::Keychain)?;
     }
     if let Some(expiry) = config.token_expires_at {
-        let _ = crate::storage::keychain::set_secret(
+        crate::storage::keychain::set_secret(
             &format!("{}::token_expires_at", key_prefix),
             &expiry.to_rfc3339(),
-        );
+        )
+        .map_err(StorageError::Keychain)?;
     }
-    // Clear secrets from the copy that will be written to disk
+    // All keychain writes succeeded — safe to strip secrets from the disk copy.
+    let mut sanitized = sanitized;
     sanitized.client_secret = String::new();
     sanitized.access_token = None;
     sanitized.refresh_token = None;
     sanitized.token_expires_at = None;
-    sanitized
+    Ok(sanitized)
 }
 
 /// Load sensitive fields from keychain and merge them into a GoogleDriveConfig.
@@ -72,17 +78,26 @@ fn load_gd_secrets(provider_name: &str, config: &mut GoogleDriveConfig) {
 }
 
 /// Store sensitive fields of a WebDavConfig in the keychain and return a sanitized copy.
-fn store_and_strip_webdav_secrets(provider_name: &str, config: &WebDavConfig) -> WebDavConfig {
-    let mut sanitized = config.clone();
+///
+/// Returns `Err` if any keychain write fails, ensuring secrets are never
+/// silently lost.
+fn store_and_strip_webdav_secrets(
+    provider_name: &str,
+    config: &WebDavConfig,
+) -> StorageResult<WebDavConfig> {
+    let sanitized = config.clone();
     let key_prefix = format!("monark_secret::{}", provider_name);
     if !config.password.is_empty() {
-        let _ = crate::storage::keychain::set_secret(
+        crate::storage::keychain::set_secret(
             &format!("{}::password", key_prefix),
             &config.password,
-        );
+        )
+        .map_err(StorageError::Keychain)?;
     }
+    // All keychain writes succeeded — safe to strip secrets from the disk copy.
+    let mut sanitized = sanitized;
     sanitized.password = String::new();
-    sanitized
+    Ok(sanitized)
 }
 
 /// Load sensitive fields from keychain and merge them into a WebDavConfig.
@@ -239,16 +254,16 @@ impl StorageConfig {
                 .map(|(k, v)| {
                     let sanitized = match v {
                         ProviderConfig::GoogleDrive { config } => ProviderConfig::GoogleDrive {
-                            config: store_and_strip_gd_secrets(k, config),
+                            config: store_and_strip_gd_secrets(k, config)?,
                         },
                         ProviderConfig::WebDav { config } => ProviderConfig::WebDav {
-                            config: store_and_strip_webdav_secrets(k, config),
+                            config: store_and_strip_webdav_secrets(k, config)?,
                         },
                         other => other.clone(),
                     };
-                    (k.clone(), sanitized)
+                    Ok((k.clone(), sanitized))
                 })
-                .collect(),
+                .collect::<Result<HashMap<_, _>, StorageError>>()?,
             default_provider: if self.default_provider == MONARK_DEFAULT_PROVIDER_NAME {
                 // If the built-in was the default, fall back to "local" or the
                 // first remaining provider.
@@ -362,16 +377,14 @@ impl StorageConfig {
     /// into the keychain and re-saves the sanitized config.
     ///
     /// Returns `Ok(true)` if migration happened, `Ok(false)` if no migration was needed.
-    pub fn migrate_secrets_from_disk() -> Result<bool, String> {
+    pub fn migrate_secrets_from_disk() -> StorageResult<bool> {
         let config_path = Self::config_file_path();
         if !config_path.exists() {
             return Ok(false);
         }
 
-        let config_str = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-        let config: StorageConfig = serde_json::from_str(&config_str)
-            .map_err(|e| format!("Failed to parse config: {}", e))?;
+        let config_str = std::fs::read_to_string(&config_path)?;
+        let config: StorageConfig = serde_json::from_str(&config_str)?;
 
         // Check if any Google Drive provider has secrets on disk
         let needs_migration = config.providers.iter().any(|(_, provider)| match provider {
@@ -397,24 +410,22 @@ impl StorageConfig {
                 .map(|(k, v)| {
                     let sanitized_provider = match v {
                         ProviderConfig::GoogleDrive { config } => ProviderConfig::GoogleDrive {
-                            config: store_and_strip_gd_secrets(k, config),
+                            config: store_and_strip_gd_secrets(k, config)?,
                         },
                         ProviderConfig::WebDav { config } => ProviderConfig::WebDav {
-                            config: store_and_strip_webdav_secrets(k, config),
+                            config: store_and_strip_webdav_secrets(k, config)?,
                         },
                         other => other.clone(),
                     };
-                    (k.clone(), sanitized_provider)
+                    Ok((k.clone(), sanitized_provider))
                 })
-                .collect(),
+                .collect::<Result<HashMap<_, _>, StorageError>>()?,
             default_provider: config.default_provider.clone(),
             vault_folder: config.vault_folder.clone(),
         };
 
-        let sanitized_str = serde_json::to_string_pretty(&sanitized)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        std::fs::write(&config_path, sanitized_str)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+        let sanitized_str = serde_json::to_string_pretty(&sanitized)?;
+        std::fs::write(&config_path, sanitized_str)?;
 
         Ok(true)
     }

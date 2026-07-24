@@ -36,28 +36,26 @@ pub enum CommandError {
 
 // Implement conversions from underlying errors
 impl From<IoError> for CommandError {
-    fn from(err: IoError) -> Self {
-        CommandError::Io(err.to_string())
+    fn from(_err: IoError) -> Self {
+        CommandError::Io("IO operation failed".to_string())
     }
 }
 
 impl From<CryptoError> for CommandError {
-    fn from(err: CryptoError) -> Self {
-        match err {
-            _ => CommandError::Crypto(err.to_string()),
-        }
+    fn from(_err: CryptoError) -> Self {
+        CommandError::Crypto("Cryptographic operation failed".to_string())
     }
 }
 
 impl From<serde_json::Error> for CommandError {
-    fn from(err: serde_json::Error) -> Self {
-        CommandError::Serialization(err.to_string())
+    fn from(_err: serde_json::Error) -> Self {
+        CommandError::Serialization("Serialization failed".to_string())
     }
 }
 
 impl From<DecodeError> for CommandError {
-    fn from(err: DecodeError) -> Self {
-        CommandError::Base64Decode(err.to_string())
+    fn from(_err: DecodeError) -> Self {
+        CommandError::Base64Decode("Base64 decode failed".to_string())
     }
 }
 
