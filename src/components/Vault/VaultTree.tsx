@@ -288,7 +288,7 @@ const VaultTree = ({
   onNavigate,
   onEntrySelect,
 }: VaultTreeProps) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('home');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{
     isOpen: boolean;

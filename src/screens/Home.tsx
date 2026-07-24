@@ -36,6 +36,7 @@ import { retrieveVaultPassword } from '../services/biometric';
 
 function HomeScreen() {
   const { t } = useTranslation('home');
+  const { t: tBiometric } = useTranslation('biometric');
   const dispatch = useDispatch<AppDispatch>();
   const vaults = useSelector((state: RootState) => state.vault.vaults);
   const currentVaultId = useSelector(
@@ -183,7 +184,7 @@ function HomeScreen() {
     try {
       const retrievedPassword = await retrieveVaultPassword(
         currentVault.id,
-        t('biometric.unlockReason').replace('{name}', currentVault.name),
+        tBiometric('unlockReason').replace('{name}', currentVault.name),
       );
 
       if (!retrievedPassword) {
