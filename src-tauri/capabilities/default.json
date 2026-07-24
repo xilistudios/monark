@@ -21,6 +21,7 @@
     "os:default",
     "http:default",
     "biometry:allow-authenticate",
+    "biometry:allow-status",
     {
       "identifier": "biometry:allow-set-data",
       "allow": [{ "domain": "com.monark.app" }]
