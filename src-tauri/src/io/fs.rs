@@ -16,10 +16,20 @@ pub fn read_file(path: &str) -> Result<String, error::IoError> {
     Ok(contents)
 }
 
-/// Writes the given content to a file, overwriting if it exists.
+/// Writes the given content to a file atomically, overwriting if it exists.
+/// Uses a temp file + rename to prevent partial writes. Sets 0600 on Unix.
 pub fn write_file(path: &str, content: &str) -> Result<(), error::IoError> {
-    let mut file = File::create(path).map_err(error::IoError::WriteError)?;
+    let path_ref = std::path::Path::new(path);
+    let tmp_path = path_ref.with_extension("monark.tmp");
+    let mut file = File::create(&tmp_path).map_err(error::IoError::WriteError)?;
     file.write_all(content.as_bytes())
         .map_err(error::IoError::WriteError)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600))
+            .map_err(error::IoError::WriteError)?;
+    }
+    std::fs::rename(&tmp_path, path_ref).map_err(error::IoError::WriteError)?;
     Ok(())
 }

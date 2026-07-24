@@ -15,6 +15,7 @@ export const store = configureStore({
 		vault,
 		preferences,
 	},
+	devTools: false,
 });
 
 // Initialize VaultManager with store context

@@ -8,7 +8,7 @@ import { EntryBasicInfo } from './EntryBasicInfo';
 import { EntryFieldsSection } from './EntryFieldsSection';
 import { EntryTagsSection } from './EntryTagsSection';
 import { CopyToast } from './CopyToast';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { copySensitive } from '../../utils/clipboard';
 
 interface EntryDetailsSidebarProps {
   entry: DataEntry | GroupEntry | null;
@@ -87,7 +87,7 @@ export function EntryDetailsSidebar({
 
   const handleCopy = async (value: string, fieldName?: string) => {
     try {
-      await writeText(value);
+      await copySensitive(value);
       setCopyToastFieldName(fieldName || '');
       setCopyToastIsError(false);
       setCopyToastVisible(true);

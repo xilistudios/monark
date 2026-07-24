@@ -650,11 +650,7 @@ export class CloudStorageCommands {
 		state: string,
 	): Promise<void> {
 		try {
-			console.log("Calling handle_google_drive_oauth_callback with:", {
-				providerName,
-				code,
-				state,
-			});
+			console.log("Calling handle_google_drive_oauth_callback for provider:", providerName);
 			await invoke("handle_google_drive_oauth_callback", {
 				request: {
 					provider_name: providerName,

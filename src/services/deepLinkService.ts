@@ -64,7 +64,7 @@ class DeepLinkService {
 		console.log("[DeepLinkService] Setting up Tauri onOpenUrl listener");
 
 		onOpenUrl((urls) => {
-			console.log("[DeepLinkService] Deep link URLs received:", urls);
+			console.log("[DeepLinkService] Deep link URLs received");
 			console.log("[DeepLinkService] Number of URLs:", urls.length);
 
 			if (urls.length > 0) {
@@ -94,18 +94,12 @@ class DeepLinkService {
 		console.log("[DeepLinkService] Setting up single-instance args listener");
 
 		listen<string[]>("single-instance-args", (event) => {
-			console.log(
-				"[DeepLinkService] Single instance args received:",
-				event.payload,
-			);
+			console.log("[DeepLinkService] Single instance args received");
 
 			const args = event.payload;
 			for (const arg of args) {
 				if (arg.startsWith("monark://")) {
-					console.log(
-						"[DeepLinkService] Deep link found in single-instance args:",
-						arg,
-					);
+					console.log("[DeepLinkService] Deep link found in single-instance args");
 					this.handleDeepLink(arg);
 					return;
 				}
@@ -138,7 +132,16 @@ class DeepLinkService {
 		);
 
 		this.handleMessage = (event: MessageEvent) => {
-			console.log("[DeepLinkService] Window message received:", event.data);
+			// Only accept messages from the same origin to prevent cross-origin attacks
+			if (event.origin !== window.location.origin) {
+				console.warn(
+					"[DeepLinkService] Ignoring message from untrusted origin:",
+					event.origin,
+				);
+				return;
+			}
+
+			console.log("[DeepLinkService] Window message received");
 
 			if (event.data?.type === "oauth_callback") {
 				console.log("[DeepLinkService] OAuth callback message detected");
@@ -159,8 +162,8 @@ class DeepLinkService {
 	 * @param url - The deep link URL to process
 	 */
 	private async handleDeepLink(url: string): Promise<void> {
-		console.log("[DeepLinkService] Processing deep link:", url);
-		console.log("[DeepLinkService] URL length:", url.length);
+		console.log("[DeepLinkService] Processing deep link");
+		
 
 		if (!this.dispatch || !this.getState) {
 			console.error(
@@ -178,14 +181,8 @@ class DeepLinkService {
 			const error = urlObj.searchParams.get("error");
 
 			console.log("[DeepLinkService] URL parameters parsed:");
-			console.log(
-				"[DeepLinkService]   - code:",
-				code ? `${code.substring(0, 20)}...` : "null",
-			);
-			console.log(
-				"[DeepLinkService]   - state:",
-				state ? `${state.substring(0, 20)}...` : "null",
-			);
+			console.log("[DeepLinkService]   - code:", code ? "[REDACTED]" : "null");
+			console.log("[DeepLinkService]   - state:", state ? "[REDACTED]" : "null");
 			console.log("[DeepLinkService]   - error:", error);
 
 			// Check for OAuth error
@@ -200,14 +197,8 @@ class DeepLinkService {
 			const oauthState = currentState.vault.oauthState;
 
 			console.log("[DeepLinkService] Current OAuth state from Redux:");
-			console.log(
-				"[DeepLinkService]   - providerName:",
-				oauthState.providerName,
-			);
-			console.log(
-				"[DeepLinkService]   - state:",
-				oauthState.state ? `${oauthState.state.substring(0, 20)}...` : "null",
-			);
+			console.log("[DeepLinkService]   - providerName:", oauthState.providerName);
+			console.log("[DeepLinkService]   - state:", oauthState.state ? "[REDACTED]" : "null");
 			console.log("[DeepLinkService]   - isOpen:", oauthState.isOpen);
 
 			// Validate state parameter
@@ -227,8 +218,6 @@ class DeepLinkService {
 
 			if (state !== oauthState.state) {
 				console.error("[DeepLinkService] State mismatch!");
-				console.error("[DeepLinkService]   Expected:", oauthState.state);
-				console.error("[DeepLinkService]   Received:", state);
 				this.handleOAuthError("State mismatch - possible CSRF attack");
 				return;
 			}
@@ -269,18 +258,7 @@ class DeepLinkService {
 			this.dispatch(clearOAuthState());
 			console.log("[DeepLinkService] OAuth state cleared");
 		} catch (error) {
-			console.error(
-				"[DeepLinkService] Failed to handle OAuth callback:",
-				error,
-			);
-			console.error(
-				"[DeepLinkService] Error details:",
-				JSON.stringify(error, null, 2),
-			);
-			console.error(
-				"[DeepLinkService] Error message:",
-				error instanceof Error ? error.message : String(error),
-			);
+			console.error("[DeepLinkService] Failed to handle OAuth callback:", error instanceof Error ? error.message : "Unknown error");
 			this.handleOAuthError(
 				error instanceof Error
 					? error.message

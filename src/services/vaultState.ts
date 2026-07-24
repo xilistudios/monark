@@ -48,7 +48,7 @@ const mapVaultToPersisted = (vault: Vault): PersistedVault => ({
   providerId: vault.providerId,
   cloudMetadata: vault.cloudMetadata,
   volatile: {
-    credential: vault.volatile?.credential ?? '',
+    credential: '',
     entries: vault.volatile?.entries ?? [],
     navigationPath: vault.volatile?.navigationPath,
     encryptedData: vault.volatile?.encryptedData,

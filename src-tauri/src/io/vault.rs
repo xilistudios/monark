@@ -6,7 +6,7 @@ use base64::Engine;
 pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
     // 1. Read the vault file
     let signed_content = io::fs::read_file(&file_path)
-        .map_err(|e| CommandError::Io(format!("Failed to read vault file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
 
     // 2. Validate the signature first
     // The signature is appended to the content, so we pass the entire file content to the validation function.
@@ -20,13 +20,11 @@ pub fn read_vault(file_path: String) -> Result<VaultFile, CommandError> {
     // 4. Base64 decode the content
     let decoded_content = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(&parsed_content.content)
-        .map_err(|e| {
-            CommandError::Crypto(format!("Failed to base64 decode vault content: {}", e))
-        })?;
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault content".to_string()))?;
 
     // 5. Deserialize into VaultFile
     let vault_file: VaultFile = serde_json::from_slice(&decoded_content)
-        .map_err(|e| CommandError::Io(format!("Failed to deserialize vault file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to deserialize vault file".to_string()))?;
 
     // 6. Return the VaultFile
     Ok(vault_file)
@@ -39,12 +37,12 @@ pub fn write_vault(file_path: String, vault_file: &VaultFile) -> Result<(), Comm
     let path = Path::new(&file_path);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
-            .map_err(|e| CommandError::Io(format!("Failed to create parent directories: {}", e)))?;
+            .map_err(|_e| CommandError::Io("Failed to create parent directories".to_string()))?;
     }
 
     let signed_vault = io::signature::sign_vault(&vault_file);
     io::fs::write_file(&file_path, &signed_vault)
-        .map_err(|e| CommandError::Io(format!("Failed to write vault file: {}", e)))?;
+        .map_err(|_e| CommandError::Io("Failed to write vault file".to_string()))?;
 
     Ok(())
 }

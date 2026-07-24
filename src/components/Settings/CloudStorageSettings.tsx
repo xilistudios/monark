@@ -93,20 +93,7 @@ export const CloudStorageSettings = () => {
 				);
 			}
 		} catch (error) {
-			console.error("[CloudStorageSettings] Authentication failed:", error);
-			console.error(
-				"[CloudStorageSettings] Error details:",
-				JSON.stringify(error, null, 2),
-			);
-			console.error(
-				"[CloudStorageSettings] Error message:",
-				error instanceof Error ? error.message : String(error),
-			);
-			console.error(
-				"[CloudStorageSettings] Error keys:",
-				error ? Object.keys(error as any) : "null",
-			);
-			console.error("[CloudStorageSettings] Error type:", typeof error);
+			console.error("[CloudStorageSettings] Authentication failed:", error instanceof Error ? error.message : "Unknown error");
 			dispatch(
 				setProviderStatus({ providerId: provider.name, status: "error" }),
 			);

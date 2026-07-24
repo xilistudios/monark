@@ -48,7 +48,7 @@ fn get_http_client() -> &'static reqwest::Client {
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GoogleDriveConfig {
     pub client_id: String,
     pub client_secret: String,
@@ -56,6 +56,25 @@ pub struct GoogleDriveConfig {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub token_expires_at: Option<DateTime<Utc>>,
+}
+
+impl std::fmt::Debug for GoogleDriveConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GoogleDriveConfig")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"[REDACTED]")
+            .field("redirect_uri", &self.redirect_uri)
+            .field(
+                "access_token",
+                &self.access_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("token_expires_at", &self.token_expires_at)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -804,7 +823,9 @@ impl StorageProvider for GoogleDriveProvider {
 
         // Use exact name match with "name = 'query'" for more precise results
         // This prevents returning "vaults_backup" when searching for "vaults"
-        let search_query = format!("name = '{}' and trashed=false", query);
+        // M2: Escape single quotes to prevent query injection
+        let escaped_query = query.replace('\'', "''");
+        let search_query = format!("name = '{}' and trashed=false", escaped_query);
 
         let client = get_http_client();
         let response = client

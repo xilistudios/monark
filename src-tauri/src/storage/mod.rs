@@ -21,7 +21,7 @@ pub use token_store::{set_token_store_path, TokenStore};
 use std::sync::Arc;
 
 /// Initialize the storage manager with default configuration
-pub async fn init_storage_manager() -> Arc<StorageManager> {
+pub async fn init_storage_manager() -> StorageResult<Arc<StorageManager>> {
     // One-time migration: move any plaintext secrets from disk files to OS keychain
     if let Err(e) = crate::storage::TokenStore::migrate_from_disk() {
         println!("[Storage] Warning: token store migration failed: {}", e);
@@ -134,9 +134,5 @@ pub async fn init_storage_manager() -> Arc<StorageManager> {
         }
     }
 
-    Arc::new(
-        StorageManager::new(config)
-            .await
-            .expect("Failed to initialize storage manager"),
-    )
+    Ok(Arc::new(StorageManager::new(config).await?))
 }

@@ -13,6 +13,7 @@ import { parseCSV } from '../../../utils/csv';
 import type { ParsedEntry } from '../../../interfaces/parsers.interface';
 import { useContext } from 'react';
 import { VaultModalContext } from '../VaultContext';
+import { validateImportedEntries } from '../../../utils/validation/importValidation';
 
 /**
  * ImportCsvModal component for importing CSV vault data with manual format selection.
@@ -186,17 +187,27 @@ export const ImportCsvModal = () => {
           }));
       }
 
-      console.log('groups', groups);
-      console.log('entries', entries);
+      // Validate & sanitise imported entries before writing to vault
+      const validEntryData = validateImportedEntries(entries.map((e) => e.entry));
+      const skippedCount = entries.length - validEntryData.length;
+      if (skippedCount > 0) {
+        console.warn(
+          `[ImportCsv] ${skippedCount} invalid entr${skippedCount === 1 ? 'y was' : 'ies were'} skipped during import`,
+        );
+      }
+      // Re-map validated entries back to the path-based format
+      const validEntries = entries
+        .filter((e) => validEntryData.includes(e.entry))
+        .map((e, i) => ({ ...e, entry: validEntryData[i] }));
 
       // First, create all groups in bulk
       if (groups.length > 0) {
         await vaultInstance.addEntries(groups);
       }
 
-      // Then, create all entries in bulk
-      if (entries.length > 0) {
-        await vaultInstance.addEntries(entries);
+      // Then, create all validated entries in bulk
+      if (validEntries.length > 0) {
+        await vaultInstance.addEntries(validEntries);
       }
 
       // Reset state

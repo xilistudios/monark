@@ -1,4 +1,4 @@
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { copySensitive } from '../../../utils/clipboard';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -65,7 +65,7 @@ export const EntryDetailsModal: React.FC = () => {
   const handleCopy = async (value: string): Promise<void> => {
     setCopyError(null);
     try {
-      await writeText(value);
+      await copySensitive(value);
       // For feedback, using alert as placeholder; replace with toast if available
       alert(t('vault.manager.copied'));
     } catch (error) {

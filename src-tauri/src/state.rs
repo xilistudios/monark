@@ -8,6 +8,7 @@ use std::sync::{Arc, OnceLock};
 use tauri::State;
 use tokio::fs;
 use tokio::sync::RwLock;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -70,7 +71,7 @@ impl Default for VaultSummary {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultVolatile {
     #[serde(default)]
@@ -78,8 +79,10 @@ pub struct VaultVolatile {
     #[serde(default)]
     pub entries: Vec<Entry>,
     #[serde(default)]
+    #[zeroize(skip)]
     pub navigation_path: Option<String>,
     #[serde(default)]
+    #[zeroize(skip)]
     pub encrypted_data: Option<String>,
 }
 
@@ -237,7 +240,10 @@ impl VaultStateManager {
         volatile: &HashMap<String, VaultVolatile>,
     ) -> VaultStateData {
         for summary in &mut state.vaults {
-            summary.volatile = volatile.get(&summary.id).cloned();
+            if let Some(mut vol) = volatile.get(&summary.id).cloned() {
+                vol.credential = String::new(); // Never expose credential via IPC
+                summary.volatile = Some(vol);
+            }
         }
 
         state
@@ -260,5 +266,5 @@ pub async fn save_vault_state(
         .manager
         .set(new_state)
         .await
-        .map_err(|err| CommandError::State(format!("Failed to persist vault state: {}", err)))
+        .map_err(|_err| CommandError::State("Failed to persist vault state".to_string()))
 }

@@ -121,6 +121,18 @@ fn parse_otpauth_uri(uri: &str) -> Result<OtpParams, CryptoError> {
         .and_then(|(_, v)| v.parse::<u32>().ok())
         .unwrap_or(30);
 
+    // Validate ranges (RFC 6238 / RFC 4226)
+    if digits < 6 || digits > 8 {
+        return Err(CryptoError::Totp(
+            "TOTP digits must be between 6 and 8".to_string(),
+        ));
+    }
+    if period == 0 {
+        return Err(CryptoError::Totp(
+            "TOTP period must be greater than 0".to_string(),
+        ));
+    }
+
     Ok(OtpParams {
         secret,
         algorithm,

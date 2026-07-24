@@ -40,7 +40,6 @@ export default class VaultCommands {
       entries: any[];
     }
   ) {
-    console.log('Writing vault content:', vaultContent, filePath, password);
     return await invoke('write_vault', { filePath, password, vaultContent });
   }
 

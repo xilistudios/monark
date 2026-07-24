@@ -69,8 +69,6 @@ export class ButtercupParser implements ICsvParser {
         id: crypto.randomUUID(),
       });
     }
-    console.log(entries);
-
     return entries;
   }
 
