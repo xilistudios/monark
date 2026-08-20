@@ -207,6 +207,26 @@ impl WebDavProvider {
         )
     }
 
+    /// Check whether an absolute href points to the same host and scheme as
+    /// the configured server URL.
+    ///
+    /// Returns false for hrefs that fail to parse, point to a different host,
+    /// or use a downgraded scheme (e.g. http against an https server). This
+    /// prevents a malicious/compromised server from making us send the user's
+    /// credentials to an attacker-controlled host.
+    fn is_same_host(&self, absolute_href: &str) -> bool {
+        match (
+            url::Url::parse(absolute_href),
+            url::Url::parse(&self.config.server_url),
+        ) {
+            (Ok(href_url), Ok(server_url)) => {
+                href_url.scheme() == server_url.scheme()
+                    && href_url.host_str() == server_url.host_str()
+            }
+            _ => false,
+        }
+    }
+
     /// Resolve a relative file_id to the full WebDAV URL.
     ///
     /// If `base_path` is set, it is prepended between `server_url` and `file_id`.
@@ -483,6 +503,16 @@ impl WebDavProvider {
                     .any(|ps| ps.prop.resourcetype.collection.is_some())
                 {
                     let sub_url = if href.starts_with("http") {
+                        // Absolute href supplied by the server. Guard against a
+                        // malicious/compromised server redirecting our credentials
+                        // to a different host or downgraded scheme.
+                        if !self.is_same_host(&href) {
+                            println!(
+                                "[WebDAV] Skipping href with mismatched host: {}",
+                                href
+                            );
+                            continue;
+                        }
                         href.clone()
                     } else {
                         // Build full URL from href
@@ -1067,5 +1097,58 @@ mod tests {
             provider.extract_relative_path("/remote.php/dav/files/user/Monark/subdir/file.txt"),
             "subdir/file.txt"
         );
+    }
+
+    #[test]
+    fn test_is_same_host_same_host_https() {
+        let provider = WebDavProvider::new(WebDavConfig {
+            server_url: "https://cloud.example.com/webdav".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_path: String::new(),
+        });
+
+        assert!(provider.is_same_host("https://cloud.example.com/other/path"));
+        assert!(provider.is_same_host("https://cloud.example.com"));
+    }
+
+    #[test]
+    fn test_is_same_host_different_host() {
+        let provider = WebDavProvider::new(WebDavConfig {
+            server_url: "https://cloud.example.com/webdav".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_path: String::new(),
+        });
+
+        assert!(!provider.is_same_host("https://evil.com/webdav"));
+        assert!(!provider.is_same_host("https://cloud.example.com.evil.com/webdav"));
+    }
+
+    #[test]
+    fn test_is_same_host_scheme_downgrade() {
+        let provider = WebDavProvider::new(WebDavConfig {
+            server_url: "https://cloud.example.com/webdav".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_path: String::new(),
+        });
+
+        // http href against https server_url must be rejected
+        assert!(!provider.is_same_host("http://cloud.example.com/webdav"));
+    }
+
+    #[test]
+    fn test_is_same_host_unparseable_href() {
+        let provider = WebDavProvider::new(WebDavConfig {
+            server_url: "https://cloud.example.com/webdav".to_string(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_path: String::new(),
+        });
+
+        assert!(!provider.is_same_host("not a url"));
+        assert!(!provider.is_same_host(""));
+        assert!(!provider.is_same_host("/just/a/path"));
     }
 }

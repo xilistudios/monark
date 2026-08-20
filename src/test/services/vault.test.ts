@@ -694,7 +694,7 @@ describe("VaultManager", () => {
 					}),
 				),
 			);
-			expect(vaultId).toMatch(/^vault_\d+_[a-z0-9]+$/);
+			expect(vaultId).toMatch(/^vault_[0-9a-f-]{36}$/);
 		});
 
 		it("should create local vault successfully", async () => {
@@ -814,7 +814,7 @@ describe("VaultManager", () => {
 					"provider_123",
 				);
 
-				expect(vaultId).toMatch(/^vault_\d+_[a-z0-9]+$/);
+				expect(vaultId).toMatch(/^vault_[0-9a-f-]{36}$/);
 				expect(mockDispatch).toHaveBeenCalledWith(
 					vaultActions.addVault(
 						expect.objectContaining({
@@ -1001,7 +1001,7 @@ describe("VaultManager", () => {
 					"google-drive",
 				);
 
-				expect(cloudVaultId).toMatch(/^vault_\d+_[a-z0-9]+$/);
+				expect(cloudVaultId).toMatch(/^vault_[0-9a-f-]{36}$/);
 				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledWith({
 					vaultName: "Migrated Vault",
 					password: "test-password",

@@ -14,6 +14,9 @@ const VAULT_EXTENSION: &str = "monark";
 const ARGON2_MEMORY_COST_KIB: u32 = 65536;
 const ARGON2_ITERATIONS: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 4;
+const ARGON2_MAX_MEMORY_COST_KIB: u32 = 262144; // 256 MiB upper bound (DoS prevention)
+const ARGON2_MAX_ITERATIONS: u32 = 10;
+const ARGON2_MAX_PARALLELISM: u32 = 16;
 
 /// Validates that a file path has the .monark extension and resolves it to a canonical path
 /// to prevent path traversal attacks (e.g., via `..` components).
@@ -74,9 +77,19 @@ pub fn write_vault(
 pub fn read_vault(file_path: String, password: String) -> Result<Vault, CommandError> {
     let canonical_path = validate_vault_path(&file_path)?;
     let canonical_str = canonical_path.to_string_lossy().to_string();
-    let vault_file = io::vault::read_vault(canonical_str)?;
+    crate::vault::rate_limit::check_attempts(&canonical_str)?;
+    let vault_file = io::vault::read_vault(canonical_str.clone())?;
 
-    let master_key = derive_and_decrypt_master_key(&password, &vault_file)?;
+    let master_key = match derive_and_decrypt_master_key(&password, &vault_file) {
+        Ok(key) => {
+            crate::vault::rate_limit::reset_attempts(&canonical_str);
+            key
+        }
+        Err(err) => {
+            crate::vault::rate_limit::record_failure(&canonical_str);
+            return Err(err);
+        }
+    };
 
     let vault_nonce = URL_SAFE_NO_PAD
         .decode(&vault_file.vault.nonce)
@@ -169,9 +182,19 @@ fn update_existing_vault(
     password: &str,
     mut new_vault_content: Vault,
 ) -> Result<(), CommandError> {
+    crate::vault::rate_limit::check_attempts(file_path)?;
     let mut vault_file = io::vault::read_vault(file_path.to_string())?;
 
-    let master_key = derive_and_decrypt_master_key(password, &vault_file)?;
+    let master_key = match derive_and_decrypt_master_key(password, &vault_file) {
+        Ok(key) => {
+            crate::vault::rate_limit::reset_attempts(file_path);
+            key
+        }
+        Err(err) => {
+            crate::vault::rate_limit::record_failure(file_path);
+            return Err(err);
+        }
+    };
 
     new_vault_content.updated_at = Utc::now();
     let vault_json_bytes = serde_json::to_vec(&new_vault_content)?;
@@ -199,6 +222,21 @@ fn validate_argon2_params(params: &Argon2Params) -> Result<(), CommandError> {
     if params.parallelism < 1 {
         return Err(CommandError::Crypto(
             "Argon2 parameters below security minimum (possible downgrade attack)".to_string(),
+        ));
+    }
+    if params.memory_cost_kib > ARGON2_MAX_MEMORY_COST_KIB {
+        return Err(CommandError::Crypto(
+            "Argon2 memory cost above security maximum (possible DoS)".to_string(),
+        ));
+    }
+    if params.iterations > ARGON2_MAX_ITERATIONS {
+        return Err(CommandError::Crypto(
+            "Argon2 iterations above security maximum (possible DoS)".to_string(),
+        ));
+    }
+    if params.parallelism > ARGON2_MAX_PARALLELISM {
+        return Err(CommandError::Crypto(
+            "Argon2 parallelism above security maximum (possible DoS)".to_string(),
         ));
     }
     Ok(())
@@ -237,4 +275,53 @@ fn derive_and_decrypt_master_key(
     master_key_vec
         .try_into()
         .map_err(|_| CommandError::Crypto("Invalid decrypted master key length".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Argon2Params;
+
+    fn params(memory_cost_kib: u32, iterations: u32, parallelism: u32) -> Argon2Params {
+        Argon2Params {
+            salt: "c2FsdA".to_string(),
+            memory_cost_kib,
+            iterations,
+            parallelism,
+        }
+    }
+
+    #[test]
+    fn validate_argon2_params_accepts_defaults() {
+        let p = params(ARGON2_MEMORY_COST_KIB, ARGON2_ITERATIONS, ARGON2_PARALLELISM);
+        assert!(validate_argon2_params(&p).is_ok());
+    }
+
+    #[test]
+    fn validate_argon2_params_rejects_excessive_memory_cost() {
+        let p = params(ARGON2_MAX_MEMORY_COST_KIB + 1, ARGON2_ITERATIONS, ARGON2_PARALLELISM);
+        assert!(validate_argon2_params(&p).is_err());
+    }
+
+    #[test]
+    fn validate_argon2_params_rejects_excessive_iterations() {
+        let p = params(ARGON2_MEMORY_COST_KIB, ARGON2_MAX_ITERATIONS + 1, ARGON2_PARALLELISM);
+        assert!(validate_argon2_params(&p).is_err());
+    }
+
+    #[test]
+    fn validate_argon2_params_rejects_excessive_parallelism() {
+        let p = params(
+            ARGON2_MEMORY_COST_KIB,
+            ARGON2_ITERATIONS,
+            ARGON2_MAX_PARALLELISM + 1,
+        );
+        assert!(validate_argon2_params(&p).is_err());
+    }
+
+    #[test]
+    fn validate_argon2_params_rejects_below_minimum_memory_cost() {
+        let p = params(1024, ARGON2_ITERATIONS, ARGON2_PARALLELISM);
+        assert!(validate_argon2_params(&p).is_err());
+    }
 }
