@@ -144,6 +144,26 @@ No Developer ID: Gatekeeper blocks the app and there is no integrity verificatio
 
 ---
 
+## 🔧 Remediation Status (2026-08-20)
+
+| # | Item | Status | Commit |
+|---|---|---|---|
+| 1 | Remove `http:default` + `remote.urls` | ✅ DONE | `8e55fb9` |
+| 2 | WebDAV credential leak (`is_same_host` guard) | ✅ DONE (4 new tests) | `ff7e833` |
+| 3 | npm CVEs (`bun update` + overrides) | ✅ DONE — 44 → 2 vulns (both low, dev-only, pending upstream) | `b59a82f` |
+| 4a | Argon2 upper bounds (256 MiB / 10 iter / 16 par) | ✅ DONE (5 new tests) | `5a5cb11` |
+| 4b | Progressive rate limiting (3 free attempts, exp backoff capped 60 s) | ✅ DONE (new `vault::rate_limit` module, 5 new tests) | `5a5cb11` |
+| M5 | `crypto.randomUUID()` for vault IDs | ✅ DONE | `b858d27` |
+| 5 | hmac/signature cleanup | ⏳ pending | — |
+| 6 | macOS signing, reqwest 0.12, cargo-audit in CI | ⏳ pending | — |
+| M1–M4, M6–M8 | remaining MEDIUM items | ⏳ pending | — |
+
+**Validation:** full `cargo check` + `cargo test` run inside an Ubuntu 22.04 container with Tauri Linux deps (host lacks GTK dev libs + no sudo). Result: compiles clean; all new tests pass (rate_limit 5/5, argon2 6/6, webdav 11/11). The only 5 failures are pre-existing keychain tests requiring a dbus secret-service (environmental, unrelated). Frontend: `bun run build` clean, 251/251 tests pass (3 test *files* fail collection due to a pre-existing localStorage/jsdom issue, unchanged by this work).
+
+Branch: `fix/security-audit-2026-08-19` (6 commits, NOT pushed).
+
+---
+
 ## Overall Verdict
 
 The cryptography and secret handling are well above average — the zero-knowledge design is real and correctly implemented. The real risks live at the **edges**: unscoped network permissions, vulnerable dependencies, the WebDAV provider, and distribution (code signing). Items 1–3 are less than a day of work.
