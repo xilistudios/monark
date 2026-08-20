@@ -1241,7 +1241,7 @@ export class VaultManager {
 		}
 
 		try {
-			const vaultId = `vault_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			const vaultId = `vault_${crypto.randomUUID()}`;
 			let vaultPath: string;
 			let cloudMetadata: Vault["cloudMetadata"] | undefined;
 

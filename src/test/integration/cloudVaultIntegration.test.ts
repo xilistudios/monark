@@ -314,7 +314,7 @@ describe('Cloud Vault Integration', () => {
       });
 
       // Verify vault ID was returned
-      expect(vaultId).toMatch(/^vault_\d+_[a-z0-9]+$/);
+      expect(vaultId).toMatch(/^vault_[0-9a-f-]{36}$/);
     });
 
     it('should verify Redux state is updated correctly after vault creation', async () => {
