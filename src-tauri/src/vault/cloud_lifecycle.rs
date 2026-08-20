@@ -259,7 +259,17 @@ pub async fn read_cloud_vault(
 
     let vault_file = parse_vault_from_bytes(&vault_data)?;
 
-    let master_key = derive_and_decrypt_master_key(&password, &vault_file)?;
+    crate::vault::rate_limit::check_attempts(&vault_id)?;
+    let master_key = match derive_and_decrypt_master_key(&password, &vault_file) {
+        Ok(key) => {
+            crate::vault::rate_limit::reset_attempts(&vault_id);
+            key
+        }
+        Err(err) => {
+            crate::vault::rate_limit::record_failure(&vault_id);
+            return Err(err);
+        }
+    };
 
     let vault_nonce = URL_SAFE_NO_PAD
         .decode(&vault_file.vault.nonce)
@@ -325,7 +335,17 @@ pub async fn change_cloud_vault_password(
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
 
     // Decrypt the master key with the OLD password
-    let master_key = derive_and_decrypt_master_key(&old_password, &vault_file)?;
+    crate::vault::rate_limit::check_attempts(&vault_id)?;
+    let master_key = match derive_and_decrypt_master_key(&old_password, &vault_file) {
+        Ok(key) => {
+            crate::vault::rate_limit::reset_attempts(&vault_id);
+            key
+        }
+        Err(err) => {
+            crate::vault::rate_limit::record_failure(&vault_id);
+            return Err(err);
+        }
+    };
 
     // Generate new salt and derive new key with NEW password
     let user_salt = crypto::random::generate_salt()?;
