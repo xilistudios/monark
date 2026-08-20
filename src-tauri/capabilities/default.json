@@ -19,7 +19,6 @@
     "updater:allow-download-and-install",
     "fs:allow-app-read",
     "os:default",
-    "http:default",
     "biometry:allow-authenticate",
     "biometry:allow-status",
     {
@@ -38,12 +37,5 @@
       "identifier": "biometry:allow-has-data",
       "allow": [{ "domain": "com.monark.app" }]
     }
-  ],
-  "remote": {
-    "urls": [
-      "https://www.googleapis.com/*",
-      "https://oauth2.googleapis.com/*",
-      "https://*.googleapis.com/*"
-    ]
-  }
+  ]
 }
