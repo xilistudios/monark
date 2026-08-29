@@ -764,11 +764,33 @@ describe("VaultManager", () => {
 			expect(instance).toBeUndefined();
 		});
 
-		it("should return undefined for cloud vault missing metadata", () => {
+		it("should return an instance for cloud vault with providerId but without cloudMetadata", () => {
 			const cloudVault: Vault = {
-				id: "cloud-vault",
+				id: "cloud-vault-no-metadata",
 				name: "Cloud",
-				path: "cloud",
+				path: "cloud-file-id",
+				storageType: "cloud",
+				providerId: "google-drive",
+				isLocked: true,
+				volatile: {
+					entries: [],
+					credential: "",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [cloudVault];
+			mockGetState.mockReturnValue(mockState);
+
+			const instance = vaultManager.getInstance("cloud-vault-no-metadata");
+			expect(instance).toBeDefined();
+		});
+
+		it("should return undefined for cloud vault missing provider information", () => {
+			const cloudVault: Vault = {
+				id: "cloud-vault-no-provider",
+				name: "Cloud",
+				path: "cloud-file-id",
 				storageType: "cloud",
 				isLocked: true,
 				volatile: {
@@ -781,7 +803,7 @@ describe("VaultManager", () => {
 			mockState.vault.vaults = [cloudVault];
 			mockGetState.mockReturnValue(mockState);
 
-			const instance = vaultManager.getInstance("cloud-vault");
+			const instance = vaultManager.getInstance("cloud-vault-no-provider");
 			expect(instance).toBeUndefined();
 		});
 
@@ -859,6 +881,60 @@ describe("VaultManager", () => {
 				);
 
 				await expect(vaultInstance!.unlock("wrong-password")).rejects.toThrow();
+			});
+
+			it("should not write cloud vault content to local storage when providerId is missing", async () => {
+				// Cloud vault without providerId: _saveVault must throw instead of
+				// silently writing cloud content to a local file
+				const cloudVault = {
+					id: "cloud-vault-missing-provider",
+					name: "Cloud Missing Provider",
+					path: "cloud-file-id",
+					storageType: "cloud" as const,
+					providerId: undefined,
+					isLocked: false,
+					volatile: {
+						entries: [
+							{
+								id: "entry-1",
+								entry_type: "entry" as const,
+								name: "Test Entry",
+								data_type: "note",
+								created_at: new Date().toISOString(),
+								updated_at: new Date().toISOString(),
+								fields: [],
+								tags: [],
+							},
+						],
+						credential: "test-password",
+						navigationPath: "/",
+						encryptedData: undefined,
+					},
+				};
+
+				mockState.vault.vaults = [cloudVault];
+				mockGetState.mockReturnValue(mockState);
+
+				// getInstance() correctly refuses to hand out instances for
+				// provider-less cloud vaults, so build the instance directly to
+				// exercise the _saveVault guard
+				const vaultInstance = new VaultInstance(
+					cloudVault,
+					mockDispatch,
+					mockGetState,
+				);
+
+				const updates: Partial<Entry> = { name: "Updated Entry" };
+
+				await expect(
+					vaultInstance.updateEntry(["entry-1"], updates),
+				).rejects.toThrow(/provider/i);
+
+				// The cloud content must never reach the local write path
+				expect(VaultCommands.write).not.toHaveBeenCalled();
+				expect(
+					CloudStorageCommands.writeCloudVault,
+				).not.toHaveBeenCalled();
 			});
 
 			it("should handle cloud vault sync with network errors", async () => {
