@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { check, type DownloadEvent } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
+import { invoke } from '@tauri-apps/api/core';
+import type { UpdateContext, SystemUpdateResult } from '../../types/updater.types';
 
 function UpdateSection() {
 	const { t } = useTranslation('settings');
@@ -17,18 +19,56 @@ function UpdateSection() {
 	const [updateError, setUpdateError] = useState('');
 	const [appVersion, setAppVersion] = useState<string | null>(null);
 	const [versionLoading, setVersionLoading] = useState(true);
+	const [updateContext, setUpdateContext] = useState<UpdateContext | null>(null);
+	const [contextLoading, setContextLoading] = useState(true);
+
+	// On Linux non-AppImage installs, updates are handled by the backend:
+	// system package manager via pkexec, or binary-replacement fallback when
+	// no dpkg/rpm is available.
+	const useSystemInstall =
+		!!updateContext &&
+		updateContext.os === 'linux' &&
+		!updateContext.isAppimage;
 
 	const checkForUpdates = async () => {
 		setIsChecking(true);
 		setUpdateMessage('');
 		setUpdateError('');
 
+		if (useSystemInstall) {
+			try {
+				// pkexec path may prompt for administrator permission; the
+				// binary-replacement fallback (no dpkg/rpm) does not.
+				const needsElevation = updateContext.preferredTarget !== 'linux-x86_64-appimage';
+				setUpdateMessage(
+					t(needsElevation ? 'updates.systemInstalling' : 'updates.systemInstallingBinary')
+				);
+
+				const result = await invoke<SystemUpdateResult>('install_system_update');
+
+				if (!result.updated) {
+					setUpdateMessage(t('updates.noUpdatesAvailable'));
+				} else {
+					setUpdateMessage(t('updates.systemInstalled', { version: result.version }));
+
+					// Relaunch the app to apply the update
+					await relaunch();
+				}
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				setUpdateError(t('updates.errorInstall', { message }));
+			} finally {
+				setIsChecking(false);
+			}
+			return;
+		}
+
 		try {
 			const update = await check();
 
 			if (update) {
-				setUpdateMessage(t('updates.available', { version: update.version }));
-				
+				setUpdateMessage(t('updates.updateAvailable', { version: update.version }));
+
 				// Download and install the update
 				let downloaded = 0;
 				let contentLength = 0;
@@ -45,7 +85,7 @@ function UpdateSection() {
 							setUpdateMessage(t('updates.downloadingProgress', { progress: Math.round(progress) }));
 							break;
 						case 'Finished':
-							setUpdateMessage(t('updates.downloaded'));
+							setUpdateMessage(t('updates.downloadedSuccessfully'));
 							break;
 					}
 				});
@@ -53,7 +93,7 @@ function UpdateSection() {
 				// Relaunch the app to apply the update
 				await relaunch();
 			} else {
-				setUpdateMessage(t('updates.upToDate'));
+				setUpdateMessage(t('updates.noUpdatesAvailable'));
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -64,7 +104,7 @@ function UpdateSection() {
 	};
 
 	useEffect(() => {
-		// Get version from Tauri API
+		// Get version from Tauri API and update context from the backend
 		const fetchVersion = async () => {
 			try {
 				const version = await getVersion();
@@ -73,6 +113,14 @@ function UpdateSection() {
 				console.error('Failed to get app version:', error);
 			} finally {
 				setVersionLoading(false);
+			}
+
+			try {
+				setUpdateContext(await invoke<UpdateContext>('get_update_context'));
+			} catch (e) {
+				console.error('Failed to get update context:', e);
+			} finally {
+				setContextLoading(false);
 			}
 		};
 
@@ -118,7 +166,7 @@ function UpdateSection() {
 					<button
 						className="px-4 py-2 bg-primary text-primary-content rounded-lg font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 						onClick={checkForUpdates}
-						disabled={isChecking}
+						disabled={isChecking || contextLoading}
 						aria-label={t('updates.checkAriaLabel', 'Check for application updates')}
 						aria-busy={isChecking}
 					>

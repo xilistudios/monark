@@ -23,3 +23,15 @@ export interface Update {
 	body: string;
 	downloadAndInstall: (onProgress?: (event: UpdateProgressEvent) => void) => Promise<void>;
 }
+
+export interface UpdateContext {
+	os: string;
+	isAppimage: boolean;
+	packageManager: string | null;
+	preferredTarget: string | null;
+}
+
+export interface SystemUpdateResult {
+	updated: boolean;
+	version: string | null;
+}
