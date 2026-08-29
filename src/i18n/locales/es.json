@@ -198,6 +198,10 @@
       "downloading": "Descargando actualización...",
       "downloadingProgress": "Descargando actualización: {{progress}}%",
       "downloadedSuccessfully": "Actualización descargada correctamente. Reiniciando...",
+      "systemInstalling": "Instalando la actualización del sistema (puede requerir permiso de administrador)...",
+      "systemInstallingBinary": "Instalando la actualización...",
+      "systemInstalled": "Actualización del sistema a la versión {{version}} instalada. Reiniciando...",
+      "errorInstall": "Error al instalar la actualización del sistema: {{message}}",
       "noUpdatesAvailable": "No hay actualizaciones disponibles. Estás en la última versión.",
       "errorCheck": "Error al buscar actualizaciones: {{message}}",
       "loading": "Cargando...",
@@ -456,6 +460,23 @@
         "otpCopyCode": "Copiar código",
         "otpInvalid": "Secreto OTP inválido"
       },
+      "passwordGenerator": {
+        "title": "Generador de Contraseñas",
+        "length": "Longitud",
+        "uppercase": "Mayúsculas (A-Z)",
+        "lowercase": "Minúsculas (a-z)",
+        "numbers": "Números (0-9)",
+        "symbols": "Símbolos (!@#$)",
+        "regenerate": "Regenerar",
+        "copy": "Copiar",
+        "copied": "¡Copiado!",
+        "usePassword": "Usar Contraseña",
+        "strengthWeak": "Débil",
+        "strengthFair": "Aceptable",
+        "strengthGood": "Buena",
+        "strengthStrong": "Fuerte",
+        "strength": "Fortaleza de la contraseña"
+      },
       "tags": {
         "title": "Etiquetas",
         "noTags": "Sin Etiquetas",
@@ -488,7 +509,8 @@
     "errors": {
       "missingFields": "Por favor complete todos los campos",
       "invalidPassword": "Contraseña no válida",
-      "unlockFailed": "Error al desbloquear la bóveda"
+      "unlockFailed": "Error al desbloquear la bóveda",
+      "vaultNotAvailable": "La bóveda no está disponible para guardar. Bloquea y desbloquea la bóveda e inténtalo de nuevo."
     },
     "editEntry": {
       "title": "Editar Entrada",

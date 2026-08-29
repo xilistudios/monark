@@ -198,6 +198,10 @@
       "downloading": "Downloading update...",
       "downloadingProgress": "Downloading update: {{progress}}%",
       "downloadedSuccessfully": "Update downloaded successfully. Relaunching...",
+      "systemInstalling": "Installing system update (administrator permission may be required)...",
+      "systemInstallingBinary": "Installing update...",
+      "systemInstalled": "System update to version {{version}} installed. Relaunching...",
+      "errorInstall": "Failed to install system update: {{message}}",
       "noUpdatesAvailable": "No updates available. You are on the latest version.",
       "errorCheck": "Failed to check for updates: {{message}}",
       "loading": "Loading...",
@@ -456,6 +460,23 @@
         "otpCopyCode": "Copy code",
         "otpInvalid": "Invalid OTP secret"
       },
+      "passwordGenerator": {
+        "title": "Password Generator",
+        "length": "Length",
+        "uppercase": "Uppercase (A-Z)",
+        "lowercase": "Lowercase (a-z)",
+        "numbers": "Numbers (0-9)",
+        "symbols": "Symbols (!@#$)",
+        "regenerate": "Regenerate",
+        "copy": "Copy",
+        "copied": "Copied!",
+        "usePassword": "Use Password",
+        "strengthWeak": "Weak",
+        "strengthFair": "Fair",
+        "strengthGood": "Good",
+        "strengthStrong": "Strong",
+        "strength": "Password Strength"
+      },
       "tags": {
         "title": "Tags",
         "noTags": "No Tags",
@@ -489,7 +510,8 @@
       "missingFields": "Please fill in all fields",
       "invalidPassword": "Invalid password",
       "passwordMismatch": "Passwords do not match",
-      "unlockFailed": "Failed to unlock vault"
+      "unlockFailed": "Failed to unlock vault",
+      "vaultNotAvailable": "Vault is not available for saving. Please lock and unlock the vault, then try again."
     },
     "editEntry": {
       "title": "Edit Entry",

@@ -184,7 +184,7 @@ function HomeScreen() {
     try {
       const retrievedPassword = await retrieveVaultPassword(
         currentVault.id,
-        tBiometric('unlockReason').replace('{name}', currentVault.name),
+        tBiometric('unlockReason', { name: currentVault.name }),
       );
 
       if (!retrievedPassword) {
