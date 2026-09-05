@@ -961,8 +961,7 @@ describe('Cloud Vault Integration', () => {
 				name: 'Corrupted Vault',
 				path: 'vault-file-1',
 				storageType: 'cloud',
-				providerId: 'google-drive-primary',
-				// Missing cloud metadata
+				// Missing provider information
 				isLocked: true,
 				volatile: {
 					entries: [],
@@ -974,9 +973,33 @@ describe('Cloud Vault Integration', () => {
 
 			store.dispatch(addVault(corruptedVault));
 
-			// Should return undefined for vault with missing metadata
+			// Should return undefined for vault with missing provider information
+			// (cloudMetadata is optional; the file id falls back to vault.path)
 			const vaultInstance = vaultManager.getInstance('corrupted-vault')
 			expect(vaultInstance).toBeUndefined()
+		})
+
+		it('should return an instance for cloud vault with providerId but without cloudMetadata', async () => {
+			const minimalCloudVault = {
+				id: 'minimal-cloud-vault',
+				name: 'Minimal Cloud Vault',
+				path: 'vault-file-1',
+				storageType: 'cloud',
+				providerId: 'google-drive-primary',
+				// Missing cloud metadata: file id falls back to vault.path
+				isLocked: true,
+				volatile: {
+					entries: [],
+					credential: '',
+					navigationPath: '/',
+					encryptedData: undefined
+				}
+			}
+
+			store.dispatch(addVault(minimalCloudVault));
+
+			const vaultInstance = vaultManager.getInstance('minimal-cloud-vault')
+			expect(vaultInstance).toBeDefined()
 		})
 	})
 

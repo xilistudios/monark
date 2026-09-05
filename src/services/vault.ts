@@ -183,7 +183,12 @@ export class VaultInstance {
 			let vaultContent: VaultContent;
 
 			// Check if this is a cloud vault
-			if (this.vault.storageType === "cloud" && this.vault.providerId) {
+			if (this.vault.storageType === "cloud") {
+				if (!this.vault.providerId) {
+					throw new Error(
+						"Cloud vault is missing provider information. Cannot unlock.",
+					);
+				}
 				const authState = await this.getProviderAuthState(
 					this.vault.providerId,
 				);
@@ -445,10 +450,23 @@ export class VaultInstance {
 		};
 
 		// Check if this is a cloud vault
-		if (vault.storageType === "cloud" && vault.providerId) {
-			// Use cloud storage commands for cloud vaults
+		// Cloud vaults must never fall through to the local write path: their
+		// "path" is a cloud file identifier, not a filesystem path.
+		if (vault.storageType === "cloud") {
+			if (!vault.providerId) {
+				throw new Error(
+					"Cloud vault is missing provider information. Cannot save to cloud storage.",
+				);
+			}
+
 			// Pass the vault ID (stored in vault.path) to update the existing vault
 			const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
+			if (!cloudFileId) {
+				throw new Error(
+					"Cloud vault is missing its cloud file identifier. Cannot save to cloud storage.",
+				);
+			}
+
 			await CloudStorageCommands.writeCloudVault({
 				vaultId: cloudFileId,
 				vaultName: vault.name,
@@ -553,7 +571,12 @@ export class VaultInstance {
 				entries: entries,
 			};
 
-			if (vault.storageType === "cloud" && vault.providerId) {
+			if (vault.storageType === "cloud") {
+				if (!vault.providerId) {
+					throw new Error(
+						"Cloud vault is missing provider information. Cannot change password.",
+					);
+				}
 				// For cloud vaults, use the dedicated password change command
 				const cloudFileId = vault.cloudMetadata?.fileId || vault.path;
 
@@ -834,11 +857,9 @@ export class VaultManager {
 			return undefined;
 		}
 
-		// Ensure cloud vaults have proper metadata
-		if (
-			vault.storageType === "cloud" &&
-			(!vault.providerId || !vault.cloudMetadata)
-		) {
+		// Ensure cloud vaults have a provider (cloudMetadata is optional; the
+		// cloud file identifier falls back to vault.path when missing)
+		if (vault.storageType === "cloud" && !vault.providerId) {
 			console.warn(`Cloud vault ${vaultId} is missing provider information`);
 			return undefined;
 		}

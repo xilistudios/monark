@@ -84,14 +84,14 @@ export function LockedVaultView({
                 {biometricLoading ? (
                   <>
                     <span className="loading loading-spinner loading-lg" role="status"></span>
-                    <p className="text-base-content/70">{tBiometric('biometric.unlocking')}</p>
+                    <p className="text-base-content/70">{tBiometric('unlocking')}</p>
                   </>
                 ) : (
                   <>
                     <button
                       className="btn btn-circle btn-lg btn-primary"
                       onClick={handleBiometricUnlock}
-                      aria-label={tBiometric('biometric.unlock')}
+                      aria-label={tBiometric('unlock')}
                     >
                       <svg
                         className="w-8 h-8"
@@ -108,19 +108,19 @@ export function LockedVaultView({
                       </svg>
                     </button>
                     <p className="text-base-content/70 text-sm">
-                      {tBiometric('biometric.tapToUnlock')}
+                      {tBiometric('tapToUnlock')}
                     </p>
                   </>
                 )}
               </div>
 
-              <div className="divider text-xs">{tBiometric('biometric.or')}</div>
+              <div className="divider text-xs">{tBiometric('or')}</div>
 
               <button
                 className="btn btn-ghost btn-sm w-full"
                 onClick={() => setShowPasswordForm(true)}
               >
-                {tBiometric('biometric.usePasswordInstead')}
+                {tBiometric('usePasswordInstead')}
               </button>
             </>
           )}

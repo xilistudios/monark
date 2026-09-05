@@ -38,17 +38,17 @@ export function BiometricSettings({
 		setError(null);
 		try {
 			const success = await authenticate(
-				t("biometric.promptEnable", { vaultName }),
+				t("promptEnable", { vaultName }),
 				{ allowDeviceCredential: true },
 			);
 			if (!success) {
-				setError(t("biometric.enableFailed"));
+				setError(t("enableFailed"));
 				return;
 			}
 			await storeVaultPassword(vaultId, vaultPassword);
 			onToggle(true);
 		} catch (_err) {
-			setError(t("biometric.enableFailed"));
+			setError(t("enableFailed"));
 		} finally {
 			setLoading(false);
 		}
@@ -61,7 +61,7 @@ export function BiometricSettings({
 			await deleteVaultPassword(vaultId);
 			onToggle(false);
 		} catch (_err) {
-			setError(t("biometric.disableFailed"));
+			setError(t("disableFailed"));
 		} finally {
 			setLoading(false);
 		}
@@ -74,9 +74,9 @@ export function BiometricSettings({
 		<div className="flex flex-col gap-2 bg-base-200/30 p-5 rounded-xl border border-base-200/50">
 			<div className="flex items-center justify-between gap-4">
 				<div>
-					<h4 className="text-sm font-medium">{t("biometric.title")}</h4>
+					<h4 className="text-sm font-medium">{t("title")}</h4>
 					<p className="text-xs text-base-content/60 mt-0.5">
-						{biometricEnabled ? t("biometric.enabled") : t("biometric.disabled")}
+						{biometricEnabled ? t("enabled") : t("disabled")}
 					</p>
 				</div>
 				<div className="flex items-center gap-3">

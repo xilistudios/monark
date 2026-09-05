@@ -165,15 +165,16 @@ export const EditEntryModal: React.FC = () => {
         // Get the VaultInstance from VaultManager
         const vaultInstance =
           VaultManager.getInstance().getInstance(currentVaultId);
-        if (vaultInstance) {
-          // Debug: log the path being used
-          // Get the path from the selected entry's parent
-          const path = [...currentPath, entry.id];
-          console.log('Updating entry with path:', path);
-
-          // Update the entry using VaultManager
-          await vaultInstance.updateEntry(path, updates);
+        if (!vaultInstance) {
+          throw new Error(t('errors.vaultNotAvailable'));
         }
+        // Debug: log the path being used
+        // Get the path from the selected entry's parent
+        const path = [...currentPath, entry.id];
+        console.log('Updating entry with path:', path);
+
+        // Update the entry using VaultManager
+        await vaultInstance.updateEntry(path, updates);
       }
 
       closeAllModals();

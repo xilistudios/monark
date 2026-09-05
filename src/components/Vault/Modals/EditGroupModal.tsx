@@ -64,19 +64,20 @@ export const EditGroupModal: React.FC = () => {
 				// Get the VaultInstance from VaultManager
 				const vaultInstance =
 					VaultManager.getInstance().getInstance(currentVaultId);
-				if (vaultInstance) {
-					// Debug: log the path being used
-					console.log("Updating group with path:", [
-						...currentPath,
-						selectedEntry.id,
-					]);
-
-					// Update the entry using VaultManager
-					await vaultInstance.updateEntry([...currentPath, selectedEntry.id], {
-						name: trimmed,
-						updated_at: new Date().toISOString(),
-					});
+				if (!vaultInstance) {
+					throw new Error(t("errors.vaultNotAvailable"));
 				}
+				// Debug: log the path being used
+				console.log("Updating group with path:", [
+					...currentPath,
+					selectedEntry.id,
+				]);
+
+				// Update the entry using VaultManager
+				await vaultInstance.updateEntry([...currentPath, selectedEntry.id], {
+					name: trimmed,
+					updated_at: new Date().toISOString(),
+				});
 			}
 
 			closeAllModals();

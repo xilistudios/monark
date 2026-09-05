@@ -259,6 +259,8 @@ fn build_app() {
             commands::storage::handle_google_drive_oauth_callback,
             commands::storage::test_webdav_connection,
             commands::totp::generate_totp,
+            commands::updater::get_update_context,
+            commands::updater::install_system_update,
             state::load_vault_state,
             state::save_vault_state,
         ])

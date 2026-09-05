@@ -67,6 +67,7 @@ function UnlockedVaultView({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isSearchingRef = useRef(false);
   const { setIsSearchModalOpen } = useContext(VaultModalContext)!;
   useEffect(() => {
@@ -124,13 +125,25 @@ function UnlockedVaultView({
     const vaultInstance = VaultManager.getInstance().getInstance(
       currentVault.id
     );
-    if (vaultInstance) {
+    if (!vaultInstance) {
+      console.error('Cannot save entry: vault instance unavailable');
+      setSaveError(t('errors.vaultNotAvailable'));
+      return;
+    }
+    try {
       await vaultInstance.updateEntry(path, updatedEntry);
       setSidebarMode('view');
+      setSaveError(null);
+    } catch (err) {
+      console.error('Error saving entry:', err);
+      setSaveError(
+        err instanceof Error ? err.message : t('editEntry.errors.updateFailed')
+      );
     }
   };
 
   const handleCancelEntry = () => {
+    setSaveError(null);
     if (sidebarMode === 'edit') {
       setSidebarMode('view');
     } else {
@@ -153,6 +166,18 @@ function UnlockedVaultView({
           onOpenSettings={() => setIsSettingsOpen(true)}
         />
       </div>
+      {saveError && (
+        <div className="px-4 py-2 bg-error/10 border-b border-error/30 flex items-center justify-between gap-2">
+          <div className="text-error text-sm">{saveError}</div>
+          <button
+            className="text-error/70 hover:text-error text-sm"
+            onClick={() => setSaveError(null)}
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {isSettingsOpen ? (
         <VaultSettingsPanel
           vault={currentVault}
