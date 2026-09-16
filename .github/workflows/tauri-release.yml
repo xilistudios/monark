@@ -127,6 +127,13 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          # El default upstream es 'tools platform-tools', pero Google dejó de
+          # servir el paquete deprecado 'tools' (sdkmanager falla con
+          # "Failed to find package 'tools'"; android-actions/setup-android#537/#538).
+          # Declaramos solo lo que necesitamos; los cmdline-tools (sdkmanager,
+          # avdmanager, aapt2, etc.) los instala el propio action y los añade al PATH.
+          packages: 'platform-tools'
 
       - name: Setup Android NDK
         id: setup-ndk
