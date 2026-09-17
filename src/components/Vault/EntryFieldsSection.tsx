@@ -107,6 +107,8 @@ const renderFieldInput = (
 					value={field.value}
 					onChange={(value) => handleUpdateField(idx, "value", value)}
 					readOnly={!editMode}
+					inputClassName="px-3 py-2 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+					showStrength={editMode}
 				/>
 			);
 

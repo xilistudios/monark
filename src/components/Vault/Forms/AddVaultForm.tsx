@@ -8,6 +8,7 @@ import type { RootState } from "../../../redux/store";
 import { CloudStorageCommands } from "../../../services/cloudStorage";
 import { VaultManager } from "../../../services/vault";
 import { isMobile } from "../../../utils/platform";
+import { PasswordFieldInput } from "../PasswordFieldInput";
 
 interface AddVaultFormProps {
 	onSuccess: () => void;
@@ -491,24 +492,26 @@ export const AddVaultForm = ({
 			)}
 
 			<div className="flex flex-col gap-2 w-full">
-				<label className="text-sm font-medium text-base-content/80 pl-1">
+				<label className="text-sm font-medium text-base-content/80 pl-1" htmlFor="vault-master-password">
 					{isEditMode ? t("editVault.newPassword") : t("addVault.password")}
 					{!isEditMode && " *"}
 				</label>
-				<input
-					type="password"
+				<PasswordFieldInput
+					id="vault-master-password"
 					placeholder={
 						isEditMode
 							? t("editVault.newPasswordPlaceholder")
 							: t("addVault.passwordPlaceholder")
 					}
-					className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
+					inputClassName="bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 					value={password}
-					onChange={(e) => {
-						setPassword(e.target.value);
+					onChange={(value) => {
+						setPassword(value);
 						clearMessages();
 					}}
 					disabled={isEditMode && vault?.isLocked}
+					maxLength={null}
+					showStrength
 				/>
 				{isEditMode && (
 					<div className="text-xs text-base-content opacity-60 ml-1">
@@ -520,26 +523,28 @@ export const AddVaultForm = ({
 			{/* Password confirmation field */}
 			{(password || !isEditMode) && (
 				<div className="flex flex-col gap-2 w-full">
-					<label className="text-sm font-medium text-base-content/80 pl-1">
+					<label className="text-sm font-medium text-base-content/80 pl-1" htmlFor="vault-confirm-password">
 						{isEditMode
 							? t("editVault.confirmNewPassword")
 							: t("addVault.confirmPassword")}
 						{!isEditMode && " *"}
 					</label>
-					<input
-						type="password"
+					<PasswordFieldInput
+						id="vault-confirm-password"
 						placeholder={
 							isEditMode
 								? t("editVault.confirmNewPasswordPlaceholder")
 								: t("addVault.confirmPasswordPlaceholder")
 						}
-						className="input input-bordered w-full bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
+						inputClassName="bg-base-100 hover:border-base-content/30 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300"
 						value={confirmPassword}
-						onChange={(e) => {
-							setConfirmPassword(e.target.value);
+						onChange={(value) => {
+							setConfirmPassword(value);
 							clearMessages();
 						}}
 						disabled={isEditMode && vault?.isLocked}
+						maxLength={null}
+						allowGenerate={false}
 					/>
 				</div>
 			)}
