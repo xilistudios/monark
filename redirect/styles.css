@@ -81,15 +81,52 @@
 	--surface-sunken: #f5f3f0;
 	--ink: #2b1a17;
 	--ink-secondary: #6b5a56;
-	--ink-tertiary: #94847f;
+
+	/* Was #94847f — only 3.23:1 on the sunken surface, below AA for the small
+	   uppercase mono labels that use it everywhere (eyebrows, spec terms, meta
+	   rows, entry sublines). Darkened to 5.0:1 at its worst background so the
+	   11–12px labels are legible; it still reads quieter than --ink-secondary. */
+	--ink-tertiary: #756560;
+
+	/* Decorative hairlines and card borders. These are never the only cue for a
+	   control, so 3:1 does not apply to them and they stay deliberately faint. */
 	--rule: #e8e3de;
 	--rule-strong: #d8d1ca;
 
-	--accent: #e0644a;
+	/* The one border that *is* load-bearing: the outline of a ghost button or
+	   the language switcher. Those are unlabelled boxes whose edge is the whole
+	   affordance, so it needs 3:1 against every surface it can land on — the
+	   ghost button sits on the canvas, and on hover it sits on the sunken
+	   surface. Was --rule-strong, at 1.51:1. */
+	--border-control: #948780;
+
+	/* Was #e0644a — 3.31:1 on the canvas. It is used as text in a few places
+	   (404 marker, callout icons, spinner and eyebrow dot as graphics), so it is
+	   darkened to clear 4.5:1 on every surface. The brand salmon is unchanged:
+	   it still leads every icon tint, and --accent on --accent-ink is 7.4:1. */
+	--accent: #b8462f;
 	--accent-ink: #ffffff;
 	--accent-quiet: #fdece7;
 	--accent-quiet-ink: #9c3a22;
 	--cocoa: #311616;
+
+	/* A surface that stays dark in *both* themes. The feature card that carries
+	   the terminal is tuned to this background. Letting it follow the theme was
+	   the single worst contrast bug on the site: in dark mode the card turned
+	   cream while its hardcoded #f6efe9 / #b9a6a0 / #d3c0ba text stayed light,
+	   landing the heading at 1.00:1 and the terminal at 1.10:1 — invisible. */
+	--surface-ink: #311616;
+	--surface-ink-strong: #f6efe9;
+	--surface-ink-muted: #c3b0a9;
+	--surface-ink-accent: #fd876c;
+	--surface-ink-tint: #4a2622;
+	--surface-ink-term: #241110;
+	--surface-ink-term-ink: #ddcdc7;
+	--surface-ink-term-key: #ab938c;
+	/* The terminal panel's edge. It separates two near-black surfaces, so it is
+	   the panel's only distinguishable boundary and has to clear 3:1 against the
+	   darker of the two. */
+	--surface-ink-term-edge: #956053;
 
 	--ok-quiet: #eaf3ea;
 	--ok-ink: #34653a;
@@ -128,9 +165,13 @@
 		--surface-sunken: #241a19;
 		--ink: #f4efec;
 		--ink-secondary: #b3a29e;
-		--ink-tertiary: #8a7873;
+
+		/* Was #8a7873 — 4.05:1 on the sunken surface, just under AA. */
+		--ink-tertiary: #a3938d;
+
 		--rule: #332625;
 		--rule-strong: #43332f;
+		--border-control: #7a6a65;
 
 		--accent: #fd876c;
 		--accent-ink: #2b1210;
@@ -153,9 +194,11 @@
 	--surface-sunken: #241a19;
 	--ink: #f4efec;
 	--ink-secondary: #b3a29e;
-	--ink-tertiary: #8a7873;
+	/* Was #8a7873 — 4.05:1 on the sunken surface, just under AA. */
+	--ink-tertiary: #a3938d;
 	--rule: #332625;
 	--rule-strong: #43332f;
+	--border-control: #7a6a65;
 
 	--accent: #fd876c;
 	--accent-ink: #2b1210;
@@ -371,21 +414,22 @@ section {
 	gap: 0.375rem;
 	font-size: 0.8125rem;
 	color: var(--ink-secondary);
-	border: 1px solid var(--rule);
+	border: 1px solid var(--border-control);
 	border-radius: var(--radius-sm);
 	padding: 0.35rem 0.55rem;
 	transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .lang-btn:hover {
-	border-color: var(--rule-strong);
+	border-color: var(--ink-tertiary);
 	color: var(--ink);
 }
 
+/* The chevron is a disclosure cue, not decoration — at 55% opacity it fell to
+   ~2:1 on the canvas. Full opacity leaves it on --ink-tertiary, above 4.5:1. */
 .lang-btn svg {
 	width: 12px;
 	height: 12px;
-	opacity: 0.55;
 	transition: transform 0.2s var(--ease);
 }
 
@@ -478,12 +522,15 @@ section {
 }
 
 .btn--ghost {
-	border-color: var(--rule-strong);
+	/* --rule-strong was 1.51:1 here; on a ghost button the border *is* the
+	   affordance, so it needs 3:1 against every background it can sit on. */
+	border-color: var(--border-control);
 	color: var(--ink);
 }
 
 .btn--ghost:hover {
 	background: var(--surface-sunken);
+	border-color: var(--ink-tertiary);
 }
 
 .btn--sm {
@@ -857,17 +904,8 @@ h2 {
 }
 
 .cell--dark {
-	background: var(--cocoa);
-	border-color: var(--cocoa);
-}
-
-.cell--dark,
-.cell--dark h3 {
-	color: #f6efe9;
-}
-
-.cell--dark p {
-	color: #b9a6a0;
+	background: var(--surface-ink);
+	border-color: var(--surface-ink);
 }
 
 .cell-icon {
@@ -888,8 +926,8 @@ h2 {
 }
 
 .cell--dark .cell-icon {
-	background: rgba(253, 135, 108, 0.16);
-	color: #fd876c;
+	background: var(--surface-ink-tint);
+	color: var(--surface-ink-accent);
 }
 
 .cell h3 {
@@ -903,6 +941,21 @@ h2 {
 	font-size: 0.9375rem;
 	line-height: 1.62;
 	color: var(--ink-secondary);
+}
+
+/* The dark feature card carries its own theme-independent surface. Before, the
+   background followed --cocoa while the text stayed hardcoded light: in dark
+   mode --cocoa flips to near-white and every string on this card landed
+   between 1.00:1 and 2.56:1. These rules must also come *after* `.cell p`,
+   which they tie on specificity with — the earlier placement silently lost and
+   left the body copy at 2.56:1 in light mode and 2.15:1 in dark. */
+.cell--dark,
+.cell--dark h3 {
+	color: var(--surface-ink-strong);
+}
+
+.cell--dark p {
+	color: var(--surface-ink-muted);
 }
 
 .cell--wide {
@@ -939,9 +992,9 @@ h2 {
 }
 
 .cell--dark .terminal {
-	background: rgba(0, 0, 0, 0.22);
-	border-color: rgba(253, 135, 108, 0.2);
-	color: #d3c0ba;
+	background: var(--surface-ink-term);
+	border-color: var(--surface-ink-term-edge);
+	color: var(--surface-ink-term-ink);
 }
 
 .terminal .k {
@@ -949,7 +1002,7 @@ h2 {
 }
 
 .cell--dark .terminal .k {
-	color: #9c8079;
+	color: var(--surface-ink-term-key);
 }
 
 .terminal .v {
@@ -957,7 +1010,7 @@ h2 {
 }
 
 .cell--dark .terminal .v {
-	color: #fd876c;
+	color: var(--surface-ink-accent);
 }
 
 .terminal .rule {
@@ -1182,7 +1235,10 @@ h2 {
 
 .legal a {
 	color: var(--accent-quiet-ink);
-	border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+	/* The underline is how the link is distinguishable without colour, so it
+	   must clear 3:1 on its own. At accent@35% it was 1.69:1 — effectively
+	   invisible, leaving colour as the only cue. */
+	border-bottom: 1px solid color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
 .legal a:hover {
@@ -1301,7 +1357,7 @@ h2 {
 
 .compliance a {
 	color: var(--ok-ink);
-	border-bottom: 1px solid color-mix(in srgb, var(--ok-ink) 40%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--ok-ink) 72%, transparent);
 }
 
 .doc-nav {
@@ -1429,7 +1485,7 @@ h2 {
 
 .status--error {
 	color: var(--danger-ink);
-	border-color: color-mix(in srgb, var(--danger-ink) 30%, transparent);
+	border-color: color-mix(in srgb, var(--danger-ink) 70%, transparent);
 	background: var(--danger-quiet);
 }
 
@@ -1441,7 +1497,7 @@ h2 {
 .status--ok {
 	color: var(--ok-ink);
 	background: var(--ok-quiet);
-	border-color: color-mix(in srgb, var(--ok-ink) 25%, transparent);
+	border-color: color-mix(in srgb, var(--ok-ink) 70%, transparent);
 }
 
 .status--ok::before {

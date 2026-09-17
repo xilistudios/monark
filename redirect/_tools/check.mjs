@@ -236,6 +236,149 @@ for (const b of broken) failures.push(`broken link: ${b}`);
 	}
 }
 
+/* --------------------------------------------------- contrast still holds --- */
+
+/* The design tokens are the whole accessibility story for this site: every
+   colour on every page resolves through one of the variables in `:root` (or its
+   dark twins), so a single darkened value silently repaints dozens of small
+   labels. That has gone wrong twice — once when --ink-tertiary sat at 3.23:1
+   across every 11px uppercase label, and once when the dark feature card kept
+   hardcoded light text on a surface that flipped to cream in dark mode.
+
+   So the pairs that carry meaning are asserted here rather than trusted. Ratios
+   are the WCAG 2.x ones; 4.5 is body/label text, 3.0 is large text, icons and
+   the boundaries of controls. Decorative hairlines (--rule, --rule-strong) are
+   deliberately absent: they are never a control's only affordance. */
+{
+	const css = fs.readFileSync(path.join(OUT, "styles.css"), "utf8");
+
+	/** Pull `--name: #hex` out of one brace-delimited block. */
+	function tokens(text) {
+		const t = {};
+		for (const m of text.matchAll(/(--[a-z-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\b/g)) {
+			t[m[1]] = m[2];
+		}
+		return t;
+	}
+
+	const light = tokens(css.slice(css.indexOf(":root {"), css.indexOf("/* The root page ships")));
+	const dark = tokens(css.slice(css.lastIndexOf(':root[data-theme="dark"]')));
+
+	/* A token that is no longer a literal hex — say `--surface-ink: var(--cocoa)`
+	   — would make the palette dance with the theme again, and the ratio maths
+	   below cannot see through an indirection. Naming the token and failing
+	   beats crashing with "cannot read properties of undefined". */
+	const required = [
+		"--canvas", "--surface", "--surface-sunken", "--ink", "--ink-secondary",
+		"--ink-tertiary", "--accent", "--accent-ink", "--accent-quiet",
+		"--accent-quiet-ink", "--ok-quiet", "--ok-ink", "--warn-quiet", "--warn-ink",
+		"--danger-quiet", "--danger-ink", "--border-control", "--surface-ink",
+		"--surface-ink-strong", "--surface-ink-muted", "--surface-ink-accent",
+		"--surface-ink-tint", "--surface-ink-term", "--surface-ink-term-ink",
+		"--surface-ink-term-key", "--surface-ink-term-edge",
+	];
+	let tokensOk = true;
+	for (const [mode, t] of [["light", light], ["dark", dark]]) {
+		for (const name of required) {
+			// The dark feature card is theme-independent, so its tokens only need
+			// to be literal in the :root block.
+			if (mode === "dark" && name.startsWith("--surface-ink")) continue;
+			if (!/^#[0-9a-fA-F]{6}$/.test(t[name] ?? "")) {
+				tokensOk = false;
+				failures.push(
+					`${mode}: ${name} is missing or not a literal hex colour, so it cannot be contrast-checked`,
+				);
+			}
+		}
+	}
+
+	/* The dark feature card must be pinned to its own surface. Pointing it back
+	   at --cocoa is exactly the bug that rendered it at 1.00:1 in dark mode, and
+	   the ratio maths above would not catch it because both tokens are valid
+	   hex. Assert the indirection instead. */
+	const darkCard = css.slice(css.indexOf(".cell--dark {"), css.indexOf(".cell-icon {"));
+	if (!/--surface-ink\b/.test(darkCard) || /--cocoa\b/.test(darkCard)) {
+		failures.push(
+			".cell--dark no longer pins its own surface — it will follow the theme and go unreadable in dark mode",
+		);
+	}
+
+	const rgb = (hex) => {
+		const x = hex.replace("#", "");
+		const s = x.length === 3 ? x.split("").map((c) => c + c).join("") : x;
+		return [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16));
+	};
+	const luminance = (hex) =>
+		rgb(hex)
+			.map((v) => {
+				const c = v / 255;
+				return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+			})
+			.reduce((acc, c, i) => acc + c * [0.2126, 0.7152, 0.0722][i], 0);
+
+	const ratio = (a, b) => {
+		const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+		return (hi + 0.05) / (lo + 0.05);
+	};
+
+	/** Every pair that must hold, per theme. */
+	const checks = [];
+	for (const [mode, t] of [["light", light], ["dark", dark]]) {
+		const surfaces = { canvas: t["--canvas"], surface: t["--surface"], sunken: t["--surface-sunken"] };
+		for (const fg of [
+			"--ink",
+			"--ink-secondary",
+			"--ink-tertiary",
+			"--accent",
+			"--accent-quiet-ink",
+			"--ok-ink",
+			"--warn-ink",
+			"--danger-ink",
+		]) {
+			for (const [name, bg] of Object.entries(surfaces)) {
+				checks.push([`${mode}: ${fg} on --${name}`, t[fg], bg, 4.5]);
+			}
+		}
+		checks.push([`${mode}: --accent-quiet-ink on --accent-quiet`, t["--accent-quiet-ink"], t["--accent-quiet"], 4.5]);
+		checks.push([`${mode}: --ok-ink on --ok-quiet`, t["--ok-ink"], t["--ok-quiet"], 4.5]);
+		checks.push([`${mode}: --warn-ink on --warn-quiet`, t["--warn-ink"], t["--warn-quiet"], 4.5]);
+		checks.push([`${mode}: --danger-ink on --danger-quiet`, t["--danger-ink"], t["--danger-quiet"], 4.5]);
+		checks.push([`${mode}: --accent-ink on --accent`, t["--accent-ink"], t["--accent"], 4.5]);
+		// Non-text: focus ring, control borders, spinner segment.
+		checks.push([`${mode}: --accent focus ring on --surface`, t["--accent"], t["--surface"], 3]);
+		checks.push([`${mode}: --accent focus ring on --canvas`, t["--accent"], t["--canvas"], 3]);
+		for (const [name, bg] of Object.entries(surfaces)) {
+			checks.push([`${mode}: --border-control on --${name}`, t["--border-control"], bg, 3]);
+		}
+	}
+
+	// The dark feature card is theme-independent on purpose, so it is checked once.
+	for (const [label, fg, bg, need] of [
+		["card heading", light["--surface-ink-strong"], light["--surface-ink"], 4.5],
+		["card body", light["--surface-ink-muted"], light["--surface-ink"], 4.5],
+		["card icon", light["--surface-ink-accent"], light["--surface-ink-tint"], 3],
+		["terminal text", light["--surface-ink-term-ink"], light["--surface-ink-term"], 4.5],
+		["terminal key", light["--surface-ink-term-key"], light["--surface-ink-term"], 4.5],
+		["terminal value", light["--surface-ink-accent"], light["--surface-ink-term"], 4.5],
+		["terminal edge", light["--surface-ink-term-edge"], light["--surface-ink"], 3],
+		["terminal edge (panel)", light["--surface-ink-term-edge"], light["--surface-ink-term"], 3],
+	]) {
+		checks.push([`dark card: ${label}`, fg, bg, need]);
+	}
+
+	if (!tokensOk) {
+		// Some token is not a literal hex, so a ratio would be computed against
+		// `undefined`. The failures above already name the token; skip the maths.
+	} else {
+		for (const [label, fg, bg, need] of checks) {
+			const value = ratio(fg, bg);
+			if (value < need) {
+				failures.push(`${label} is ${value.toFixed(2)}:1, needs ${need}:1`);
+			}
+		}
+	}
+}
+
 for (const w of warnings) console.log(`warn  ${w}`);
 for (const f of failures) console.log(`FAIL  ${f}`);
 
