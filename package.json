@@ -12,7 +12,12 @@
 		"test:ui": "vitest --ui",
 		"test:run": "vitest run",
 		"test:coverage": "vitest --coverage",
-		"test:rust": "cargo test --manifest-path src-tauri/Cargo.toml -p monark_lib"
+		"test:rust": "cargo test --manifest-path src-tauri/Cargo.toml -p monark_lib",
+		"site:build": "node redirect/_tools/build.mjs",
+		"site:check": "node redirect/_tools/check.mjs",
+		"site:serve": "node redirect/_tools/serve.mjs",
+		"site:og": "./redirect/_tools/og/render.sh",
+		"site": "npm run site:build && npm run site:check"
 	},
 	"dependencies": {
 		"@reduxjs/toolkit": "^2.12.0",

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /index.html
+
+Sitemap: https://monark-password-manager.web.app/sitemap.xml

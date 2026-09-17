@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Política de Privacidad - Monark Password Manager</title>
+	<meta name="description" content="Política de Privacidad de Monark Password Manager. Conoce nuestro modelo de seguridad de conocimiento cero (Zero-Knowledge) y el uso de las APIs de Google.">
+	<link rel="icon" type="image/png" href="favicon.png">
+	<link rel="icon" type="image/svg+xml" href="favicon.svg">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+	<!-- Header -->
+	<header class="site-header">
+		<div class="header-container">
+			<a href="index.html" class="logo-group">
+				<img src="logo.svg" alt="Monark Logo" class="brand-icon">
+				<span class="brand-name">Monark</span>
+				<span class="brand-badge">Open Source</span>
+			</a>
+			<nav>
+				<ul class="nav-links">
+					<li><a href="index.html" class="nav-link">Inicio</a></li>
+					<li><a href="privacy.html" class="nav-link active">Privacidad</a></li>
+					<li><a href="terms.html" class="nav-link">Condiciones del Servicio</a></li>
+					<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a></li>
+				</ul>
+			</nav>
+		</div>
+	</header>
+
+	<!-- Main Content -->
+	<main>
+		<div class="doc-nav-banner">
+			<span>Navegación Rápida:</span>
+			<a href="index.html">← Volver a la Página Principal</a>
+			<a href="terms.html">Condiciones del Servicio →</a>
+		</div>
+
+		<article class="document-container">
+			<header class="document-header">
+				<span class="doc-badge">Documento Oficial</span>
+				<h1 class="document-title">Política de Privacidad</h1>
+				<p class="document-meta">Última actualización: 17 de septiembre de 2026 • Versión 1.0 • Xilistudios</p>
+			</header>
+
+			<section class="legal-section">
+				<h2>1. Introducción y Compromiso de Conocimiento Cero</h2>
+				<p>
+					En <strong>Monark Password Manager</strong> (desarrollado por <strong>Xilistudios</strong>), la privacidad y la soberanía de los datos son nuestros principios fundacionales. Creemos que tus contraseñas, credenciales de acceso, notas y documentos confidenciales deben pertenecerte exclusivamente a ti.
+				</p>
+				<p>
+					Monark opera bajo una estricta <strong>arquitectura de conocimiento cero (Zero-Knowledge)</strong> y un modelo <strong>local-first</strong>. Esto significa que nosotros no recopilamos, no almacenamos en servidores propios y no tenemos capacidad técnica para acceder ni descifrar tus contraseñas ni la clave maestra de tu bóveda. Todo el proceso criptográfico ocurre directamente en tu dispositivo.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>2. Información que Tratamos y que NO Tratamos</h2>
+				<h3>2.1 Información de tu Bóveda de Contraseñas (Sin Acceso)</h3>
+				<p>
+					Tus contraseñas, nombres de usuario, URLs, notas seguras e información de autenticación de dos factores (2FA) se almacenan cifradas localmente en tu equipo. Xilistudios nunca recibe tus datos en texto claro ni almacena tus contraseñas en servidores externos.
+				</p>
+				<h3>2.2 Datos de Telemetría o Rastreo</h3>
+				<p>
+					Monark no incluye rastreadores publicitarios, identificadores de publicidad ni herramientas de análisis invasivas que recopilen tu comportamiento de navegación o identidad personal.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>3. Uso de la API de Google y Google Drive</h2>
+				<p>
+					Monark ofrece a los usuarios la posibilidad opcional de realizar copias de seguridad sincronizadas en la nube a través de su propia cuenta personal de Google Drive. Para hacer esto posible, la aplicación solicita autenticación OAuth con el alcance específico y mínimo necesario:
+				</p>
+				
+				<div class="info-box highlight">
+					<div class="info-box-title">
+						<span>📁</span> Alcance solicitado: <code>https://www.googleapis.com/auth/drive.file</code>
+					</div>
+					<p>
+						Este permiso <strong>únicamente</strong> le permite a Monark crear, ver, modificar y eliminar los archivos y carpetas que hayan sido creados directamente por la aplicación Monark para alojar tu copia de seguridad cifrada.
+					</p>
+					<p>
+						<strong>Monark NO puede acceder, leer ni modificar ningún otro archivo, documento, foto o carpeta existente en tu Google Drive.</strong>
+					</p>
+				</div>
+
+				<div class="compliance-badge">
+					<strong>Cumplimiento de los Requisitos de Uso Limitado de Google (Google Limited Use):</strong><br>
+					El uso y la transferencia por parte de Monark a cualquier otra aplicación de la información recibida a través de las APIs de Google se apegan estrictamente a la <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" style="color: #6ee7b7; text-decoration: underline;">Política de Datos de Usuario de los Servicios de las APIs de Google (Google API Services User Data Policy)</a>, incluidos los requisitos de <em>Uso Limitado (Limited Use Requirements)</em>.
+				</div>
+
+				<h3>3.1 Restricciones estrictas sobre los datos de Google:</h3>
+				<ul>
+					<li><strong>No venta ni comercialización:</strong> Nunca vendemos, comercializamos, licenciamos ni transferimos datos de usuario obtenidos a través de Google Drive a terceras partes, corredores de datos ni agencias de publicidad.</li>
+					<li><strong>No publicidad personalizada:</strong> No utilizamos ningún dato obtenido mediante las APIs de Google para mostrar anuncios publicitarios, crear perfiles comerciales ni reorientación publicitaria.</li>
+					<li><strong>No entrenamiento de Inteligencia Artificial (IA):</strong> No utilizamos los datos de los usuarios obtenidos a través de las APIs de Google para entrenar modelos de lenguaje general (LLM), aprendizaje automático (Machine Learning) ni algoritmos de inteligencia artificial.</li>
+					<li><strong>Transferencia humana restringida:</strong> Ningún empleado o desarrollador de Xilistudios tiene acceso humano a los archivos de tu bóveda alojados en Google Drive, salvo requerimiento legal expreso e ineludible, o consentimiento explícito del usuario para fines de depuración técnica (y aun en tal caso, los datos se encuentran fuertemente cifrados de extremo a extremo).</li>
+				</ul>
+			</section>
+
+			<section class="legal-section">
+				<h2>4. Seguridad y Cifrado de los Datos</h2>
+				<p>
+					Antes de que cualquier archivo de respaldo sea transmitido a tu Google Drive, Monark aplica estándares criptográficos de vanguardia implementados en el núcleo seguro de Rust:
+				</p>
+				<ul>
+					<li><strong>Derivación de Clave (KDF):</strong> <code>Argon2id</code> con parámetros resistentes a ataques por fuerza bruta y aceleración por GPU (64 MB de memoria, 3 iteraciones y paralelismo de 4 hilos).</li>
+					<li><strong>Cifrado Simétrico Autenticado:</strong> <code>XChaCha20-Poly1305</code> (variante IETF) con claves de 256 bits y nonces aleatorios de 192 bits.</li>
+					<li><strong>Protección en Memoria:</strong> Eliminación segura de credenciales en memoria (<code>ZeroizeOnDrop</code>) para prevenir ataques de extracción forense.</li>
+				</ul>
+			</section>
+
+			<section class="legal-section">
+				<h2>5. Control, Derechos y Eliminación de Datos</h2>
+				<p>Como usuario, mantienes el control absoluto en todo momento:</p>
+				<ul>
+					<li><strong>Acceso y Portabilidad:</strong> Puedes exportar tu bóveda en cualquier momento desde los ajustes de la aplicación.</li>
+					<li><strong>Eliminación de Copias de Seguridad:</strong> Puedes eliminar los archivos de respaldo directamente desde la aplicación Monark o eliminando la carpeta de Monark en tu propio almacenamiento de Google Drive.</li>
+					<li><strong>Revocación de Permisos:</strong> Puedes revocar el acceso de Monark a tu cuenta de Google en cualquier momento visitando la página oficial de gestión de permisos de Google: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">https://myaccount.google.com/permissions</a>.</li>
+				</ul>
+			</section>
+
+			<section class="legal-section">
+				<h2>6. Enlaces a Sitios de Terceros</h2>
+				<p>
+					Monark puede ofrecer integración opcional con servicios de almacenamiento externos (como Google Drive, Nextcloud o servidores WebDAV). La interacción con dichos servicios está sujeta a las políticas de privacidad y términos de servicio de los proveedores respectivos.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>7. Cambios a esta Política de Privacidad</h2>
+				<p>
+					Nos reservamos el derecho de actualizar esta Política de Privacidad para reflejar mejoras en la aplicación, nuevas características o adecuaciones regulatorias. En caso de cambios sustanciales, publicaremos la versión actualizada en este sitio web con la nueva fecha de vigencia.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>8. Contacto</h2>
+				<p>
+					Si tienes preguntas, dudas o inquietudes sobre esta Política de Privacidad o sobre las prácticas de seguridad de Monark, puedes contactar al equipo de desarrollo de Xilistudios a través de nuestro repositorio oficial de GitHub:
+				</p>
+				<p>
+					<strong>Xilistudios</strong><br>
+					Repositorio y soporte: <a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark</a>
+				</p>
+			</section>
+		</article>
+	</main>
+
+	<!-- Footer -->
+	<footer class="site-footer">
+		<div class="footer-container">
+			<div class="footer-brand">
+				<a href="index.html" class="logo-group">
+					<img src="logo.svg" alt="Monark Logo" class="brand-icon">
+					<span class="brand-name">Monark</span>
+				</a>
+				<p>Gestor de contraseñas seguro, local-first y de código abierto con cifrado de conocimiento cero.</p>
+			</div>
+			<div class="footer-col">
+				<h4>Navegación</h4>
+				<ul>
+					<li><a href="index.html">Página Principal</a></li>
+					<li><a href="privacy.html">Política de Privacidad</a></li>
+					<li><a href="terms.html">Condiciones del Servicio</a></li>
+				</ul>
+			</div>
+			<div class="footer-col">
+				<h4>Proyecto</h4>
+				<ul>
+					<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">Código en GitHub</a></li>
+					<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">Reportar un problema</a></li>
+					<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Licencia AGPL-3.0</a></li>
+				</ul>
+			</div>
+		</div>
+		<div class="footer-bottom">
+			<p>© 2026 Xilistudios. Monark Password Manager es software libre (AGPL-3.0).</p>
+			<p>
+				<a href="index.html">Inicio</a> • 
+				<a href="privacy.html">Privacidad</a> • 
+				<a href="terms.html">Términos</a>
+			</p>
+		</div>
+	</footer>
+</body>
+</html>

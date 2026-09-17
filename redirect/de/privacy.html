@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="de">
+<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Datenschutzerklärung — Monark</title>
+		<meta name="description" content="Wie Monark mit Daten umgeht: die Zero-Knowledge-Architektur, der angefragte Google-Drive-Scope und die Verpflichtungen zur eingeschränkten Nutzung, die eingehalten werden.">
+		<meta name="color-scheme" content="light dark">
+		<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+		<meta name="theme-color" content="#16100e" media="(prefers-color-scheme: dark)">
+		<link rel="canonical" href="https://monark-password-manager.web.app/de/privacy">
+	<link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/privacy">
+	<link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/privacy">
+	<link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/privacy">
+	<link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/privacy">
+	<link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/privacy">
+	<link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/privacy">
+	<link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/privacy">
+	<link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/privacy">
+		<meta property="og:type" content="website">
+		<meta property="og:site_name" content="Monark">
+		<meta property="og:locale" content="de_DE">
+		<meta property="og:title" content="Datenschutzerklärung — Monark">
+		<meta property="og:description" content="Wie Monark mit Daten umgeht: die Zero-Knowledge-Architektur, der angefragte Google-Drive-Scope und die Verpflichtungen zur eingeschränkten Nutzung, die eingehalten werden.">
+		<meta property="og:url" content="https://monark-password-manager.web.app/de/privacy">
+		<meta property="og:image" content="https://monark-password-manager.web.app/og.png">
+		<meta name="twitter:card" content="summary_large_image">
+		<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+		<link rel="icon" href="../favicon.png" type="image/png">
+		<link rel="apple-touch-icon" href="../favicon.png">
+		<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="preload" href="../fonts/newsreader-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<a class="skip-link" href="#main">Zum Inhalt springen</a>
+<header class="site-header">
+			<div class="shell header-inner">
+				<a class="brand" href="/de/">
+					<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+					<span class="brand-name">Monark</span>
+				</a>
+				<nav class="nav" aria-label="Hauptnavigation">
+					<a href="/de/#features">Funktionen</a>
+					<a href="/de/privacy" aria-current="page">Datenschutz</a>
+					<a href="/de/terms">Nutzungsbedingungen</a>
+				</nav>
+				<div class="header-actions">
+					<div class="lang" data-lang>
+						<button type="button" class="lang-btn" data-lang-toggle aria-expanded="false" aria-haspopup="menu" aria-label="Sprache wählen: Deutsch">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.4 3.4 5.4 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.4-3.4-8.5S9.8 5.9 12 3.5z"/></svg><span aria-hidden="true">DE</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6"/></svg>
+						</button>
+						<ul class="lang-menu" data-lang-menu aria-label="Sprache wählen">
+							<li><a href="/en/" hreflang="en" lang="en"><span class="lang-name">English</span><span class="lang-native" aria-hidden="true">EN</span></a></li>
+							<li><a href="/es/" hreflang="es" lang="es"><span class="lang-name">Español</span><span class="lang-native" aria-hidden="true">ES</span></a></li>
+							<li><a href="/pt/" hreflang="pt" lang="pt"><span class="lang-name">Português</span><span class="lang-native" aria-hidden="true">PT</span></a></li>
+							<li><a href="/fr/" hreflang="fr" lang="fr"><span class="lang-name">Français</span><span class="lang-native" aria-hidden="true">FR</span></a></li>
+							<li><a href="/de/" hreflang="de" lang="de" aria-current="true"><span class="lang-name">Deutsch</span></a></li>
+							<li><a href="/zh/" hreflang="zh" lang="zh"><span class="lang-name">简体中文</span><span class="lang-native" aria-hidden="true">中文</span></a></li>
+							<li><a href="/ja/" hreflang="ja" lang="ja"><span class="lang-name">日本語</span><span class="lang-native" aria-hidden="true">日本語</span></a></li>
+						</ul>
+					</div>
+					<a class="btn btn--ghost btn--sm" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>Herunterladen</span></a>
+				</div>
+			</div>
+		</header>
+	<main id="main">
+		<div class="shell">
+			<div class="doc-head">
+				<p class="mono">Datenschutzerklärung</p>
+				<h1>Datenschutzerklärung</h1>
+				<p class="doc-meta">
+					<span>Zuletzt aktualisiert: 17. September 2026</span>
+					<span>Version 1.0</span>
+					<span>Xilistudios</span>
+				</p>
+			</div>
+			<div class="doc-layout">
+				<nav class="toc" aria-label="Datenschutzerklärung">
+					<ol>
+					<li><a href="#introduction">1. Einleitung und Zero-Knowledge-Zusage</a></li>
+						<li><a href="#data">2. Was wir verarbeiten und was wir niemals verarbeiten</a></li>
+						<li><a href="#google">3. Nutzung der Google API und von Google Drive</a></li>
+						<li><a href="#security">4. Datensicherheit und Verschlüsselung</a></li>
+						<li><a href="#control">5. Kontrolle, Rechte und Löschung von Daten</a></li>
+						<li><a href="#third-parties">6. Links zu Websites Dritter</a></li>
+						<li><a href="#changes">7. Änderungen dieser Erklärung</a></li>
+						<li><a href="#contact">8. Kontakt</a></li>
+					</ol>
+				</nav>
+				<div class="legal">
+				<article id="introduction">
+						<h2>1. Einleitung und Zero-Knowledge-Zusage</h2>
+						<p>Bei <strong>Monark Password Manager</strong> (entwickelt von <strong>Xilistudios</strong>) sind Datenschutz und Datenhoheit Gründungsprinzipien. Deine Passwörter, Zugangsdaten, Notizen und vertraulichen Dokumente gehören dir und niemandem sonst.</p>
+					<p>Monark folgt einer strikten <strong>Zero-Knowledge-Architektur</strong> und einem <strong>Local-First</strong>-Modell. Wir erheben deine Daten nicht, wir speichern sie nicht auf Servern, die wir kontrollieren, und wir haben keine technische Möglichkeit, deine Passwörter oder den Master-Schlüssel deines Tresors zu lesen oder zu entschlüsseln. Sämtliche kryptografische Arbeit findet auf deinem Gerät statt.</p>
+					</article>
+					<article id="data">
+						<h2>2. Was wir verarbeiten und was wir niemals verarbeiten</h2>
+						<h3>2.1 Inhalte des Tresors — kein Zugriff</h3>
+					<p>Deine Passwörter, Benutzernamen, URLs, sicheren Notizen und Zwei-Faktor-Authentifizierungsdaten werden verschlüsselt auf deiner eigenen Hardware gespeichert. Xilistudios erhält sie niemals im Klartext und speichert sie niemals auf externen Servern.</p>
+					<h3>2.2 Telemetrie und Tracking</h3>
+					<p>Monark enthält keine Werbe-Tracker, keine Werbe-IDs und keine invasiven Analysen, die dein Surfverhalten oder deine Identität erfassen.</p>
+					</article>
+					<article id="google">
+						<h2>3. Nutzung der Google API und von Google Drive</h2>
+						<p>Monark bietet dir die Möglichkeit, ein synchronisiertes Backup in deinem eigenen Google-Drive-Konto zu führen. Damit dies möglich ist, authentifiziert sich die Anwendung über OAuth und fragt ausschließlich den einen, minimal notwendigen Scope an:</p>
+					<div class="callout">
+						<h4>Angefragter Scope: <code>https://www.googleapis.com/auth/drive.file</code></h4>
+						<p>Diese Berechtigung erlaubt Monark <strong>ausschließlich</strong>, die Dateien und Ordner anzulegen, anzusehen, zu ändern und zu löschen, die von der Anwendung Monark selbst erstellt wurden, um dein verschlüsseltes Backup zu halten.</p>
+						<p><strong>Monark kann auf keine andere Datei, kein anderes Dokument, Foto oder keinen anderen Ordner zugreifen, sie lesen oder ändern, die bereits in deinem Google Drive vorhanden sind.</strong></p>
+					</div>
+					<div class="compliance">
+						<strong>Einhaltung der Anforderungen von Google zur eingeschränkten Nutzung.</strong><br>
+						Die Verwendung und Weitergabe von Informationen, die Monark über Google APIs erhält, richtet sich nach der <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, einschließlich der Anforderungen zur eingeschränkten Nutzung.
+					</div>
+					<h3>3.1 Strikte Beschränkungen für Google-Daten</h3>
+					<ul>
+						<li><strong>Kein Verkauf und keine Kommerzialisierung:</strong> Wir verkaufen, lizenzieren, handeln oder übertragen keine Nutzerdaten, die über Google Drive erlangt wurden, an Dritte, Datenhändler oder Werbeagenturen.</li>
+						<li><strong>Keine personalisierte Werbung:</strong> Keine über Google APIs erlangten Daten werden verwendet, um Werbung auszuliefern, kommerzielle Profile zu erstellen oder dich erneut anzusprechen.</li>
+						<li><strong>Kein KI-Training:</strong> Über Google APIs erlangte Daten werden niemals verwendet, um große Sprachmodelle, maschinelle Lernsysteme oder KI-Algorithmen zu trainieren.</li>
+						<li><strong>Eingeschränkter menschlicher Zugriff:</strong> Keine Mitarbeiterin und kein Entwickler von Xilistudios hat menschlichen Zugriff auf die in deinem Google Drive gespeicherten Tresordateien, außer bei rechtlicher Verpflichtung oder wenn du ausdrücklich für die technische Fehlersuche einwilligst — und selbst dann sind die Daten Ende-zu-Ende stark verschlüsselt.</li>
+					</ul>
+					</article>
+					<article id="security">
+						<h2>4. Datensicherheit und Verschlüsselung</h2>
+						<p>Bevor eine Backup-Datei an dein Google Drive übertragen wird, wendet Monark moderne kryptografische Verfahren an, die im sicheren Rust-Kern implementiert sind:</p>
+					<ul>
+						<li><strong>Schlüsselableitung (KDF):</strong> <code>Argon2id</code> mit Parametern, die gegen Brute-Force und GPU-Beschleunigung widerstandsfähig sind (64 MB Speicher, 3 Iterationen, 4-Thread-Parallelität).</li>
+						<li><strong>Authentifizierte symmetrische Verschlüsselung:</strong> <code>XChaCha20-Poly1305</code> (IETF-Variante) mit 256-Bit-Schlüsseln und zufälligen 192-Bit-Nonces.</li>
+						<li><strong>Speicherschutz:</strong> sichere Löschung der Zugangsdaten im Arbeitsspeicher (<code>ZeroizeOnDrop</code>), um forensische Extraktionsangriffe zu verhindern.</li>
+					</ul>
+					</article>
+					<article id="control">
+						<h2>5. Kontrolle, Rechte und Löschung von Daten</h2>
+						<p>Als Nutzer behältst du jederzeit die vollständige Kontrolle:</p>
+					<ul>
+						<li><strong>Zugriff und Portabilität:</strong> Exportiere deinen Tresor jederzeit über die Einstellungen der Anwendung.</li>
+						<li><strong>Backups löschen:</strong> Entferne Backup-Dateien in Monark selbst oder indem du den Monark-Ordner in deinem eigenen Google-Drive-Speicher löschst.</li>
+						<li><strong>Berechtigungen widerrufen:</strong> Widerrufe den Zugriff von Monark auf dein Google-Konto jederzeit auf der offiziellen Berechtigungsseite von Google: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>.</li>
+					</ul>
+					</article>
+					<article id="third-parties">
+						<h2>6. Links zu Websites Dritter</h2>
+						<p>Monark kann optionale Integrationen mit externen Speicherdiensten wie Google Drive, Nextcloud oder WebDAV-Servern anbieten. Deine Interaktion mit diesen Diensten unterliegt der Datenschutzerklärung und den Nutzungsbedingungen des jeweiligen Anbieters.</p>
+					</article>
+					<article id="changes">
+						<h2>7. Änderungen dieser Erklärung</h2>
+						<p>Wir behalten uns das Recht vor, diese Datenschutzerklärung zu aktualisieren, um Verbesserungen der Anwendung, neue Funktionen oder regulatorische Anforderungen abzubilden. Bei wesentlichen Änderungen veröffentlichen wir die aktualisierte Fassung auf dieser Website mit einem neuen Datum des Inkrafttretens.</p>
+					</article>
+					<article id="contact">
+						<h2>8. Kontakt</h2>
+						<p>Wenn du Fragen zu dieser Datenschutzerklärung oder zu den Sicherheitspraktiken von Monark hast, kannst du das Entwicklungsteam von Xilistudios über unser offizielles GitHub-Repository erreichen.</p>
+					<p><strong>Xilistudios</strong><br>Repository und Support: <a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark</a></p>
+					</article>
+				</div>
+			</div>
+			<nav class="doc-nav">
+				<a class="btn btn--ghost btn--sm" href="/de/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19.5 12h-14"/><path d="M11 6.5L5.5 12 11 17.5"/></svg><span>Startseite</span></a>
+				<a class="btn btn--ghost btn--sm" href="/de/terms"><span>Nutzungsbedingungen</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+			</nav>
+		</div>
+	</main>
+<footer class="site-footer">
+			<div class="shell">
+				<div class="footer-grid">
+					<div class="footer-brand">
+						<a class="brand" href="/de/">
+							<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+							<span class="brand-name">Monark</span>
+						</a>
+						<p>Ein quelloffener, lokal arbeitender Passwortmanager mit Zero-Knowledge-Verschlüsselung, entwickelt von Xilistudios.</p>
+					</div>
+				<div class="footer-col">
+						<h4>Dokumente</h4>
+						<ul>
+							<li><a href="/de/">Überblick</a></li>
+						<li><a href="/de/privacy">Datenschutzerklärung</a></li>
+						<li><a href="/de/terms">Nutzungsbedingungen</a></li>
+						</ul>
+					</div>
+				<div class="footer-col">
+						<h4>Projekt</h4>
+						<ul>
+							<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">Quellcode</a></li>
+						<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">Problem melden</a></li>
+						<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPL-3.0-Lizenz</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-base">
+					<p>© 2026 Xilistudios. Monark ist freie Software unter der AGPL-3.0.</p>
+					<nav class="footer-langs" aria-label="Sprache wählen">
+					<a href="/en/" hreflang="en" lang="en">English</a>
+					<a href="/es/" hreflang="es" lang="es">Español</a>
+					<a href="/pt/" hreflang="pt" lang="pt">Português</a>
+					<a href="/fr/" hreflang="fr" lang="fr">Français</a>
+					<a href="/de/" hreflang="de" lang="de" aria-current="true">Deutsch</a>
+					<a href="/zh/" hreflang="zh" lang="zh">简体中文</a>
+					<a href="/ja/" hreflang="ja" lang="ja">日本語</a>
+					</nav>
+				</div>
+			</div>
+		</footer>
+<script src="../site.js" defer></script>
+
+</body>
+</html>
