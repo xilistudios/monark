@@ -11,6 +11,7 @@ import {
 import type { RootState } from "../../redux/store";
 import { VaultManager } from "../../services/vault";
 import { BiometricSettings } from "../Settings/BiometricSettings";
+import { PasswordFieldInput } from "./PasswordFieldInput";
 
 interface VaultSettingsPanelProps {
 	vault: Vault;
@@ -273,26 +274,28 @@ export function VaultSettingsPanel({
 											<label htmlFor="new-password" className="label px-0 pt-0 pb-2">
 												<span className="label-text text-sm font-medium">{t("vaultSettings.security.newPassword")}</span>
 											</label>
-											<input
+											<PasswordFieldInput
 												id="new-password"
-												type="password"
-												className="input input-bordered w-full bg-transparent focus:outline-none focus:border-secondary transition-all rounded-lg"
-												placeholder={t("vaultSettings.security.newPasswordPlaceholder")}
 												value={newPassword}
-												onChange={(e) => setNewPassword(e.target.value)}
+												onChange={setNewPassword}
+												placeholder={t("vaultSettings.security.newPasswordPlaceholder")}
+												inputClassName="bg-transparent focus:border-secondary rounded-lg"
+												maxLength={null}
+												showStrength
 											/>
 										</div>
 										<div className="form-control">
 											<label htmlFor="confirm-password" className="label px-0 pt-0 pb-2">
 												<span className="label-text text-sm font-medium">{t("vaultSettings.security.confirmPassword")}</span>
 											</label>
-											<input
+											<PasswordFieldInput
 												id="confirm-password"
-												type="password"
-												className="input input-bordered w-full bg-transparent focus:outline-none focus:border-secondary transition-all rounded-lg"
-												placeholder={t("vaultSettings.security.confirmPasswordPlaceholder")}
 												value={confirmPassword}
-												onChange={(e) => setConfirmPassword(e.target.value)}
+												onChange={setConfirmPassword}
+												placeholder={t("vaultSettings.security.confirmPasswordPlaceholder")}
+												inputClassName="bg-transparent focus:border-secondary rounded-lg"
+												maxLength={null}
+												allowGenerate={false}
 											/>
 										</div>
 									</div>

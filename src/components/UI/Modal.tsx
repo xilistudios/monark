@@ -6,7 +6,9 @@ export interface ModalProps {
 }
 export const Modal = ({ isOpen, onClose, children, className }: ModalProps) => {
 	return (
-		<dialog className={`modal ${isOpen ? "modal-open" : ""} ${className}`}>
+		<dialog
+			className={`modal ${isOpen ? "modal-open" : ""} ${className ?? ""}`}
+		>
 			<div className="modal-box max-h-[85vh] overflow-y-auto">
 				<form method="dialog">
 					<button

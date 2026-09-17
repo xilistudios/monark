@@ -455,6 +455,8 @@
         "hideButton": "Hide",
         "showButton": "Show",
         "copyButton": "Copy",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password",
         "secretLabel": "Secret",
         "removeButton": "Remove",
         "otpCopyCode": "Copy code",

@@ -102,16 +102,31 @@ export function PasswordGenerator({ onAccept }: PasswordGeneratorProps) {
 
 	const entropy = estimateEntropyBits(options.length, poolSize);
 
+	// Class names must be literal strings: Tailwind scans the source, so an
+	// interpolated `progress-${color}` never makes it into the built CSS.
 	const strength =
 		entropy < ENTROPY_WEAK
-			? { label: t("vault.passwordGenerator.strengthWeak"), color: "error" }
+			? {
+					label: t("vault.passwordGenerator.strengthWeak"),
+					badge: "badge-error",
+					bar: "progress-error",
+				}
 			: entropy < ENTROPY_FAIR
-				? { label: t("vault.passwordGenerator.strengthFair"), color: "warning" }
+				? {
+						label: t("vault.passwordGenerator.strengthFair"),
+						badge: "badge-warning",
+						bar: "progress-warning",
+					}
 				: entropy < ENTROPY_GOOD
-					? { label: t("vault.passwordGenerator.strengthGood"), color: "info" }
+					? {
+							label: t("vault.passwordGenerator.strengthGood"),
+							badge: "badge-info",
+							bar: "progress-info",
+						}
 					: {
 							label: t("vault.passwordGenerator.strengthStrong"),
-							color: "success",
+							badge: "badge-success",
+							bar: "progress-success",
 						};
 
 	const toggleLabels: Record<ToggleKey, string> = {
@@ -125,7 +140,10 @@ export function PasswordGenerator({ onAccept }: PasswordGeneratorProps) {
 		<div className="flex flex-col gap-4">
 			{/* Generated password display with copy and regenerate actions */}
 			<div className="flex items-center gap-2">
-				<div className="font-mono text-sm bg-base-200 rounded-md px-3 py-2 break-all select-all flex-1 min-h-[2.5rem] flex items-center">
+				<div
+					data-testid="generated-password"
+					className="font-mono text-sm bg-base-200 rounded-md px-3 py-2 break-all select-all flex-1 min-h-[2.5rem] flex items-center"
+				>
 					{password || (
 						<span className="text-base-content/50">{optionsError}</span>
 					)}
@@ -214,7 +232,7 @@ export function PasswordGenerator({ onAccept }: PasswordGeneratorProps) {
 				<input
 					id="password-generator-length"
 					type="range"
-					className="range range-primary"
+					className="range range-primary w-full"
 					min={PASSWORD_MIN_LENGTH}
 					max={PASSWORD_MAX_LENGTH}
 					step={1}
@@ -251,12 +269,12 @@ export function PasswordGenerator({ onAccept }: PasswordGeneratorProps) {
 					<span className="text-sm font-medium">
 						{t("vault.passwordGenerator.strength")}
 					</span>
-					<span className={`badge badge-${strength.color}`}>
+					<span className={`badge ${strength.badge} badge-outline`}>
 						{strength.label}
 					</span>
 				</div>
 				<progress
-					className={`progress progress-${strength.color}`}
+					className={`progress ${strength.bar}`}
 					value={Math.min(entropy, 100)}
 					max={100}
 					aria-label={strength.label}
