@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ja">
+<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Monark — ゼロ知識のパスワードマネージャー</title>
+		<meta name="description" content="オープンソースでローカルファーストのパスワードマネージャーです。認証情報は自分の端末だけに保存し、暗号処理は Rust による Argon2id と XChaCha20-Poly1305 で行います。アカウントも同期サーバーもテレメトリもありません。">
+		<meta name="color-scheme" content="light dark">
+		<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+		<meta name="theme-color" content="#16100e" media="(prefers-color-scheme: dark)">
+		<link rel="canonical" href="https://monark-password-manager.web.app/ja/">
+	<link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/">
+	<link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/">
+	<link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/">
+	<link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/">
+	<link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/">
+	<link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/">
+	<link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/">
+	<link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/">
+		<meta property="og:type" content="website">
+		<meta property="og:site_name" content="Monark">
+		<meta property="og:locale" content="ja_JP">
+		<meta property="og:title" content="Monark — ゼロ知識のパスワードマネージャー">
+		<meta property="og:description" content="オープンソースでローカルファーストのパスワードマネージャーです。認証情報は自分の端末だけに保存し、暗号処理は Rust による Argon2id と XChaCha20-Poly1305 で行います。アカウントも同期サーバーもテレメトリもありません。">
+		<meta property="og:url" content="https://monark-password-manager.web.app/ja/">
+		<meta property="og:image" content="https://monark-password-manager.web.app/og.png">
+		<meta name="twitter:card" content="summary_large_image">
+		<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+		<link rel="icon" href="../favicon.png" type="image/png">
+		<link rel="apple-touch-icon" href="../favicon.png">
+		<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="preload" href="../fonts/newsreader-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<a class="skip-link" href="#main">本文へスキップ</a>
+<header class="site-header">
+			<div class="shell header-inner">
+				<a class="brand" href="/ja/">
+					<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+					<span class="brand-name">Monark</span>
+				</a>
+				<nav class="nav" aria-label="メインビゲーション">
+					<a href="/ja/#features">機能</a>
+					<a href="/ja/privacy">プライバシー</a>
+					<a href="/ja/terms">利用規約</a>
+				</nav>
+				<div class="header-actions">
+					<div class="lang" data-lang>
+						<button type="button" class="lang-btn" data-lang-toggle aria-expanded="false" aria-haspopup="menu" aria-label="言語を選択: 日本語">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.4 3.4 5.4 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.4-3.4-8.5S9.8 5.9 12 3.5z"/></svg><span aria-hidden="true">日本語</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6"/></svg>
+						</button>
+						<ul class="lang-menu" data-lang-menu aria-label="言語を選択">
+							<li><a href="/en/" hreflang="en" lang="en"><span class="lang-name">English</span><span class="lang-native" aria-hidden="true">EN</span></a></li>
+							<li><a href="/es/" hreflang="es" lang="es"><span class="lang-name">Español</span><span class="lang-native" aria-hidden="true">ES</span></a></li>
+							<li><a href="/pt/" hreflang="pt" lang="pt"><span class="lang-name">Português</span><span class="lang-native" aria-hidden="true">PT</span></a></li>
+							<li><a href="/fr/" hreflang="fr" lang="fr"><span class="lang-name">Français</span><span class="lang-native" aria-hidden="true">FR</span></a></li>
+							<li><a href="/de/" hreflang="de" lang="de"><span class="lang-name">Deutsch</span><span class="lang-native" aria-hidden="true">DE</span></a></li>
+							<li><a href="/zh/" hreflang="zh" lang="zh"><span class="lang-name">简体中文</span><span class="lang-native" aria-hidden="true">中文</span></a></li>
+							<li><a href="/ja/" hreflang="ja" lang="ja" aria-current="true"><span class="lang-name">日本語</span></a></li>
+						</ul>
+					</div>
+					<a class="btn btn--ghost btn--sm" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>ダウンロード</span></a>
+				</div>
+			</div>
+		</header>
+	<main id="main">
+		<section class="hero">
+				<div class="shell hero-grid">
+					<div class="hero-copy">
+						<span class="eyebrow" data-reveal>ローカルファースト · ゼロ知識</span>
+						<h1 data-reveal style="--delay:60ms">あなたの鍵を。<br><span class="serif">あなただけに。</span></h1>
+						<p class="hero-lede" data-reveal style="--delay:120ms">Monark は、認証情報を自分のマシン上に置いておくためのオープンソースのパスワードマネージャーです。アカウントも同期サーバーもテレメトリもなく、あるのは保存されている場所で暗号化された保管庫だけです。</p>
+						<div class="hero-actions" data-reveal style="--delay:180ms">
+							<a class="btn btn--primary" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><span>Monark をダウンロード</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+							<a class="btn btn--ghost" href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>ソースコードを読む</span></a>
+						</div>
+						<dl class="hero-meta" data-reveal style="--delay:240ms">
+						<div><dt>対応環境</dt><dd>Linux、macOS、Windows、Android、iOS</dd></div>
+						<div><dt>暗号化方式</dt><dd>XChaCha20-Poly1305</dd></div>
+						<div><dt>鍵導出</dt><dd>Argon2id · 64 MB</dd></div>
+						<div><dt>ライセンス</dt><dd>AGPL-3.0</dd></div>
+						</dl>
+					</div>
+				<div class="vault-mock" role="img" aria-label="Monark のボルト画面：フォルダ一覧のサイドバーと、Google、AWS、Fastmail、GitHub、銀行の項目リスト。" data-reveal style="--delay:140ms">
+						<div class="vault-bar" aria-hidden="true">
+							<i></i><i></i><i></i>
+							<span>Monark — 個人用ボルト</span>
+						</div>
+						<div class="vault-body">
+							<div class="vault-side" aria-hidden="true">
+								<p>フォルダ</p>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>すべて</span></a>
+							<a href="#" aria-current="true" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>個人</span></a>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>仕事</span></a>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>金融</span></a>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>サーバー</span></a>
+							</div>
+							<div class="vault-main">
+								<header>
+									<h3>個人</h3>
+									<em>24 件</em>
+								</header>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">G</span>
+								<div>
+									<strong>Google</strong>
+									<small>you@example.com</small>
+								</div>
+								<span class="entry-tag">2FA</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">A</span>
+								<div>
+									<strong>AWS</strong>
+									<small>root · us-east-1</small>
+								</div>
+								<span class="entry-pw" aria-hidden="true">••••••••••</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">F</span>
+								<div>
+									<strong>Fastmail</strong>
+									<small>you@example.com</small>
+								</div>
+								<span class="entry-tag">2FA</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">G</span>
+								<div>
+									<strong>GitHub</strong>
+									<small>アカウント · SSH 鍵</small>
+								</div>
+								<span class="entry-pw" aria-hidden="true">••••••••••</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">B</span>
+								<div>
+									<strong>銀行</strong>
+									<small>カード + 口座</small>
+								</div>
+								<span class="entry-pw" aria-hidden="true">••••••••••</span>
+							</div>
+								<p class="vault-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6l7-3z"/><path d="M9 11.8l2.1 2.1L15 10"/></svg><span>マスターパスフレーズで施錠</span></p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+		<section id="features" class="section-rule">
+				<div class="shell">
+					<div class="section-head">
+						<div>
+							<span class="eyebrow" data-reveal>できること</span>
+							<h2 data-reveal style="--delay:60ms">パスワードマネージャーがやるべきことはすべて、やるべきでないことは何も。</h2>
+						</div>
+						<p class="section-lede" data-reveal style="--delay:120ms">Monark は、ログイン情報、メモ、ワンタイムコードを、あなたが所有する 1 つの暗号化ファイルに保存します。間に事業者は入りません。そもそも間に事業者がいないからです。</p>
+					</div>
+					<div class="bento">
+					<article class="cell cell--4" data-reveal>
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg></span>
+							<h3>保管庫はディスク上のただのファイル</h3>
+							<p>エントリは保存先に書き込まれる前に暗号化され、保管庫を開いている間だけ復号されます。Monark は完全にオフラインで動作し、あなたが求めない限りネットワークには触れません。</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--dark cell--2" data-reveal style="--delay:60ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V8a4 4 0 018 0v2.5"/><path d="M12 14.5v2.5"/></svg></span>
+							<h3>暗号処理は Rust で実装</h3>
+							<p>暗号処理の中核は Rust で書かれており、ページ内ではなくネイティブに動作します。</p>
+						</div>
+					<div class="terminal" aria-hidden="true">
+						<div><span class="k">kdf</span> <span class="v">argon2id</span></div>
+						<div><span class="k">memory</span> <span class="v">64 MB · 3 パス</span></div>
+						<div><span class="k">cipher</span> <span class="v">xchacha20-poly1305</span></div>
+						<div><span class="k">key</span> <span class="v">256 ビット</span></div>
+						<div><span class="k">nonce</span> <span class="v">192 ビット、ランダム</span></div>
+						</div>
+					</article>
+					<article class="cell cell--2" data-reveal style="--delay:120ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="3.2"/><path d="M10.4 12.6L19 4"/><path d="M16 7l2 2"/><path d="M14 9l2 2"/></svg></span>
+							<h3>パスワード生成</h3>
+							<p>パスワードとパスフレーズはオペレーティングシステムの CSPRNG から生成します。使用する文字種と長さは指定できます。</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--2" data-reveal style="--delay:180ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.6"/><path d="M9.5 2.8h5"/></svg></span>
+							<h3>2 段階認証コード</h3>
+							<p>TOTP のシークレットは対応するログイン情報の隣に保存でき、現在のコードは保管庫のウィンドウから確認できます。</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--2" data-reveal style="--delay:240ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.5 18.5h9.2a3.8 3.8 0 00.4-7.6 5.2 5.2 0 00-10-1.3 3.6 3.6 0 00.4 8.9z"/><path d="M12 14.4V9.6"/><path d="M9.8 11.5L12 9.3l2.2 2.2"/></svg></span>
+							<h3>任意の暗号化バックアップ</h3>
+							<p>保管庫を自分の Google Drive や WebDAV サーバーにコピーできます。ファイルは端末から出る前にすでに暗号化されています。</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--wide cell--6" data-reveal style="--delay:300ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="12" height="9" rx="1.6"/><path d="M2.5 17.5h12"/><rect x="16.5" y="9" width="5" height="10" rx="1.4"/></svg></span>
+							<h3>1 つのコードベースで、手元のすべての PC とスマートフォンへ</h3>
+							<p>Monark は Tauri v2 で作られているため、同じ Rust のコアとインターフェースを Linux、macOS、Windows、Android、iOS に配布できます。Electron ランタイムを抱え込む必要はありません。</p>
+						</div>
+					<div class="terminal" aria-hidden="true">
+						<div><span class="k">bundle</span> <span class="v">native webview</span></div>
+						<div><span class="k">runtime</span> <span class="v">tauri v2 · rust</span></div>
+						<div><span class="k">interface</span> <span class="v">react 18 · 型付き</span></div>
+						<div><span class="k">installer</span> <span class="v">.deb .rpm .dmg .msi .apk</span></div>
+						</div>
+					</article>
+					</div>
+				</div>
+			</section>
+		<section class="section-rule">
+				<div class="shell">
+					<div class="section-head">
+						<div>
+							<span class="eyebrow" data-reveal>内部の仕組み</span>
+							<h2 data-reveal style="--delay:60ms">パラメータは、そのままの言葉で。</h2>
+						</div>
+						<p class="section-lede" data-reveal style="--delay:120ms">ここに独自仕様はなく、秘密もありません。実際に使っているプリミティブはすべてリポジトリに記載され、テストで検証されています。</p>
+					</div>
+					<dl class="specs">
+					<div class="spec"><dt>鍵導出</dt><dd>メモリ 64 MB、3 回の反復、4 並列の <b>Argon2id</b>。GPU を使った総当たり推測を高コストにします。</dd></div>
+						<div class="spec"><dt>認証付き暗号化</dt><dd>256 ビット鍵と操作ごとの 192 ビットランダム nonce を用いる <b>XChaCha20-Poly1305</b>（IETF 版）。</dd></div>
+						<div class="spec"><dt>乱数</dt><dd>鍵、ソルト、nonce はすべてオペレーティングシステムの <b>CSPRNG</b> から取得し、言語の乱数生成器は使いません。</dd></div>
+						<div class="spec"><dt>メモリの衛生管理</dt><dd>導出した鍵と平文のシークレットは<b>破棄時にゼロ埋め</b>され、解放済みメモリに残りません。</dd></div>
+						<div class="spec"><dt>保存形式</dt><dd>移動もコピーも削除もできる、ローカルの<b>保管庫ファイル</b> 1 つだけ。クラウド上のコピーも同じ暗号化バイト列です。</dd></div>
+						<div class="spec"><dt>ソース</dt><dd><b>AGPL-3.0</b> で公開しています。自分でビルドしても、監査しても、実際に動かしているリビジョンに対して issue を報告してもかまいません。</dd></div>
+					</dl>
+				</div>
+			</section>
+		<section class="cta">
+				<div class="shell cta-inner">
+					<div data-reveal>
+						<h2>パスワードを預ける前に、コードを読んでください。</h2>
+						<p>Monark は公開リポジトリから配布されており、テスト、暗号パラメータ、リリース成果物が同じ場所にあります。ビルドを検証するか、自分でコンパイルしてください。</p>
+					</div>
+					<div class="cta-actions" data-reveal style="--delay:80ms">
+						<a class="btn btn--primary" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><span>最新リリースを入手</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+						<a class="btn btn--ghost" href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>リポジトリを見る</span></a>
+					</div>
+				</div>
+			</section>
+	</main>
+<footer class="site-footer">
+			<div class="shell">
+				<div class="footer-grid">
+					<div class="footer-brand">
+						<a class="brand" href="/ja/">
+							<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+							<span class="brand-name">Monark</span>
+						</a>
+						<p>Xilistudios が開発する、ゼロ知識暗号化を採用したオープンソースかつローカルファーストのパスワードマネージャーです。</p>
+					</div>
+				<div class="footer-col">
+						<h4>ドキュメント</h4>
+						<ul>
+							<li><a href="/ja/">概要</a></li>
+						<li><a href="/ja/privacy">プライバシーポリシー</a></li>
+						<li><a href="/ja/terms">利用規約</a></li>
+						</ul>
+					</div>
+				<div class="footer-col">
+						<h4>プロジェクト</h4>
+						<ul>
+							<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">ソースコード</a></li>
+						<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">問題を報告</a></li>
+						<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPL-3.0 ライセンス</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-base">
+					<p>© 2026 Xilistudios。Monark は AGPL-3.0 の下で公開されている自由ソフトウェアです。</p>
+					<nav class="footer-langs" aria-label="言語を選択">
+					<a href="/en/" hreflang="en" lang="en">English</a>
+					<a href="/es/" hreflang="es" lang="es">Español</a>
+					<a href="/pt/" hreflang="pt" lang="pt">Português</a>
+					<a href="/fr/" hreflang="fr" lang="fr">Français</a>
+					<a href="/de/" hreflang="de" lang="de">Deutsch</a>
+					<a href="/zh/" hreflang="zh" lang="zh">简体中文</a>
+					<a href="/ja/" hreflang="ja" lang="ja" aria-current="true">日本語</a>
+					</nav>
+				</div>
+			</div>
+		</footer>
+<script src="../site.js" defer></script>
+
+</body>
+</html>

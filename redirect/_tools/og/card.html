@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Monark — social card</title>
+	<link rel="stylesheet" href="../../styles.css">
+	<style>
+		/* Social cards are rendered headless into a 1200×630 PNG. Everything is
+		   fixed-size: no clamp(), no viewport units, no media queries. */
+		body {
+			margin: 0;
+			width: 1200px;
+			height: 630px;
+			overflow: hidden;
+			background: var(--canvas);
+			display: grid;
+			grid-template-columns: 1fr 444px;
+		}
+
+		.card-copy {
+			padding: 84px 0 84px 88px;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+		}
+
+		.brand-row {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+		}
+
+		.brand-row img {
+			width: 40px;
+			height: 40px;
+		}
+
+		.brand-row span {
+			font-size: 26px;
+			font-weight: 600;
+			letter-spacing: -0.02em;
+		}
+
+		h1 {
+			font-size: 68px;
+			line-height: 1.05;
+			letter-spacing: -0.035em;
+			font-weight: 600;
+			max-width: 15ch;
+			text-wrap: balance;
+		}
+
+		h1 .serif {
+			font-family: var(--font-serif);
+			font-style: italic;
+			font-weight: 400;
+		}
+
+		.tail {
+			display: flex;
+			align-items: center;
+			gap: 28px;
+			font-family: var(--font-mono);
+			font-size: 19px;
+			letter-spacing: 0.02em;
+			color: var(--ink-tertiary);
+		}
+
+		.tail b {
+			font-weight: 400;
+			color: var(--ink);
+		}
+
+		/* A single hairline keeps the panel from floating in empty space. */
+		.panel {
+			border-left: 1px solid var(--rule);
+			background: var(--surface);
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			gap: 26px;
+			padding: 0 52px;
+		}
+
+		.panel p {
+			font-family: var(--font-mono);
+			font-size: 18px;
+			letter-spacing: 0.01em;
+			color: var(--ink-secondary);
+			/* Label column keeps the values on a single baseline each; without
+			   it the longer values wrap and the panel reads as noise. */
+			display: grid;
+			grid-template-columns: 86px 1fr;
+			align-items: baseline;
+			white-space: nowrap;
+		}
+
+		.panel p span {
+			color: var(--accent);
+		}
+	</style>
+</head>
+<body>
+	<div class="card-copy">
+		<div class="brand-row">
+			<img src="../../logo.svg" alt="">
+			<span>Monark</span>
+		</div>
+		<h1>Your keys.<br><span class="serif">Only yours.</span></h1>
+		<div class="tail">
+			<b>Local-first</b>
+			<b>Zero-knowledge</b>
+			<b>AGPL-3.0</b>
+		</div>
+	</div>
+	<div class="panel">
+		<p><span>kdf</span> argon2id · 64 MB</p>
+		<p><span>cipher</span> xchacha20-poly1305</p>
+		<p><span>store</span> one file on disk</p>
+		<p><span>cloud</span> optional, off by default</p>
+	</div>
+</body>
+</html>

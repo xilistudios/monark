@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ja">
+<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>プライバシーポリシー — Monark</title>
+		<meta name="description" content="Monark がデータをどう扱うか。ゼロ知識アーキテクチャ、要求する Google Drive のスコープ、順守している限定使用の確約について説明します。">
+		<meta name="color-scheme" content="light dark">
+		<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+		<meta name="theme-color" content="#16100e" media="(prefers-color-scheme: dark)">
+		<link rel="canonical" href="https://monark-password-manager.web.app/ja/privacy">
+	<link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/privacy">
+	<link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/privacy">
+	<link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/privacy">
+	<link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/privacy">
+	<link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/privacy">
+	<link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/privacy">
+	<link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/privacy">
+	<link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/privacy">
+		<meta property="og:type" content="website">
+		<meta property="og:site_name" content="Monark">
+		<meta property="og:locale" content="ja_JP">
+		<meta property="og:title" content="プライバシーポリシー — Monark">
+		<meta property="og:description" content="Monark がデータをどう扱うか。ゼロ知識アーキテクチャ、要求する Google Drive のスコープ、順守している限定使用の確約について説明します。">
+		<meta property="og:url" content="https://monark-password-manager.web.app/ja/privacy">
+		<meta property="og:image" content="https://monark-password-manager.web.app/og.png">
+		<meta name="twitter:card" content="summary_large_image">
+		<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+		<link rel="icon" href="../favicon.png" type="image/png">
+		<link rel="apple-touch-icon" href="../favicon.png">
+		<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="preload" href="../fonts/newsreader-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<a class="skip-link" href="#main">本文へスキップ</a>
+<header class="site-header">
+			<div class="shell header-inner">
+				<a class="brand" href="/ja/">
+					<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+					<span class="brand-name">Monark</span>
+				</a>
+				<nav class="nav" aria-label="メインビゲーション">
+					<a href="/ja/#features">機能</a>
+					<a href="/ja/privacy" aria-current="page">プライバシー</a>
+					<a href="/ja/terms">利用規約</a>
+				</nav>
+				<div class="header-actions">
+					<div class="lang" data-lang>
+						<button type="button" class="lang-btn" data-lang-toggle aria-expanded="false" aria-haspopup="menu" aria-label="言語を選択: 日本語">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.4 3.4 5.4 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.4-3.4-8.5S9.8 5.9 12 3.5z"/></svg><span aria-hidden="true">日本語</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6"/></svg>
+						</button>
+						<ul class="lang-menu" data-lang-menu aria-label="言語を選択">
+							<li><a href="/en/" hreflang="en" lang="en"><span class="lang-name">English</span><span class="lang-native" aria-hidden="true">EN</span></a></li>
+							<li><a href="/es/" hreflang="es" lang="es"><span class="lang-name">Español</span><span class="lang-native" aria-hidden="true">ES</span></a></li>
+							<li><a href="/pt/" hreflang="pt" lang="pt"><span class="lang-name">Português</span><span class="lang-native" aria-hidden="true">PT</span></a></li>
+							<li><a href="/fr/" hreflang="fr" lang="fr"><span class="lang-name">Français</span><span class="lang-native" aria-hidden="true">FR</span></a></li>
+							<li><a href="/de/" hreflang="de" lang="de"><span class="lang-name">Deutsch</span><span class="lang-native" aria-hidden="true">DE</span></a></li>
+							<li><a href="/zh/" hreflang="zh" lang="zh"><span class="lang-name">简体中文</span><span class="lang-native" aria-hidden="true">中文</span></a></li>
+							<li><a href="/ja/" hreflang="ja" lang="ja" aria-current="true"><span class="lang-name">日本語</span></a></li>
+						</ul>
+					</div>
+					<a class="btn btn--ghost btn--sm" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>ダウンロード</span></a>
+				</div>
+			</div>
+		</header>
+	<main id="main">
+		<div class="shell">
+			<div class="doc-head">
+				<p class="mono">プライバシーポリシー</p>
+				<h1>プライバシーポリシー</h1>
+				<p class="doc-meta">
+					<span>最終更新日：2026 年 9 月 17 日</span>
+					<span>バージョン 1.0</span>
+					<span>Xilistudios</span>
+				</p>
+			</div>
+			<div class="doc-layout">
+				<nav class="toc" aria-label="プライバシーポリシー">
+					<ol>
+					<li><a href="#introduction">1. はじめにとゼロ知識の確約</a></li>
+						<li><a href="#data">2. 当方が処理するもの、そして決して処理しないもの</a></li>
+						<li><a href="#google">3. Google API および Google Drive の利用</a></li>
+						<li><a href="#security">4. データの安全性と暗号化</a></li>
+						<li><a href="#control">5. 管理、権利、データの削除</a></li>
+						<li><a href="#third-parties">6. 第三者サイトへのリンク</a></li>
+						<li><a href="#changes">7. 本ポリシーの変更</a></li>
+						<li><a href="#contact">8. お問い合わせ</a></li>
+					</ol>
+				</nav>
+				<div class="legal">
+				<article id="introduction">
+						<h2>1. はじめにとゼロ知識の確約</h2>
+						<p><strong>Monark Password Manager</strong>（開発：<strong>Xilistudios</strong>）にとって、プライバシーとデータ主権は設立当初からの原則です。あなたのパスワード、認証情報、メモ、機密文書はあなたのものであり、他の誰のものでもありません。</p>
+					<p>Monark は厳格な<strong>ゼロ知識アーキテクチャ</strong>と<strong>ローカルファースト</strong>のモデルで動作します。当方はあなたのデータを収集せず、当方が管理するサーバーに保存することもなく、あなたのパスワードや保管庫のマスター鍵を読み取ったり復号したりする技術的手段を持ちません。暗号処理はすべてあなたの端末上で行われます。</p>
+					</article>
+					<article id="data">
+						<h2>2. 当方が処理するもの、そして決して処理しないもの</h2>
+						<h3>2.1 保管庫の中身 — アクセスできません</h3>
+					<p>あなたのパスワード、ユーザー名、URL、セキュアノート、2 段階認証のデータは、あなた自身のハードウェア上に暗号化して保存されます。Xilistudios がこれらを平文で受け取ることはなく、外部サーバーに保存することもありません。</p>
+					<h3>2.2 テレメトリとトラッキング</h3>
+					<p>Monark には、広告トラッカー、広告識別子、および閲覧行動や個人の特定につながる侵入的な解析機能は含まれていません。</p>
+					</article>
+					<article id="google">
+						<h2>3. Google API および Google Drive の利用</h2>
+						<p>Monark では、あなた個人の Google Drive アカウントに同期したバックアップを保存するかどうかを選べます。これを実現するため、アプリケーションは OAuth で認証し、必要最小限のスコープを 1 つだけ要求します。</p>
+					<div class="callout">
+						<h4>要求するスコープ：<code>https://www.googleapis.com/auth/drive.file</code></h4>
+						<p>この権限は、Monark アプリケーション自身が直接作成したファイルとフォルダを、暗号化されたバックアップを保持する目的で作成・閲覧・変更・削除すること<strong>のみ</strong>を許可します。</p>
+						<p><strong>Monark は、あなたの Google Drive にすでにある他のファイル、ドキュメント、写真、フォルダにアクセスしたり、読み取ったり、変更したりすることはできません。</strong></p>
+					</div>
+					<div class="compliance">
+						<strong>Google の限定使用（Limited Use）要件への準拠。</strong><br>
+						Monark による Google API から受け取った情報の使用および転送は、限定使用要件を含む <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API サービス ユーザーデータ ポリシー</a>に従います。
+					</div>
+					<h3>3.1 Google データに対する厳格な制限</h3>
+					<ul>
+						<li><strong>販売・商用利用の禁止：</strong>Google Drive を通じて取得したユーザーデータを、第三者、データブローカー、広告代理店に対して販売、ライセンス供与、取引、譲渡することは一切ありません。</li>
+						<li><strong>パーソナライズ広告の禁止：</strong>Google API を通じて取得したデータを、広告の配信、商用プロファイルの作成、リターゲティングに利用することはありません。</li>
+						<li><strong>AI 学習の禁止：</strong>Google API を通じて取得したデータを、大規模言語モデル、機械学習システム、人工知能アルゴリズムの学習に利用することは一切ありません。</li>
+						<li><strong>人的アクセスの制限：</strong>Xilistudios の従業員および開発者は、あなたの Google Drive に保存された保管庫ファイルに対して人的アクセスを行いません。ただし法令により求められた場合、または技術的なデバッグについてあなたが明示的に同意した場合を除きます。その場合でも、データはエンドツーエンドで強固に暗号化されています。</li>
+					</ul>
+					</article>
+					<article id="security">
+						<h2>4. データの安全性と暗号化</h2>
+						<p>バックアップファイルを Google Drive に送信する前に、Monark は Rust のコアで次のプリミティブを用いて鍵を導出し、暗号化します。</p>
+					<ul>
+						<li><strong>鍵導出（KDF）：</strong>総当たり攻撃と GPU による高速化に耐えるパラメータの <code>Argon2id</code>（メモリ 64 MB、反復 3 回、4 スレッド並列）。</li>
+						<li><strong>認証付き共通鍵暗号化：</strong>256 ビット鍵とランダムな 192 ビット nonce を用いる <code>XChaCha20-Poly1305</code>（IETF 版）。</li>
+						<li><strong>メモリ保護：</strong>メモリ上の認証情報を安全に消去し（<code>ZeroizeOnDrop</code>）、フォレンジックによる抽出攻撃を防ぎます。</li>
+					</ul>
+					</article>
+					<article id="control">
+						<h2>5. 管理、権利、データの削除</h2>
+						<p>ユーザーであるあなたは、常に完全な管理権を保持します。</p>
+					<ul>
+						<li><strong>アクセスと可搬性：</strong>アプリケーションの設定からいつでも保管庫をエクスポートできます。</li>
+						<li><strong>バックアップの削除：</strong>Monark の画面から、またはご自身の Google Drive 内の Monark フォルダを削除することで、バックアップファイルを消去できます。</li>
+						<li><strong>権限の取り消し：</strong>Google の公式な権限ページ <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a> で、Monark の Google アカウントへのアクセスをいつでも取り消せます。</li>
+					</ul>
+					</article>
+					<article id="third-parties">
+						<h2>6. 第三者サイトへのリンク</h2>
+						<p>Monark は、Google Drive、Nextcloud、WebDAV サーバーなどの外部ストレージサービスとの任意の連携を提供する場合があります。これらのサービスとのやり取りには、それぞれの提供者のプライバシーポリシーおよび利用規約が適用されます。</p>
+					</article>
+					<article id="changes">
+						<h2>7. 本ポリシーの変更</h2>
+						<p>当方は、アプリケーションの改善、新機能、法規制上の要請を反映するため、本プライバシーポリシーを更新する権利を留保します。重要な変更を行う場合は、新しい発効日を付した更新版を本サイトで公開します。</p>
+					</article>
+					<article id="contact">
+						<h2>8. お問い合わせ</h2>
+						<p>本プライバシーポリシーまたは Monark のセキュリティ慣行についてご質問がある場合は、公式の GitHub リポジトリを通じて Xilistudios の開発チームにご連絡いただけます。</p>
+					<p><strong>Xilistudios</strong><br>リポジトリとサポート：<a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark</a></p>
+					</article>
+				</div>
+			</div>
+			<nav class="doc-nav">
+				<a class="btn btn--ghost btn--sm" href="/ja/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19.5 12h-14"/><path d="M11 6.5L5.5 12 11 17.5"/></svg><span>ホーム</span></a>
+				<a class="btn btn--ghost btn--sm" href="/ja/terms"><span>利用規約</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+			</nav>
+		</div>
+	</main>
+<footer class="site-footer">
+			<div class="shell">
+				<div class="footer-grid">
+					<div class="footer-brand">
+						<a class="brand" href="/ja/">
+							<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+							<span class="brand-name">Monark</span>
+						</a>
+						<p>Xilistudios が開発する、ゼロ知識暗号化を採用したオープンソースかつローカルファーストのパスワードマネージャーです。</p>
+					</div>
+				<div class="footer-col">
+						<h4>ドキュメント</h4>
+						<ul>
+							<li><a href="/ja/">概要</a></li>
+						<li><a href="/ja/privacy">プライバシーポリシー</a></li>
+						<li><a href="/ja/terms">利用規約</a></li>
+						</ul>
+					</div>
+				<div class="footer-col">
+						<h4>プロジェクト</h4>
+						<ul>
+							<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">ソースコード</a></li>
+						<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">問題を報告</a></li>
+						<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPL-3.0 ライセンス</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-base">
+					<p>© 2026 Xilistudios。Monark は AGPL-3.0 の下で公開されている自由ソフトウェアです。</p>
+					<nav class="footer-langs" aria-label="言語を選択">
+					<a href="/en/" hreflang="en" lang="en">English</a>
+					<a href="/es/" hreflang="es" lang="es">Español</a>
+					<a href="/pt/" hreflang="pt" lang="pt">Português</a>
+					<a href="/fr/" hreflang="fr" lang="fr">Français</a>
+					<a href="/de/" hreflang="de" lang="de">Deutsch</a>
+					<a href="/zh/" hreflang="zh" lang="zh">简体中文</a>
+					<a href="/ja/" hreflang="ja" lang="ja" aria-current="true">日本語</a>
+					</nav>
+				</div>
+			</div>
+		</footer>
+<script src="../site.js" defer></script>
+
+</body>
+</html>

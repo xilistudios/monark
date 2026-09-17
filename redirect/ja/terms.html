@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>利用規約 — Monark</title>
+		<meta name="description" content="Monark の利用条件。AGPL-3.0 によるライセンス、ゼロ知識モデルの限界、第三者ストレージ、および保証の免責について定めます。">
+		<meta name="color-scheme" content="light dark">
+		<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+		<meta name="theme-color" content="#16100e" media="(prefers-color-scheme: dark)">
+		<link rel="canonical" href="https://monark-password-manager.web.app/ja/terms">
+	<link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/terms">
+	<link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/terms">
+	<link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/terms">
+	<link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/terms">
+	<link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/terms">
+	<link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/terms">
+	<link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/terms">
+	<link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/terms">
+		<meta property="og:type" content="website">
+		<meta property="og:site_name" content="Monark">
+		<meta property="og:locale" content="ja_JP">
+		<meta property="og:title" content="利用規約 — Monark">
+		<meta property="og:description" content="Monark の利用条件。AGPL-3.0 によるライセンス、ゼロ知識モデルの限界、第三者ストレージ、および保証の免責について定めます。">
+		<meta property="og:url" content="https://monark-password-manager.web.app/ja/terms">
+		<meta property="og:image" content="https://monark-password-manager.web.app/og.png">
+		<meta name="twitter:card" content="summary_large_image">
+		<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+		<link rel="icon" href="../favicon.png" type="image/png">
+		<link rel="apple-touch-icon" href="../favicon.png">
+		<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="preload" href="../fonts/newsreader-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<a class="skip-link" href="#main">本文へスキップ</a>
+<header class="site-header">
+			<div class="shell header-inner">
+				<a class="brand" href="/ja/">
+					<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+					<span class="brand-name">Monark</span>
+				</a>
+				<nav class="nav" aria-label="メインビゲーション">
+					<a href="/ja/#features">機能</a>
+					<a href="/ja/privacy">プライバシー</a>
+					<a href="/ja/terms" aria-current="page">利用規約</a>
+				</nav>
+				<div class="header-actions">
+					<div class="lang" data-lang>
+						<button type="button" class="lang-btn" data-lang-toggle aria-expanded="false" aria-haspopup="menu" aria-label="言語を選択: 日本語">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.4 3.4 5.4 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.4-3.4-8.5S9.8 5.9 12 3.5z"/></svg><span aria-hidden="true">日本語</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6"/></svg>
+						</button>
+						<ul class="lang-menu" data-lang-menu aria-label="言語を選択">
+							<li><a href="/en/" hreflang="en" lang="en"><span class="lang-name">English</span><span class="lang-native" aria-hidden="true">EN</span></a></li>
+							<li><a href="/es/" hreflang="es" lang="es"><span class="lang-name">Español</span><span class="lang-native" aria-hidden="true">ES</span></a></li>
+							<li><a href="/pt/" hreflang="pt" lang="pt"><span class="lang-name">Português</span><span class="lang-native" aria-hidden="true">PT</span></a></li>
+							<li><a href="/fr/" hreflang="fr" lang="fr"><span class="lang-name">Français</span><span class="lang-native" aria-hidden="true">FR</span></a></li>
+							<li><a href="/de/" hreflang="de" lang="de"><span class="lang-name">Deutsch</span><span class="lang-native" aria-hidden="true">DE</span></a></li>
+							<li><a href="/zh/" hreflang="zh" lang="zh"><span class="lang-name">简体中文</span><span class="lang-native" aria-hidden="true">中文</span></a></li>
+							<li><a href="/ja/" hreflang="ja" lang="ja" aria-current="true"><span class="lang-name">日本語</span></a></li>
+						</ul>
+					</div>
+					<a class="btn btn--ghost btn--sm" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>ダウンロード</span></a>
+				</div>
+			</div>
+		</header>
+	<main id="main">
+		<div class="shell">
+			<div class="doc-head">
+				<p class="mono">利用規約</p>
+				<h1>利用規約</h1>
+				<p class="doc-meta">
+					<span>最終更新日：2026 年 9 月 17 日</span>
+					<span>バージョン 1.0</span>
+					<span>Xilistudios</span>
+				</p>
+			</div>
+			<div class="doc-layout">
+				<nav class="toc" aria-label="利用規約">
+					<ol>
+					<li><a href="#acceptance">1. 本規約への同意</a></li>
+						<li><a href="#license">2. ソフトウェアの性質とライセンス</a></li>
+						<li><a href="#responsibility">3. ユーザーの責任とゼロ知識モデル</a></li>
+						<li><a href="#google">4. 第三者サービス（Google Drive）との連携</a></li>
+						<li><a href="#acceptable-use">5. 利用の範囲</a></li>
+						<li><a href="#warranty">6. 保証の否認</a></li>
+						<li><a href="#liability">7. 責任の制限</a></li>
+						<li><a href="#modifications">8. 本規約の変更</a></li>
+						<li><a href="#contact">9. お問い合わせ</a></li>
+					</ol>
+				</nav>
+				<div class="legal">
+				<article id="acceptance">
+						<h2>1. 本規約への同意</h2>
+						<p><strong>Monark Password Manager</strong> をインストールし、実行し、またはその他の方法で使用することにより、あなたは本利用規約に同意したものとみなされます。同意しない場合は、本アプリケーションを使用しないでください。</p>
+					</article>
+					<article id="license">
+						<h2>2. ソフトウェアの性質とライセンス</h2>
+						<p>Monark は、ローカルファーストかつオープンソースの認証情報・パスワード管理アプリケーションです。</p>
+					<p>ソースコードは <strong>GNU Affero General Public License version 3.0（AGPL-3.0）</strong>の条件で配布されています。あなたは同ライセンスの条件に従い、コードを自由に閲覧、監査、改変、再配布できます。ライセンス全文は、プロジェクトの公式 GitHub リポジトリで入手できます。</p>
+					</article>
+					<article id="responsibility">
+						<h2>3. ユーザーの責任とゼロ知識モデル</h2>
+						<div class="callout callout--warn">
+						<h4>マスターパスワードに関する重要なお知らせ</h4>
+						<p>Monark は<strong>ゼロ知識</strong>の暗号モデルで動作します。あなたのデータは、マスターパスワードとそこから導出された鍵（Argon2id および XChaCha20-Poly1305）を使って、あなた自身の端末上で暗号化されます。</p>
+						<p><strong>Xilistudios はあなたのマスターパスワードを保存しておらず、把握してもおらず、いかなる状況でも再設定できません。マスターパスワードを忘れ、リカバリーキーやバックアップも持っていない場合、あなたのデータを復元することはできません。</strong></p>
+					</div>
+					<p>次の事項は、あなただけの責任です。</p>
+					<ul>
+						<li>強力なマスターパスワードを選び、安全に管理すること。</li>
+						<li>データとリカバリーキーのバックアップを作成し、保管すること。</li>
+						<li>Monark をインストールした端末の物理的および論理的な安全性を維持すること。</li>
+					</ul>
+					</article>
+					<article id="google">
+						<h2>4. 第三者サービス（Google Drive）との連携</h2>
+						<p>Monark は、第三者が提供するクラウドストレージとの任意の同期に対応しています。特に <strong>Google Drive</strong> とは OAuth 認証を通じて連携します。</p>
+					<ul>
+						<li>Google Drive の利用には <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Google の利用規約</a>が適用されます。</li>
+						<li>Monark は、アプリケーション自身が生成したバックアップファイル（<code>drive.file</code> スコープ）を管理するためのアクセスのみを要求します。これらのファイルは送信前にエンドツーエンドで暗号化されます。</li>
+						<li>第三者のクラウド提供者による接続障害、サービス停止、保存容量の制限について、Xilistudios は責任を負いません。</li>
+					</ul>
+					</article>
+					<article id="acceptable-use">
+						<h2>5. 利用の範囲</h2>
+						<p>あなたは Monark を適法な目的にのみ使用することに同意します。本ソフトウェアを次の目的で使用することは固く禁じます。</p>
+					<ul>
+						<li>違法に、または権限なく取得した認証情報を保存、管理、配布すること。</li>
+						<li>あなたが所有していない第三者サービスやシステムのセキュリティ対策を突破、無効化、回避しようとすること。</li>
+					</ul>
+					</article>
+					<article id="warranty">
+						<h2>6. 保証の否認</h2>
+						<p>適用法が認める最大限の範囲において、本ソフトウェアは<strong>「現状有姿」</strong>かつ<strong>「提供可能な範囲」</strong>で提供され、明示か黙示かを問わずいかなる保証も伴いません。これには、商品性、特定目的への適合性、権利非侵害に関する黙示の保証が含まれますが、これらに限られません。</p>
+					<p>当方は品質、安全性、テストの水準を高く保つよう努めていますが、Xilistudios は、本アプリケーションが中断なく動作すること、誤りがまったくないこと、あらゆるハードウェアやソフトウェア構成と互換性があることを保証しません。</p>
+					</article>
+					<article id="liability">
+						<h2>7. 責任の制限</h2>
+						<p>いかなる場合も、Xilistudios、その開発者または貢献者は、本アプリケーションの使用または使用不能から生じる直接的、間接的、偶発的、特別、結果的または懲罰的な損害について責任を負いません。これには、逸失利益、データの損失、事業の中断、コンピュータの故障が含まれます。</p>
+					</article>
+					<article id="modifications">
+						<h2>8. 本規約の変更</h2>
+						<p>Xilistudios は、本利用規約をいつでも変更または更新する権利を留保します。最終改訂日は本ページ上部に反映されます。変更の公開後も本アプリケーションの使用を続けることは、新しい規約への同意を意味します。</p>
+					</article>
+					<article id="contact">
+						<h2>9. お問い合わせ</h2>
+						<p>本利用規約に関するご質問やご要望は、公式の窓口を通じて Xilistudios チームまでご連絡ください。</p>
+					<p><strong>Xilistudios</strong><br>プロジェクトリポジトリ：<a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark</a><br>報告とサポート：<a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark/issues</a></p>
+					</article>
+				</div>
+			</div>
+			<nav class="doc-nav">
+				<a class="btn btn--ghost btn--sm" href="/ja/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19.5 12h-14"/><path d="M11 6.5L5.5 12 11 17.5"/></svg><span>ホーム</span></a>
+				<a class="btn btn--ghost btn--sm" href="/ja/privacy"><span>プライバシーポリシー</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+			</nav>
+		</div>
+	</main>
+<footer class="site-footer">
+			<div class="shell">
+				<div class="footer-grid">
+					<div class="footer-brand">
+						<a class="brand" href="/ja/">
+							<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+							<span class="brand-name">Monark</span>
+						</a>
+						<p>Xilistudios が開発する、ゼロ知識暗号化を採用したオープンソースかつローカルファーストのパスワードマネージャーです。</p>
+					</div>
+				<div class="footer-col">
+						<h4>ドキュメント</h4>
+						<ul>
+							<li><a href="/ja/">概要</a></li>
+						<li><a href="/ja/privacy">プライバシーポリシー</a></li>
+						<li><a href="/ja/terms">利用規約</a></li>
+						</ul>
+					</div>
+				<div class="footer-col">
+						<h4>プロジェクト</h4>
+						<ul>
+							<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">ソースコード</a></li>
+						<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">問題を報告</a></li>
+						<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPL-3.0 ライセンス</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-base">
+					<p>© 2026 Xilistudios。Monark は AGPL-3.0 の下で公開されている自由ソフトウェアです。</p>
+					<nav class="footer-langs" aria-label="言語を選択">
+					<a href="/en/" hreflang="en" lang="en">English</a>
+					<a href="/es/" hreflang="es" lang="es">Español</a>
+					<a href="/pt/" hreflang="pt" lang="pt">Português</a>
+					<a href="/fr/" hreflang="fr" lang="fr">Français</a>
+					<a href="/de/" hreflang="de" lang="de">Deutsch</a>
+					<a href="/zh/" hreflang="zh" lang="zh">简体中文</a>
+					<a href="/ja/" hreflang="ja" lang="ja" aria-current="true">日本語</a>
+					</nav>
+				</div>
+			</div>
+		</footer>
+<script src="../site.js" defer></script>
+
+</body>
+</html>

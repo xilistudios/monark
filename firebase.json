@@ -1,10 +1,12 @@
 {
   "hosting": {
     "public": "redirect",
+    "cleanUrls": true,
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/_tools/**"
     ]
   }
 }

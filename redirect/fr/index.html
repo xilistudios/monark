@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr">
+<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Monark — Gestionnaire de mots de passe</title>
+		<meta name="description" content="Gestionnaire de mots de passe local-first et open source. Argon2id et XChaCha20-Poly1305 en Rust. Sans compte, sans serveur, sans télémétrie.">
+		<meta name="color-scheme" content="light dark">
+		<meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
+		<meta name="theme-color" content="#16100e" media="(prefers-color-scheme: dark)">
+		<link rel="canonical" href="https://monark-password-manager.web.app/fr/">
+	<link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/">
+	<link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/">
+	<link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/">
+	<link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/">
+	<link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/">
+	<link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/">
+	<link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/">
+	<link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/">
+		<meta property="og:type" content="website">
+		<meta property="og:site_name" content="Monark">
+		<meta property="og:locale" content="fr_FR">
+		<meta property="og:title" content="Monark — Gestionnaire de mots de passe">
+		<meta property="og:description" content="Gestionnaire de mots de passe local-first et open source. Argon2id et XChaCha20-Poly1305 en Rust. Sans compte, sans serveur, sans télémétrie.">
+		<meta property="og:url" content="https://monark-password-manager.web.app/fr/">
+		<meta property="og:image" content="https://monark-password-manager.web.app/og.png">
+		<meta name="twitter:card" content="summary_large_image">
+		<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+		<link rel="icon" href="../favicon.png" type="image/png">
+		<link rel="apple-touch-icon" href="../favicon.png">
+		<link rel="preload" href="../fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="preload" href="../fonts/newsreader-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+		<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+	<a class="skip-link" href="#main">Aller au contenu</a>
+<header class="site-header">
+			<div class="shell header-inner">
+				<a class="brand" href="/fr/">
+					<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+					<span class="brand-name">Monark</span>
+				</a>
+				<nav class="nav" aria-label="Navigation principale">
+					<a href="/fr/#features">Fonctionnalités</a>
+					<a href="/fr/privacy">Confidentialité</a>
+					<a href="/fr/terms">Conditions</a>
+				</nav>
+				<div class="header-actions">
+					<div class="lang" data-lang>
+						<button type="button" class="lang-btn" data-lang-toggle aria-expanded="false" aria-haspopup="menu" aria-label="Choisir une langue: Français">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.4 3.4 5.4 3.4 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.4-5.4-3.4-8.5S9.8 5.9 12 3.5z"/></svg><span aria-hidden="true">FR</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6"/></svg>
+						</button>
+						<ul class="lang-menu" data-lang-menu aria-label="Choisir une langue">
+							<li><a href="/en/" hreflang="en" lang="en"><span class="lang-name">English</span><span class="lang-native" aria-hidden="true">EN</span></a></li>
+							<li><a href="/es/" hreflang="es" lang="es"><span class="lang-name">Español</span><span class="lang-native" aria-hidden="true">ES</span></a></li>
+							<li><a href="/pt/" hreflang="pt" lang="pt"><span class="lang-name">Português</span><span class="lang-native" aria-hidden="true">PT</span></a></li>
+							<li><a href="/fr/" hreflang="fr" lang="fr" aria-current="true"><span class="lang-name">Français</span></a></li>
+							<li><a href="/de/" hreflang="de" lang="de"><span class="lang-name">Deutsch</span><span class="lang-native" aria-hidden="true">DE</span></a></li>
+							<li><a href="/zh/" hreflang="zh" lang="zh"><span class="lang-name">简体中文</span><span class="lang-native" aria-hidden="true">中文</span></a></li>
+							<li><a href="/ja/" hreflang="ja" lang="ja"><span class="lang-name">日本語</span><span class="lang-native" aria-hidden="true">日本語</span></a></li>
+						</ul>
+					</div>
+					<a class="btn btn--ghost btn--sm" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>Télécharger</span></a>
+				</div>
+			</div>
+		</header>
+	<main id="main">
+		<section class="hero">
+				<div class="shell hero-grid">
+					<div class="hero-copy">
+						<span class="eyebrow" data-reveal>Local-first · Zero-knowledge</span>
+						<h1 data-reveal style="--delay:60ms">Vos clés.<br><span class="serif">À vous seuls.</span></h1>
+						<p class="hero-lede" data-reveal style="--delay:120ms">Monark est un gestionnaire de mots de passe open source qui garde vos identifiants sur votre propre machine. Pas de compte, pas de serveur de synchronisation, pas de télémétrie — juste un coffre chiffré là où il se trouve.</p>
+						<div class="hero-actions" data-reveal style="--delay:180ms">
+							<a class="btn btn--primary" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><span>Télécharger Monark</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+							<a class="btn btn--ghost" href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>Lire le code source</span></a>
+						</div>
+						<dl class="hero-meta" data-reveal style="--delay:240ms">
+						<div><dt>Systèmes</dt><dd>Linux, macOS, Windows, Android, iOS</dd></div>
+						<div><dt>Chiffrement</dt><dd>XChaCha20-Poly1305</dd></div>
+						<div><dt>Dérivation de clé</dt><dd>Argon2id · 64 Mo</dd></div>
+						<div><dt>Licence</dt><dd>AGPL-3.0</dd></div>
+						</dl>
+					</div>
+				<div class="vault-mock" role="img" aria-label="La fenêtre du coffre Monark : une barre de dossiers à côté d'une liste d'entrées Google, AWS, Fastmail, GitHub et une banque." data-reveal style="--delay:140ms">
+						<div class="vault-bar" aria-hidden="true">
+							<i></i><i></i><i></i>
+							<span>Monark — Coffre personnel</span>
+						</div>
+						<div class="vault-body">
+							<div class="vault-side" aria-hidden="true">
+								<p>Dossiers</p>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>Tout</span></a>
+							<a href="#" aria-current="true" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>Personnel</span></a>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>Travail</span></a>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>Finances</span></a>
+							<a href="#" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg><span>Serveurs</span></a>
+							</div>
+							<div class="vault-main">
+								<header>
+									<h3>Personnel</h3>
+									<em>24 éléments</em>
+								</header>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">G</span>
+								<div>
+									<strong>Google</strong>
+									<small>vous@exemple.com</small>
+								</div>
+								<span class="entry-tag">2FA</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">A</span>
+								<div>
+									<strong>AWS</strong>
+									<small>root · us-east-1</small>
+								</div>
+								<span class="entry-pw" aria-hidden="true">••••••••••</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">F</span>
+								<div>
+									<strong>Fastmail</strong>
+									<small>vous@exemple.com</small>
+								</div>
+								<span class="entry-tag">2FA</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">G</span>
+								<div>
+									<strong>GitHub</strong>
+									<small>vous · clé SSH</small>
+								</div>
+								<span class="entry-pw" aria-hidden="true">••••••••••</span>
+							</div>
+							<div class="entry">
+								<span class="entry-avatar" aria-hidden="true">B</span>
+								<div>
+									<strong>Banque</strong>
+									<small>carte + compte</small>
+								</div>
+								<span class="entry-pw" aria-hidden="true">••••••••••</span>
+							</div>
+								<p class="vault-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6l7-3z"/><path d="M9 11.8l2.1 2.1L15 10"/></svg><span>Verrouillé par votre phrase maîtresse</span></p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+		<section id="features" class="section-rule">
+				<div class="shell">
+					<div class="section-head">
+						<div>
+							<span class="eyebrow" data-reveal>Ce qu'il fait</span>
+							<h2 data-reveal style="--delay:60ms">Tout ce qu'un gestionnaire de mots de passe doit faire, et rien de plus.</h2>
+						</div>
+						<p class="section-lede" data-reveal style="--delay:120ms">Monark stocke vos identifiants, vos notes et vos codes à usage unique dans un seul fichier chiffré qui vous appartient. Aucun intermédiaire, puisqu'il n'y a personne entre vous et vos données.</p>
+					</div>
+					<div class="bento">
+					<article class="cell cell--4" data-reveal>
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 7.5a2 2 0 012-2h3.4l2 2.4h7.6a2 2 0 012 2v8.1a2 2 0 01-2 2H5.5a2 2 0 01-2-2V7.5z"/></svg></span>
+							<h3>Votre coffre est un fichier sur votre disque</h3>
+							<p>Les entrées sont chiffrées avant d'atteindre le stockage et ne sont déchiffrées que lorsque le coffre est ouvert. Monark fonctionne entièrement hors ligne : le réseau n'entre en jeu que si vous le demandez.</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--dark cell--2" data-reveal style="--delay:60ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V8a4 4 0 018 0v2.5"/><path d="M12 14.5v2.5"/></svg></span>
+							<h3>La cryptographie écrite en Rust</h3>
+							<p>Le cœur cryptographique est écrit en Rust et s'exécute nativement, pas dans la page.</p>
+						</div>
+					<div class="terminal" aria-hidden="true">
+						<div><span class="k">kdf</span> <span class="v">argon2id</span></div>
+						<div><span class="k">mémoire</span> <span class="v">64 Mo · 3 passes</span></div>
+						<div><span class="k">chiffrement</span> <span class="v">xchacha20-poly1305</span></div>
+						<div><span class="k">clé</span> <span class="v">256 bits</span></div>
+						<div><span class="k">nonce</span> <span class="v">192 bits, aléatoire</span></div>
+						</div>
+					</article>
+					<article class="cell cell--2" data-reveal style="--delay:120ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="3.2"/><path d="M10.4 12.6L19 4"/><path d="M16 7l2 2"/><path d="M14 9l2 2"/></svg></span>
+							<h3>Générateur de mots de passe</h3>
+							<p>Mots de passe et phrases de passe tirés du CSPRNG du système d'exploitation, avec les jeux de caractères et la longueur que vous choisissez.</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--2" data-reveal style="--delay:180ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.6"/><path d="M9.5 2.8h5"/></svg></span>
+							<h3>Codes de double authentification</h3>
+							<p>Stockez vos secrets TOTP à côté de l'identifiant auquel ils correspondent et lisez le code courant depuis la fenêtre du coffre.</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--2" data-reveal style="--delay:240ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.5 18.5h9.2a3.8 3.8 0 00.4-7.6 5.2 5.2 0 00-10-1.3 3.6 3.6 0 00.4 8.9z"/><path d="M12 14.4V9.6"/><path d="M9.8 11.5L12 9.3l2.2 2.2"/></svg></span>
+							<h3>Sauvegarde chiffrée facultative</h3>
+							<p>Copiez le coffre sur votre propre Google Drive ou sur un serveur WebDAV. Le fichier est déjà chiffré avant de quitter votre appareil.</p>
+						</div>
+					
+					</article>
+					<article class="cell cell--wide cell--6" data-reveal style="--delay:300ms">
+						<div class="cell-copy">
+							<span class="cell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="12" height="9" rx="1.6"/><path d="M2.5 17.5h12"/><rect x="16.5" y="9" width="5" height="10" rx="1.4"/></svg></span>
+							<h3>Une seule base de code, pour tous vos ordinateurs et téléphones</h3>
+							<p>Monark est construit sur Tauri v2 : le même cœur Rust et la même interface sont livrés pour Linux, macOS, Windows, Android et iOS, sans embarquer de runtime Electron.</p>
+						</div>
+					<div class="terminal" aria-hidden="true">
+						<div><span class="k">paquet</span> <span class="v">webview natif</span></div>
+						<div><span class="k">runtime</span> <span class="v">tauri v2 · rust</span></div>
+						<div><span class="k">interface</span> <span class="v">react 18 · typée</span></div>
+						<div><span class="k">installeur</span> <span class="v">.deb .rpm .dmg .msi .apk</span></div>
+						</div>
+					</article>
+					</div>
+				</div>
+			</section>
+		<section class="section-rule">
+				<div class="shell">
+					<div class="section-head">
+						<div>
+							<span class="eyebrow" data-reveal>Sous le capot</span>
+							<h2 data-reveal style="--delay:60ms">Les paramètres, dits simplement.</h2>
+						</div>
+						<p class="section-lede" data-reveal style="--delay:120ms">Rien ici n'est propriétaire et rien n'est secret. Les primitives exactes sont documentées dans le dépôt et couvertes par des tests.</p>
+					</div>
+					<dl class="specs">
+					<div class="spec"><dt>Dérivation de clé</dt><dd><b>Argon2id</b> avec 64 Mo de mémoire, 3 itérations et un parallélisme de 4 voies, pour rendre coûteuses les attaques par force brute assistées par GPU.</dd></div>
+						<div class="spec"><dt>Chiffrement authentifié</dt><dd><b>XChaCha20-Poly1305</b> (IETF) avec des clés de 256 bits et des nonces aléatoires de 192 bits par opération.</dd></div>
+						<div class="spec"><dt>Aléa</dt><dd>Chaque clé, sel et nonce provient du <b>CSPRNG</b> du système d'exploitation, jamais d'un générateur fourni par le langage.</dd></div>
+						<div class="spec"><dt>Hygiène mémoire</dt><dd>Les clés dérivées et les secrets en clair sont <b>effacés à la libération</b> (zeroized on drop), afin de ne pas subsister dans la mémoire libérée.</dd></div>
+						<div class="spec"><dt>Stockage</dt><dd>Un unique <b>fichier de coffre</b> local, que vous pouvez déplacer, copier ou supprimer. Les copies dans le cloud sont les mêmes octets chiffrés.</dd></div>
+						<div class="spec"><dt>Source</dt><dd>Distribué sous <b>AGPL-3.0</b>. Compilez-le vous-même, auditez-le, ou ouvrez un ticket sur la révision exacte que vous exécutez.</dd></div>
+					</dl>
+				</div>
+			</section>
+		<section class="cta">
+				<div class="shell cta-inner">
+					<div data-reveal>
+						<h2>Lisez le code avant de lui confier vos mots de passe.</h2>
+						<p>Monark est publié depuis un dépôt ouvert, avec ses tests, ses paramètres cryptographiques et ses artefacts de version au même endroit. Vérifiez le binaire, ou compilez-le vous-même.</p>
+					</div>
+					<div class="cta-actions" data-reveal style="--delay:80ms">
+						<a class="btn btn--primary" href="https://github.com/xilistudios/monark/releases/latest" target="_blank" rel="noopener noreferrer"><span>Obtenir la dernière version</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 12h14"/><path d="M13 6.5l5.5 5.5L13 17.5"/></svg></a>
+						<a class="btn btn--ghost" href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.7.08-.7 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.74 1.27 3.4.97.1-.76.4-1.28.74-1.57-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.73 18.27.5 12 .5z"/></svg><span>Voir le dépôt</span></a>
+					</div>
+				</div>
+			</section>
+	</main>
+<footer class="site-footer">
+			<div class="shell">
+				<div class="footer-grid">
+					<div class="footer-brand">
+						<a class="brand" href="/fr/">
+							<img class="brand-mark" src="../logo.svg" alt="" width="28" height="28" aria-hidden="true">
+							<span class="brand-name">Monark</span>
+						</a>
+						<p>Un gestionnaire de mots de passe open source et local-first, à chiffrement zero-knowledge, développé par Xilistudios.</p>
+					</div>
+				<div class="footer-col">
+						<h4>Documents</h4>
+						<ul>
+							<li><a href="/fr/">Présentation</a></li>
+						<li><a href="/fr/privacy">Politique de confidentialité</a></li>
+						<li><a href="/fr/terms">Conditions d'utilisation</a></li>
+						</ul>
+					</div>
+				<div class="footer-col">
+						<h4>Projet</h4>
+						<ul>
+							<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">Code source</a></li>
+						<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">Signaler un problème</a></li>
+						<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Licence AGPL-3.0</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="footer-base">
+					<p>© 2026 Xilistudios. Monark est un logiciel libre sous licence AGPL-3.0.</p>
+					<nav class="footer-langs" aria-label="Choisir une langue">
+					<a href="/en/" hreflang="en" lang="en">English</a>
+					<a href="/es/" hreflang="es" lang="es">Español</a>
+					<a href="/pt/" hreflang="pt" lang="pt">Português</a>
+					<a href="/fr/" hreflang="fr" lang="fr" aria-current="true">Français</a>
+					<a href="/de/" hreflang="de" lang="de">Deutsch</a>
+					<a href="/zh/" hreflang="zh" lang="zh">简体中文</a>
+					<a href="/ja/" hreflang="ja" lang="ja">日本語</a>
+					</nav>
+				</div>
+			</div>
+		</footer>
+<script src="../site.js" defer></script>
+
+</body>
+</html>

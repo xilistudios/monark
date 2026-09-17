@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+	xmlns:xhtml="http://www.w3.org/1999/xhtml">
+	<url>
+		<loc>https://monark-password-manager.web.app/en/</loc>
+		<xhtml:link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/"/>
+		<xhtml:link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/"/>
+		<xhtml:link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/"/>
+		<xhtml:link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/"/>
+		<xhtml:link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/"/>
+		<xhtml:link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/"/>
+		<xhtml:link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/"/>
+		<xhtml:link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/"/>
+		<changefreq>monthly</changefreq>
+		<priority>1.0</priority>
+	</url>
+	<url>
+		<loc>https://monark-password-manager.web.app/en/privacy</loc>
+		<xhtml:link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/privacy"/>
+		<xhtml:link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/privacy"/>
+		<xhtml:link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/privacy"/>
+		<xhtml:link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/privacy"/>
+		<xhtml:link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/privacy"/>
+		<xhtml:link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/privacy"/>
+		<xhtml:link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/privacy"/>
+		<xhtml:link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/privacy"/>
+		<changefreq>yearly</changefreq>
+		<priority>0.5</priority>
+	</url>
+	<url>
+		<loc>https://monark-password-manager.web.app/en/terms</loc>
+		<xhtml:link rel="alternate" hreflang="en" href="https://monark-password-manager.web.app/en/terms"/>
+		<xhtml:link rel="alternate" hreflang="es" href="https://monark-password-manager.web.app/es/terms"/>
+		<xhtml:link rel="alternate" hreflang="pt" href="https://monark-password-manager.web.app/pt/terms"/>
+		<xhtml:link rel="alternate" hreflang="fr" href="https://monark-password-manager.web.app/fr/terms"/>
+		<xhtml:link rel="alternate" hreflang="de" href="https://monark-password-manager.web.app/de/terms"/>
+		<xhtml:link rel="alternate" hreflang="zh" href="https://monark-password-manager.web.app/zh/terms"/>
+		<xhtml:link rel="alternate" hreflang="ja" href="https://monark-password-manager.web.app/ja/terms"/>
+		<xhtml:link rel="alternate" hreflang="x-default" href="https://monark-password-manager.web.app/en/terms"/>
+		<changefreq>yearly</changefreq>
+		<priority>0.5</priority>
+	</url>
+</urlset>

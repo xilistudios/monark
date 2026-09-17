@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Condiciones del Servicio - Monark Password Manager</title>
+	<meta name="description" content="Condiciones del Servicio y Términos de Uso de Monark Password Manager. Información legal, licencias y responsabilidades de uso.">
+	<link rel="icon" type="image/png" href="favicon.png">
+	<link rel="icon" type="image/svg+xml" href="favicon.svg">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+	<!-- Header -->
+	<header class="site-header">
+		<div class="header-container">
+			<a href="index.html" class="logo-group">
+				<img src="logo.svg" alt="Monark Logo" class="brand-icon">
+				<span class="brand-name">Monark</span>
+				<span class="brand-badge">Open Source</span>
+			</a>
+			<nav>
+				<ul class="nav-links">
+					<li><a href="index.html" class="nav-link">Inicio</a></li>
+					<li><a href="privacy.html" class="nav-link">Privacidad</a></li>
+					<li><a href="terms.html" class="nav-link active">Condiciones del Servicio</a></li>
+					<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a></li>
+				</ul>
+			</nav>
+		</div>
+	</header>
+
+	<!-- Main Content -->
+	<main>
+		<div class="doc-nav-banner">
+			<span>Navegación Rápida:</span>
+			<a href="index.html">← Volver a la Página Principal</a>
+			<a href="privacy.html">Política de Privacidad →</a>
+		</div>
+
+		<article class="document-container">
+			<header class="document-header">
+				<span class="doc-badge">Documento Oficial</span>
+				<h1 class="document-title">Condiciones del Servicio</h1>
+				<p class="document-meta">Última actualización: 17 de septiembre de 2026 • Versión 1.0 • Xilistudios</p>
+			</header>
+
+			<section class="legal-section">
+				<h2>1. Aceptación de las Condiciones</h2>
+				<p>
+					Al descargar, instalar, acceder o utilizar <strong>Monark Password Manager</strong> (en adelante, "la Aplicación" o "el Software"), desarrollada por <strong>Xilistudios</strong>, aceptas quedar vinculado por las presentes Condiciones del Servicio y Términos de Uso. Si no estás de acuerdo con alguno de estos términos, debes abstenerte de utilizar la Aplicación.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>2. Naturaleza del Software y Licencia</h2>
+				<p>
+					Monark es una aplicación de gestión de credenciales y contraseñas local-first y de código abierto.
+				</p>
+				<p>
+					El código fuente de Monark se distribuye bajo los términos de la <strong>Licencia Pública General Affero de GNU versión 3.0 (AGPL-3.0)</strong>. Tienes derecho a inspeccionar, auditar, modificar y redistribuir el código conforme a los términos y condiciones de dicha licencia. El texto íntegro de la licencia está disponible en el repositorio oficial de GitHub del proyecto.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>3. Responsabilidad del Usuario y Modelo Zero-Knowledge</h2>
+				<div class="info-box highlight">
+					<div class="info-box-title">
+						<span>⚠️</span> Aviso Crítico sobre la Contraseña Maestra
+					</div>
+					<p>
+						Monark opera bajo un modelo criptográfico de <strong>conocimiento cero (Zero-Knowledge)</strong>. Tus datos se cifran en tu propio dispositivo utilizando tu contraseña maestra y claves derivadas (Argon2id y XChaCha20-Poly1305).
+					</p>
+					<p>
+						<strong>Xilistudios no almacena, no conoce y no puede restablecer tu contraseña maestra bajo ninguna circunstancia. Si olvidas tu contraseña maestra y no cuentas con tus claves de recuperación o respaldos, tus datos no podrán ser recuperados.</strong>
+					</p>
+				</div>
+				<p>El usuario es el único responsable de:</p>
+				<ul>
+					<li>Elegir una contraseña maestra robusta y mantenerla a buen resguardo.</li>
+					<li>Generar y conservar copias de seguridad de sus datos y claves de recuperación.</li>
+					<li>Mantener la seguridad física y lógica de los dispositivos en los que esté instalado Monark.</li>
+				</ul>
+			</section>
+
+			<section class="legal-section">
+				<h2>4. Integración con Servicios de Terceros (Google Drive)</h2>
+				<p>
+					Monark permite la sincronización opcional con servicios de almacenamiento en la nube provistos por terceros, en particular <strong>Google Drive</strong> mediante autenticación OAuth.
+				</p>
+				<ul>
+					<li>El uso de Google Drive está sujeto a las <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Condiciones del Servicio de Google</a>.</li>
+					<li>Monark únicamente solicita acceso para gestionar los archivos de respaldo generados por la propia aplicación (scope <code>drive.file</code>), los cuales se envían previamente cifrados de extremo a extremo.</li>
+					<li>Xilistudios no se responsabiliza por fallos de conectividad, interrupciones del servicio o límites de almacenamiento impuestos por los proveedores de la nube de terceros.</li>
+				</ul>
+			</section>
+
+			<section class="legal-section">
+				<h2>5. Uso Aceptable</h2>
+				<p>Te comprometes a utilizar Monark exclusivamente para fines legítimos y conformes con la ley aplicable. Queda estrictamente prohibido utilizar el software para:</p>
+				<ul>
+					<li>Almacenar, gestionar o distribuir credenciales obtenidas de manera ilícita o no autorizada.</li>
+					<li>Intentar vulnerar, desactivar o burlar las medidas de seguridad de servicios de terceros o sistemas informáticos ajenos.</li>
+				</ul>
+			</section>
+
+			<section class="legal-section">
+				<h2>6. Exclusión de Garantías</h2>
+				<p>
+					En la máxima medida permitida por la legislación aplicable, el software se proporciona <strong>"TAL CUAL" ("AS IS")</strong> y <strong>"SEGÚN DISPONIBILIDAD"</strong>, sin garantías de ningún tipo, ya sean expresas o implícitas, incluidas, entre otras, las garantías implícitas de comerciabilidad, idoneidad para un propósito específico o no infracción.
+				</p>
+				<p>
+					Aunque nos esforzamos por mantener los más altos estándares de calidad, seguridad y pruebas rigurosas, Xilistudios no garantiza que el funcionamiento de la aplicación sea ininterrumpido, esté completamente libre de errores o que sea compatible con todas las configuraciones de hardware o software.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>7. Limitación de Responsabilidad</h2>
+				<p>
+					En ningún caso Xilistudios ni sus desarrolladores o colaboradores serán responsables de daños directos, indirectos, incidentales, especiales, consecuentes o punitivos, incluida la pérdida de beneficios, pérdida de datos, interrupción del negocio o fallos informáticos derivados del uso o de la imposibilidad de uso de la aplicación.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>8. Modificaciones a las Condiciones</h2>
+				<p>
+					Xilistudios se reserva el derecho de modificar o actualizar estas Condiciones del Servicio en cualquier momento. La fecha de la última revisión se actualizará en la parte superior de esta página. El uso continuado de la aplicación tras la publicación de cualquier cambio constituirá tu aceptación de las nuevas condiciones.
+				</p>
+			</section>
+
+			<section class="legal-section">
+				<h2>9. Contacto</h2>
+				<p>
+					Para cualquier consulta o solicitud relacionada con estas Condiciones del Servicio, puedes comunicarte con el equipo de Xilistudios a través de los canales oficiales:
+				</p>
+				<p>
+					<strong>Xilistudios</strong><br>
+					Repositorio del proyecto: <a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark</a><br>
+					Reportes y soporte: <a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">https://github.com/xilistudios/monark/issues</a>
+				</p>
+			</section>
+		</article>
+	</main>
+
+	<!-- Footer -->
+	<footer class="site-footer">
+		<div class="footer-container">
+			<div class="footer-brand">
+				<a href="index.html" class="logo-group">
+					<img src="logo.svg" alt="Monark Logo" class="brand-icon">
+					<span class="brand-name">Monark</span>
+				</a>
+				<p>Gestor de contraseñas seguro, local-first y de código abierto con cifrado de conocimiento cero.</p>
+			</div>
+			<div class="footer-col">
+				<h4>Navegación</h4>
+				<ul>
+					<li><a href="index.html">Página Principal</a></li>
+					<li><a href="privacy.html">Política de Privacidad</a></li>
+					<li><a href="terms.html">Condiciones del Servicio</a></li>
+				</ul>
+			</div>
+			<div class="footer-col">
+				<h4>Proyecto</h4>
+				<ul>
+					<li><a href="https://github.com/xilistudios/monark" target="_blank" rel="noopener noreferrer">Código en GitHub</a></li>
+					<li><a href="https://github.com/xilistudios/monark/issues" target="_blank" rel="noopener noreferrer">Reportar un problema</a></li>
+					<li><a href="https://github.com/xilistudios/monark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Licencia AGPL-3.0</a></li>
+				</ul>
+			</div>
+		</div>
+		<div class="footer-bottom">
+			<p>© 2026 Xilistudios. Monark Password Manager es software libre (AGPL-3.0).</p>
+			<p>
+				<a href="index.html">Inicio</a> • 
+				<a href="privacy.html">Privacidad</a> • 
+				<a href="terms.html">Términos</a>
+			</p>
+		</div>
+	</footer>
+</body>
+</html>
