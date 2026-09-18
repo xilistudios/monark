@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://tauri.app"><img src="https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri&logoColor=black" alt="Tauri" /></a>
-  <a href="https://react.dev"><img src="https://img.shields.io/badge/React-19.3-61DAFB?logo=react&logoColor=black" alt="React" /></a>
+  <a href="https://react.dev"><img src="https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black" alt="React" /></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-Stable-DEA584?logo=rust&logoColor=black" alt="Rust" /></a>
   <img src="https://img.shields.io/badge/License-AGPL--3.0-blue" alt="License" />
 </p>
