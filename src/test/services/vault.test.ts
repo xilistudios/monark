@@ -210,6 +210,249 @@ describe("VaultInstance", () => {
 		});
 	});
 
+	describe("updateEntry", () => {
+		it("should update a root-level entry successfully", async () => {
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "entry-1",
+							entry_type: "entry",
+							name: "Original",
+							data_type: "note",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							fields: [],
+							tags: [],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.updateEntry(["entry-1"], { name: "Updated" });
+
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultEntries(
+					expect.objectContaining({
+						vaultId: "test-vault",
+						entries: expect.arrayContaining([
+							expect.objectContaining({ id: "entry-1", name: "Updated" }),
+						]),
+					}),
+				),
+			);
+		});
+
+		it("should throw when path is wrong (single-segment for nested entry)", async () => {
+			// This is the exact bug scenario: deriving a single-segment path
+			// from currentPath + id when the entry is actually nested inside a group
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "group-1",
+							entry_type: "group",
+							name: "Group",
+							data_type: "",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							children: [
+								{
+									id: "nested-entry-1",
+									entry_type: "entry",
+									name: "Nested",
+									data_type: "login",
+									created_at: "2025-01-01T00:00:00Z",
+									updated_at: "2025-01-01T00:00:00Z",
+									fields: [],
+									tags: [],
+								},
+							],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+
+			// Single-segment path (what the buggy UI passed) should fail
+			await expect(
+				instance.updateEntry(["nested-entry-1"], { name: "Updated" }),
+			).rejects.toThrow("Entry not found at path: nested-entry-1");
+		});
+	});
+
+	describe("updateEntryById", () => {
+		it("should update a nested entry by resolving its absolute path", async () => {
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "group-1",
+							entry_type: "group",
+							name: "Group",
+							data_type: "",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							children: [
+								{
+									id: "nested-entry-1",
+									entry_type: "entry",
+									name: "Nested Original",
+									data_type: "login",
+									created_at: "2025-01-01T00:00:00Z",
+									updated_at: "2025-01-01T00:00:00Z",
+									fields: [],
+									tags: [],
+								},
+							],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.updateEntryById("nested-entry-1", {
+				name: "Nested Renamed",
+			});
+
+			// Verify the nested entry was updated in the dispatched entries
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultEntries(
+					expect.objectContaining({
+						vaultId: "test-vault",
+						entries: expect.arrayContaining([
+							expect.objectContaining({
+								id: "group-1",
+								children: expect.arrayContaining([
+									expect.objectContaining({
+										id: "nested-entry-1",
+										name: "Nested Renamed",
+									}),
+								]),
+							}),
+						]),
+					}),
+				),
+			);
+		});
+
+		it("should throw for a non-existent entry ID", async () => {
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "entry-1",
+							entry_type: "entry",
+							name: "Entry",
+							data_type: "note",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							fields: [],
+							tags: [],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+
+			await expect(
+				instance.updateEntryById("does-not-exist", { name: "Nope" }),
+			).rejects.toThrow("Entry not found: does-not-exist");
+		});
+
+		it("should update a root-level entry by ID", async () => {
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "root-entry",
+							entry_type: "entry",
+							name: "Root Original",
+							data_type: "note",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							fields: [],
+							tags: [],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.updateEntryById("root-entry", { name: "Root Updated" });
+
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultEntries(
+					expect.objectContaining({
+						vaultId: "test-vault",
+						entries: expect.arrayContaining([
+							expect.objectContaining({ id: "root-entry", name: "Root Updated" }),
+						]),
+					}),
+				),
+			);
+		});
+	});
+
 	describe("lock", () => {
 		it("should lock the vault", () => {
 			vaultInstance.lock();
