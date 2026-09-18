@@ -1,7 +1,8 @@
 // src/components/Vault/UnlockedVaultView.tsx
 
 import { useState, useEffect, useContext, useRef } from 'react';
-import { Entry, DataEntry, GroupEntry } from '../../interfaces/vault.interface';
+import { Entry, DataEntry, GroupEntry, findEntryByPath } from '../../interfaces/vault.interface';
+import { findPathById } from '../../utils/vaultNavigation';
 import type { Vault } from '../../redux/actions/vault';
 
 import { EntryDetailsSidebar } from './EntryDetailsSidebar';
@@ -79,6 +80,17 @@ function UnlockedVaultView({
     }
   }, [currentPath.join('/')]);
 
+  // Keep selectedEntry in sync with the vault tree after mutations/sync
+  useEffect(() => {
+    if (!selectedEntry) return;
+    if (sidebarMode === 'edit') return; // never clobber in-progress edits
+    const tree = currentVault.volatile?.entries ?? [];
+    const path = findPathById(tree, selectedEntry.id);
+    if (path.length === 0) return;
+    const fresh = findEntryByPath(tree, path);
+    if (fresh && fresh !== selectedEntry) setSelectedEntry(fresh);
+  }, [currentVault.volatile?.entries, selectedEntry, sidebarMode]);
+
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 10);
     return () => clearTimeout(timer);
@@ -93,6 +105,7 @@ function UnlockedVaultView({
   const handleEntrySelect = (entry: Entry) => {
     setSelectedEntry(entry);
     setSidebarMode('view');
+    setSaveError(null);
     // Open sidebar on mobile when an entry is selected
     setIsMobileSidebarOpen(true);
   };
@@ -117,11 +130,11 @@ function UnlockedVaultView({
   const handleCloseMobileSidebar = () => {
     setIsMobileSidebarOpen(false);
     setSelectedEntry(null);
+    setSaveError(null);
   };
 
   const handleSaveEntry = async (updatedEntry: DataEntry | GroupEntry) => {
     if (!selectedEntry) return;
-    const path = [...currentPath, selectedEntry.id];
     const vaultInstance = VaultManager.getInstance().getInstance(
       currentVault.id
     );
@@ -131,7 +144,7 @@ function UnlockedVaultView({
       return;
     }
     try {
-      await vaultInstance.updateEntry(path, updatedEntry);
+      await vaultInstance.updateEntryById(selectedEntry.id, updatedEntry);
       setSidebarMode('view');
       setSaveError(null);
     } catch (err) {
@@ -275,6 +288,21 @@ function UnlockedVaultView({
                   </svg>
                 </button>
               </div>
+
+              {/* Mobile Save Error */}
+              {saveError && (
+                <div data-testid="mobile-save-error" className="px-4 py-2 bg-error/10 border-b border-error/30 flex items-center justify-between gap-2">
+                  <div className="text-error text-sm">{saveError}</div>
+                  <button
+                    type="button"
+                    className="text-error/70 hover:text-error text-sm"
+                    onClick={() => setSaveError(null)}
+                    aria-label="Dismiss"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               {/* Sidebar Content */}
               <div className="h-full overflow-hidden">
