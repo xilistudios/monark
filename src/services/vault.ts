@@ -5,6 +5,7 @@ import type {
 import { StorageProviderType } from "../interfaces/cloud-storage.interface";
 import type { Entry, VaultContent } from "../interfaces/vault.interface";
 import { findEntryByPath, isGroupEntry } from "../interfaces/vault.interface";
+import { findPathById } from "../utils/vaultNavigation";
 import type { Vault } from "../redux/actions/vault";
 import {
 	addVault,
@@ -369,6 +370,28 @@ export class VaultInstance {
 		} else {
 			throw new Error(`Entry not found at path: ${path.join("/")}`);
 		}
+	}
+
+	/**
+	 * Updates an entry by its unique ID, resolving the absolute path from the
+	 * vault root automatically.  Callers should prefer this over
+	 * {@link updateEntry} whenever they only have the entry ID and a
+	 * potentially-wrong view path (e.g. mobile sidebar save, edit modals).
+	 * @param entryId - The unique ID of the entry to update
+	 * @param updates - Partial entry data to apply
+	 * @throws Error if the entry does not exist in the vault
+	 */
+	async updateEntryById(entryId: string, updates: Partial<Entry>): Promise<void> {
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+		const entries = vault?.volatile?.entries ?? [];
+
+		const path = findPathById(entries, entryId);
+		if (path.length === 0) {
+			throw new Error(`Entry not found: ${entryId}`);
+		}
+
+		await this.updateEntry(path, updates);
 	}
 
 	/**

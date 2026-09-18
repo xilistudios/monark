@@ -8,7 +8,6 @@ import { Modal } from '../../UI/Modal';
 import { PasswordFieldInput } from '../PasswordFieldInput';
 import { useContext } from 'react';
 import { VaultModalContext } from '../VaultContext';
-import { parseNavigationPath } from '../../../utils/vaultNavigation';
 
 /**
  * Modal component for editing an existing vault data entry.
@@ -36,11 +35,6 @@ export const EditEntryModal: React.FC = () => {
   const currentVaultId = useSelector(
     (state: RootState) => state.vault.currentVaultId
   );
-  const currentVault = useSelector((state: RootState) =>
-    state.vault.vaults.find((v) => v.id === currentVaultId)
-  );
-  const navigationPath = currentVault?.volatile?.navigationPath || '/';
-  const currentPath = parseNavigationPath(navigationPath);
   const context = useContext(VaultModalContext);
   if (!context)
     throw new Error(
@@ -155,13 +149,9 @@ export const EditEntryModal: React.FC = () => {
         if (!vaultInstance) {
           throw new Error(t('errors.vaultNotAvailable'));
         }
-        // Debug: log the path being used
-        // Get the path from the selected entry's parent
-        const path = [...currentPath, entry.id];
-        console.log('Updating entry with path:', path);
 
         // Update the entry using VaultManager
-        await vaultInstance.updateEntry(path, updates);
+        await vaultInstance.updateEntryById(entry.id, updates);
       }
 
       closeAllModals();

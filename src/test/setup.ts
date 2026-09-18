@@ -1,6 +1,20 @@
 /// <reference types="vitest/globals" />
 import '@testing-library/jest-dom';
 
+// Node 26+ jsdom does not provide localStorage by default; polyfill it
+// so that module-level code (e.g. i18n/index.ts) can call getItem at import time.
+if (typeof globalThis.localStorage === 'undefined' || globalThis.localStorage === null) {
+  const store: Record<string, string> = {};
+  (globalThis as any).localStorage = {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => { store[key] = String(value); },
+    removeItem: (key: string) => { delete store[key]; },
+    clear: () => { for (const k in store) delete store[k]; },
+    get length() { return Object.keys(store).length; },
+    key: (index: number) => Object.keys(store)[index] ?? null,
+  };
+}
+
 // Extend the Window interface to include Tauri's internal API for mocking
 declare global {
   interface Window {

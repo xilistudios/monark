@@ -1,7 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { selectCurrentNavigationPath } from "../../../redux/selectors/vaultSelectors";
 import type { RootState } from "../../../redux/store";
 import { VaultManager } from "../../../services/vault";
 import { Modal } from "../../UI/Modal";
@@ -25,9 +24,6 @@ export const EditGroupModal: React.FC = () => {
 	const [groupName, setGroupName] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-
-	// Extract current path from Redux state using selector
-	const currentPath = useSelector(selectCurrentNavigationPath);
 
 	// Prefill name when modal opens or entry changes
 	useEffect(() => {
@@ -67,14 +63,9 @@ export const EditGroupModal: React.FC = () => {
 				if (!vaultInstance) {
 					throw new Error(t("errors.vaultNotAvailable"));
 				}
-				// Debug: log the path being used
-				console.log("Updating group with path:", [
-					...currentPath,
-					selectedEntry.id,
-				]);
 
 				// Update the entry using VaultManager
-				await vaultInstance.updateEntry([...currentPath, selectedEntry.id], {
+				await vaultInstance.updateEntryById(selectedEntry.id, {
 					name: trimmed,
 					updated_at: new Date().toISOString(),
 				});
