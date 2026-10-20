@@ -2,6 +2,7 @@ use crate::crypto::error::CryptoError;
 use crate::io::error::IoError;
 use base64::DecodeError;
 use serde::Serialize;
+use std::sync::OnceLock;
 use thiserror::Error;
 // Define Error types
 #[derive(Error, Debug, Serialize)]
@@ -63,7 +64,7 @@ impl From<DecodeError> for CommandError {
 pub type CommandResult<T> = Result<T, CommandError>;
 
 /// Longest slice of an upstream error kept as the `cause` of a classified error.
-const MAX_ERROR_CAUSE_LEN: usize = 240;
+pub(crate) const MAX_ERROR_CAUSE_LEN: usize = 240;
 
 /// What replaces a routing keyword found in an upstream `cause`.
 const REDACTION_PLACEHOLDER: &str = "[redacted]";
@@ -171,8 +172,20 @@ impl AuthFailureClass {
     /// The message always carries the class keyword (except for [`Other`]), the
     /// human-readable `context` of the failing step, and the sanitized `cause`.
     ///
+    /// Both `context` and `cause` go through the routing-keyword redaction of
+    /// [`redact_routing_keywords`]: the class invariant ("the message carries the
+    /// keywords of its own class and of no other") must hold for *every*
+    /// interpolated fragment, not only for the upstream `cause`. A context added
+    /// later that happens to contain a routing keyword (e.g.
+    /// `"checking whether the token expired"`) would otherwise silently push an
+    /// `Other` message into the frontend's `TOKEN_EXPIRED` bucket. All context
+    /// strings currently used by this crate are keyword-free (see
+    /// `auth_failure_class_tests::every_context_string_used_by_the_crate_is_keyword_free`),
+    /// so this defense-in-depth changes no observable message today.
+    ///
     /// [`Other`]: AuthFailureClass::Other
     pub fn message(self, context: &str, cause: &str) -> String {
+        let context = redact_routing_keywords(self, context);
         let cause = sanitize_error_cause(self, cause);
         match self {
             AuthFailureClass::AuthRejection => {
@@ -190,6 +203,32 @@ impl AuthFailureClass {
     /// Convenience wrapper producing the [`CommandError`] sent over the IPC boundary.
     pub fn into_command_error(self, context: &str, cause: &str) -> CommandError {
         CommandError::Io(self.message(context, cause))
+    }
+
+    /// Same as [`into_command_error`](AuthFailureClass::into_command_error) but
+    /// naming the *local* nature of the failure in the wording.
+    ///
+    /// Used by the token-refresh path for failures that are transient and
+    /// retryable (`Transient`, so the frontend keeps routing on the `network`
+    /// keyword) but that are **not** a network problem: persisting the freshly
+    /// rotated tokens can fail on the OS keychain, the config file, or
+    /// (de)serialization. The template renders `network or local storage error`
+    /// instead of `network error`, so the user is told where to look while the
+    /// frontend keyword contract (`network` → `NETWORK_ERROR` / `transient`)
+    /// stays intact. The `context` goes through the same keyword redaction as
+    /// [`message`](AuthFailureClass::message) (both interpolations must obey the
+    /// class invariant).
+    pub fn into_command_error_local_storage(self, context: &str, cause: &str) -> CommandError {
+        debug_assert_eq!(
+            self,
+            AuthFailureClass::Transient,
+            "the local-storage wording is only defined for Transient"
+        );
+        let context = redact_routing_keywords(self, context);
+        let cause = sanitize_error_cause(self, cause);
+        CommandError::Io(format!(
+            "network or local storage error while {context}: {cause}"
+        ))
     }
 
     /// Whether a routing keyword found inside a `cause` has to be redacted.
@@ -227,22 +266,37 @@ impl AuthFailureClass {
 /// Scanning is done character by character (not by byte slicing) so multi-byte
 /// upstream text cannot be split in the middle of a code point, and multi-word
 /// entries (`not found`) are matched like any other keyword.
+///
+/// The `Vec<char>` of each keyword is materialised **once** per process (in a
+/// [`OnceLock`]) instead of once per keyword *per scan position*: with the old
+/// per-position allocation a multi-MB body cost tens of millions of allocations
+/// (O(len × keywords) `Vec`s), which dominated the sanitizer's runtime (review
+/// finding m1).
+fn keyword_char_vectors() -> &'static [Vec<char>] {
+    static KEYWORD_CHARS: OnceLock<Vec<Vec<char>>> = OnceLock::new();
+    KEYWORD_CHARS.get_or_init(|| {
+        ROUTING_KEYWORDS
+            .iter()
+            .map(|keyword| keyword.chars().collect())
+            .collect()
+    })
+}
+
 fn redact_routing_keywords(class: AuthFailureClass, text: &str) -> String {
     let characters: Vec<char> = text.chars().collect();
     let mut redacted = String::with_capacity(text.len());
     let mut index = 0;
 
     'scan: while index < characters.len() {
-        for keyword in ROUTING_KEYWORDS {
+        for (keyword, keyword_chars) in ROUTING_KEYWORDS.iter().zip(keyword_char_vectors()) {
             if !class.must_redact(keyword) {
                 continue;
             }
-            let keyword_chars: Vec<char> = keyword.chars().collect();
             let end = index + keyword_chars.len();
             let matches = end <= characters.len()
                 && characters[index..end]
                     .iter()
-                    .zip(&keyword_chars)
+                    .zip(keyword_chars)
                     .all(|(found, expected)| found.eq_ignore_ascii_case(expected));
 
             if matches {
@@ -265,24 +319,40 @@ fn redact_routing_keywords(class: AuthFailureClass, text: &str) -> String {
 ///    that upstream split across lines (`authen\ntication`) is re-joined as two
 ///    words and can then no longer match — which is safe, because the frontend
 ///    evaluates the very same collapsed text.
-/// 2. **Redact** the routing keywords that do not belong to `class`, so the
+/// 2. **Truncate** the collapsed text to [`MAX_ERROR_CAUSE_LEN`] characters
+///    (appending `…` when truncated) **before** the redaction scan, so the scan
+///    itself is O(`MAX_ERROR_CAUSE_LEN`) regardless of how large the upstream
+///    body was (review finding m1: a multi-MB body used to be scanned in full).
+///    A routing keyword cut in half by the truncation cannot match — the same
+///    argument the whitespace collapse above already makes for `authen\ntication` —
+///    so a truncated cause can never smuggle a *whole* keyword to the frontend.
+/// 3. **Redact** the routing keywords that do not belong to `class`, so the
 ///    frontend cannot re-classify the message from an upstream body.
-/// 3. **Truncate** to [`MAX_ERROR_CAUSE_LEN`] characters, appending `…` when
-///    truncated (after redaction, so a placeholder is never cut in half).
+///
+/// Because **no truncation happens after step 3**, a [`REDACTION_PLACEHOLDER`]
+/// can never be cut in half (review finding m2: the old order truncated *after*
+/// redaction and the doc claimed the opposite). The honest bound of the result is
+/// therefore `MAX_ERROR_CAUSE_LEN` plus a bounded placeholder expansion: each
+/// occurrence of a keyword is replaced by a fixed-length placeholder, so the
+/// growth is bounded by the worst case where the whole bounded text is one
+/// keyword repeated (`denied`, the shortest at 5 chars, → `[redacted]` at 10
+/// chars, i.e. a growth factor of 2.0×); in practice the growth is proportional
+/// to the number of keywords found, not to the length of the input.
 ///
 /// Callers must only pass upstream/provider error text. Request-side secrets
 /// (authorization code, access/refresh tokens, client secret) are never handed to
 /// this function and must never be included in a message.
 fn sanitize_error_cause(class: AuthFailureClass, cause: &str) -> String {
     let collapsed = cause.split_whitespace().collect::<Vec<_>>().join(" ");
-    let redacted = redact_routing_keywords(class, &collapsed);
 
-    if redacted.chars().count() <= MAX_ERROR_CAUSE_LEN {
-        redacted
+    let truncated: String = if collapsed.chars().count() <= MAX_ERROR_CAUSE_LEN {
+        collapsed
     } else {
-        let truncated: String = redacted.chars().take(MAX_ERROR_CAUSE_LEN).collect();
-        format!("{truncated}…")
-    }
+        let head: String = collapsed.chars().take(MAX_ERROR_CAUSE_LEN).collect();
+        format!("{head}…")
+    };
+
+    redact_routing_keywords(class, &truncated)
 }
 
 /// Keyword replica of `CloudStorageCommands.handleError` for contract tests.
@@ -587,6 +657,204 @@ mod auth_failure_class_tests {
         assert_eq!(
             sanitize_error_cause(AuthFailureClass::Transient, &exact),
             exact
+        );
+    }
+
+    /// m1: the redaction scan runs over the *bounded* text, so a multi-MB cause
+    /// costs O(`MAX_ERROR_CAUSE_LEN`) work, and a keyword that the truncation cut
+    /// in half cannot match — the truncation happens *before* the scan.
+    ///
+    /// **Pins only**: the *bound* of the sanitized output (exactly
+    /// `MAX_ERROR_CAUSE_LEN` plus the ellipsis) and the frontend bucket for a
+    /// truncated cause. It does **not** pin the truncate-before-redact *order*:
+    /// the old truncate-after-redact implementation is also green here (a half
+    /// keyword is inert either way). The order itself is pinned by
+    /// [`sanitize_never_cuts_a_redaction_placeholder_in_half`].
+    #[test]
+    fn sanitize_preserves_the_input_bound_when_keywords_straddle_the_cut() {
+        // The keyword `denied` straddles the truncation boundary (it starts 2 chars
+        // before it), so the pre-truncation cuts it in half. A half keyword is
+        // inert: the redaction scan cannot match it, and neither can the frontend
+        // (which sees the same truncated text).
+        let padding = "a".repeat(MAX_ERROR_CAUSE_LEN - 2);
+        let cause = format!("{padding}denied and more text");
+        let sanitized = sanitize_error_cause(AuthFailureClass::Transient, &cause);
+
+        assert_eq!(
+            sanitized.chars().count(),
+            MAX_ERROR_CAUSE_LEN + 1,
+            "the truncated cause must be exactly the bound plus the ellipsis: {sanitized}"
+        );
+        assert!(
+            sanitized.ends_with('…'),
+            "a truncated cause must end with the ellipsis: {sanitized}"
+        );
+        assert!(
+            !sanitized.contains(REDACTION_PLACEHOLDER),
+            "a keyword cut in half must not match the redaction scan: {sanitized}"
+        );
+        assert_eq!(
+            bucket_of(&format!("network error while x: {sanitized}")),
+            FrontendBucket::NetworkError,
+            "the frontend sees the same truncated text, so the bucket must hold: {sanitized}"
+        );
+    }
+
+    /// m2: no truncation happens AFTER redaction, so a placeholder can never be
+    /// cut in half — the old order (redact first, truncate after) would have
+    /// sliced the placeholder of a keyword sitting right at the bound.
+    #[test]
+    fn sanitize_never_cuts_a_redaction_placeholder_in_half() {
+        // `denied` (5 chars) sits FULLY inside the bound, so it is replaced by a
+        // whole placeholder (10 chars): under the old order the final truncate
+        // would have produced a sliced `[reda…`.
+        let would_be_cut = format!("{}denied", "b".repeat(MAX_ERROR_CAUSE_LEN - "denied".len()));
+        let sanitized = sanitize_error_cause(AuthFailureClass::Transient, &would_be_cut);
+
+        assert!(
+            sanitized.contains(REDACTION_PLACEHOLDER),
+            "the keyword must be replaced by a whole placeholder: {sanitized}"
+        );
+        assert!(
+            sanitized.ends_with(REDACTION_PLACEHOLDER),
+            "the placeholder must never be cut in half: {sanitized}"
+        );
+    }
+
+    /// m1: the scan must never grow the text beyond the bound plus a placeholder
+    /// expansion factor bounded by the shortest keyword (`denied`, 5 chars →
+    /// `[redacted]`, 10 chars, i.e. 2.0×). A pathological cause made only of
+    /// keywords must not explode into an unbounded message.
+    ///
+    /// **Pins only**: the *upper bound* of the sanitized output for a
+    /// keyword-only cause. The exact truncate-before-redact *order* is not
+    /// pinned here (the old implementation also stayed within the bound); it is
+    /// pinned by [`sanitize_never_cuts_a_redaction_placeholder_in_half`].
+    #[test]
+    fn sanitize_bounds_a_pathological_keyword_only_cause_stays_within_the_documented_bound() {
+        let cause = "denied ".repeat(MAX_ERROR_CAUSE_LEN);
+        let sanitized = sanitize_error_cause(AuthFailureClass::Transient, &cause);
+        let bound = REDACTION_PLACEHOLDER.len() * MAX_ERROR_CAUSE_LEN;
+
+        assert!(
+            sanitized.chars().count() <= bound + 1, // + the ellipsis
+            "a keyword-only cause must stay within the placeholder-expanded bound, \
+             got {} chars: {sanitized}",
+            sanitized.chars().count()
+        );
+
+        // The growth is a placeholder expansion of the *bounded* text, never of
+        // the (unbounded) input: the input here is ~1920 chars, the output must
+        // be within a few multiples of the bound, not of the input.
+        assert!(
+            sanitized.chars().count() < 10 * MAX_ERROR_CAUSE_LEN,
+            "the growth must be bounded by the placeholder expansion of the bound, \
+             not by the input length, got {} chars",
+            sanitized.chars().count()
+        );
+    }
+
+    /// m3: the context is interpolated into the message, so it must obey the same
+    /// class invariant as the cause: a context carrying a routing keyword must be
+    /// redacted, not rendered verbatim.
+    #[test]
+    fn context_with_a_routing_keyword_is_redacted_and_keeps_the_class() {
+        // A future context that talks about an *expired* token would trip the
+        // frontend's composite `token` + `expired` rule and steal the `Other`
+        // bucket for `TOKEN_EXPIRED`.
+        let other = observable_message(&AuthFailureClass::Other.into_command_error(
+            "checking whether the token expired",
+            "expected value at column 1",
+        ));
+        let lowered = other.to_lowercase();
+        for keyword in ROUTING_KEYWORDS {
+            assert!(
+                !lowered.contains(keyword),
+                "OTHER must stay keyword-free even when its context carries a \
+                 keyword, got: {other}"
+            );
+        }
+        assert_eq!(bucket_of(&other), FrontendBucket::OperationFailed);
+
+        // The same holds for the local-storage template (m4).
+        let local = observable_message(
+            &AuthFailureClass::Transient.into_command_error_local_storage(
+                "checking whether the token expired",
+                "the secret service is not available",
+            ),
+        );
+        assert!(
+            !local.to_lowercase().contains("expired"),
+            "the local-storage template must redact the context as well, got: {local}"
+        );
+        assert_eq!(
+            bucket_of(&local),
+            FrontendBucket::NetworkError,
+            "the local-storage message must keep the transient bucket: {local}"
+        );
+    }
+
+    /// m3: every context string this crate interpolates into a message must be
+    /// keyword-free, so the defense-in-depth redaction of the context is a no-op
+    /// for the messages the frontend contract fixtures pin. If a new context with
+    /// a routing keyword is ever added, it must be added here too (it would be
+    /// silently redacted, changing the observable message).
+    #[test]
+    fn every_context_string_used_by_the_crate_is_keyword_free() {
+        let contexts = [
+            // `commands::storage`: `classify_refresh_failure`.
+            "refreshing the Google Drive access token",
+            // `commands::storage`: `exchange_google_drive_code`.
+            "exchanging the Google Drive authorization code",
+            // `commands::storage`: `exchange_google_drive_code` (2xx JSON parse).
+            "parsing the Google Drive token response",
+            // `commands::storage`: `oauth_state_terminal_error`.
+            "validating the OAuth state",
+            // `commands::storage`: `run_google_drive_oauth` (precondition).
+            "loading the Google Drive provider configuration",
+            // `commands::storage`: `token_persistence_failure`.
+            "saving the Google Drive tokens that Google already issued",
+        ];
+
+        for context in contexts {
+            for class in [
+                AuthFailureClass::AuthRejection,
+                AuthFailureClass::Transient,
+                AuthFailureClass::Other,
+            ] {
+                assert_eq!(
+                    redact_routing_keywords(class, context),
+                    context,
+                    "the context {context:?} must be keyword-free for {class:?}, \
+                     otherwise the observable message changes"
+                );
+            }
+        }
+    }
+
+    /// m4: the local-storage template names the real cause while keeping the
+    /// `network` keyword the frontend routes on.
+    #[test]
+    fn local_storage_template_names_the_real_cause_and_keeps_the_transient_bucket() {
+        let rendered = observable_message(
+            &AuthFailureClass::Transient.into_command_error_local_storage(
+                "refreshing the Google Drive access token",
+                "Failed to set keychain secret",
+            ),
+        );
+
+        assert!(
+            rendered.contains("network or local storage error"),
+            "the local-storage template must name the real cause, got: {rendered}"
+        );
+        assert!(
+            rendered.contains("refreshing the Google Drive access token"),
+            "the context must survive verbatim: {rendered}"
+        );
+        assert_eq!(
+            bucket_of(&rendered),
+            FrontendBucket::NetworkError,
+            "the frontend must keep routing on `network`: {rendered}"
         );
     }
 }

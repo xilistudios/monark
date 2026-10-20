@@ -12,6 +12,17 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 use tauri::State;
 
+/// Upper bound on the slice of a token-endpoint response body that is embedded
+/// in the human-readable error *cause*.
+///
+/// The body is an arbitrary upstream payload (a proxy/gateway HTML page, Google's
+/// JSON error) and may be arbitrarily large; only its first
+/// [`MAX_ERROR_BODY_CAUSE_CHARS`] characters are kept for the user, with `…`
+/// appended when truncated. Classification always runs on the **full** body (see
+/// [`exchange_google_drive_code`]): this bound only limits what reaches the
+/// message, so a multi-MB 5xx body cannot blow up the IPC payload or the log.
+const MAX_ERROR_BODY_CAUSE_CHARS: usize = 960;
+
 // Global state for storage manager
 pub struct StorageState {
     pub manager: Arc<StorageManager>,
@@ -681,9 +692,15 @@ async fn exchange_google_drive_code(
             .text()
             .await
             .unwrap_or_else(|_| "unreadable response body".to_string());
+        // Classification always sees the FULL body (`invalid_grant` could sit
+        // anywhere in it); only the human-readable cause is bounded (review
+        // finding m1: an unbounded upstream body used to be embedded verbatim).
         let class = classify_token_endpoint_status(status, &body);
         let cause = if class == AuthFailureClass::AuthRejection {
-            format!("the token endpoint returned HTTP status {status}: {body}")
+            format!(
+                "the token endpoint returned HTTP status {status}: {}",
+                bounded_error_body(&body)
+            )
         } else {
             format!("the token endpoint returned HTTP status {status}")
         };
@@ -941,6 +958,70 @@ fn strip_refresh_error_body(message: &str) -> &str {
     }
 }
 
+/// Bound an upstream response body before embedding it in an error cause.
+///
+/// Returns the body unchanged when it already fits in
+/// [`MAX_ERROR_BODY_CAUSE_CHARS`] characters; otherwise its first
+/// `MAX_ERROR_BODY_CAUSE_CHARS` characters plus a `…`. The truncation is done on
+/// `char`s (not bytes) so a multi-byte code point is never split.
+///
+/// This bounds the INTERMEDIATE cause string that is formatted into
+/// `ClassifiedAuthError`/`StorageError::Authentication` (and copied by error
+/// logging): defence in depth so a multi-MB proxy page is never copied or
+/// scanned wholesale on the error path. It is NOT the final IPC bound — the
+/// observable message is bounded separately by `sanitize_error_cause`
+/// (`MAX_ERROR_CAUSE_LEN`), which runs before redaction. The intermediate bound
+/// is pinned directly by the `bounded_error_body_*` unit tests (it is not
+/// observable through the classified message, because sanitisation runs first).
+fn bounded_error_body(body: &str) -> String {
+    if body.chars().count() <= MAX_ERROR_BODY_CAUSE_CHARS {
+        return body.to_string();
+    }
+    let head: String = body.chars().take(MAX_ERROR_BODY_CAUSE_CHARS).collect();
+    format!("{head}…")
+}
+
+/// Pins the INTERMEDIATE cause bound (see [`bounded_error_body`]'s doc: this
+/// bound is not observable through the classified message, because
+/// `sanitize_error_cause` truncates first — so it needs its own tests).
+#[cfg(test)]
+mod bounded_error_body_tests {
+    use super::{bounded_error_body, MAX_ERROR_BODY_CAUSE_CHARS};
+
+    #[test]
+    fn short_input_is_returned_unchanged() {
+        assert_eq!(bounded_error_body(""), "");
+        assert_eq!(bounded_error_body("small body"), "small body");
+    }
+
+    #[test]
+    fn input_exactly_at_the_bound_is_returned_unchanged() {
+        let body = "x".repeat(MAX_ERROR_BODY_CAUSE_CHARS);
+        assert_eq!(bounded_error_body(&body), body);
+    }
+
+    #[test]
+    fn longer_input_is_truncated_to_the_bound_plus_ellipsis() {
+        let body = "x".repeat(MAX_ERROR_BODY_CAUSE_CHARS + 500);
+        let bounded = bounded_error_body(&body);
+        assert_eq!(bounded.chars().count(), MAX_ERROR_BODY_CAUSE_CHARS + 1);
+        assert!(bounded.ends_with('…'));
+    }
+
+    #[test]
+    fn a_multi_byte_char_at_the_cut_point_is_never_split() {
+        // `é` is 2 bytes but 1 char: the cut lands right after it, and the
+        // char-based slice must keep it whole (no byte split, no U+FFFD).
+        let prefix = "e".repeat(MAX_ERROR_BODY_CAUSE_CHARS - 1);
+        let body = format!("{prefix}ééé tail");
+        let bounded = bounded_error_body(&body);
+        assert_eq!(bounded.chars().count(), MAX_ERROR_BODY_CAUSE_CHARS + 1);
+        assert!(bounded.ends_with('…'));
+        assert!(bounded.contains('é'));
+        assert!(!bounded.contains('\u{FFFD}'));
+    }
+}
+
 /// Classify a token-refresh failure into the [`AuthFailureClass`] contract.
 ///
 /// The refresh reaches Google through `ensure_google_drive_token_valid` →
@@ -974,8 +1055,13 @@ pub(crate) fn classify_refresh_failure(error: StorageError) -> CommandError {
 
     match &error {
         // Persisting the refreshed tokens failed: retryable IO/keychain problem.
+        // The wording must name the real cause (a *local* storage failure, not a
+        // network one) while keeping the `network` keyword the frontend routes
+        // on — `network or local storage error while …` still maps to
+        // `NETWORK_ERROR`/`transient` (review finding m4).
         StorageError::Io(_) | StorageError::Keychain(_) | StorageError::Serialization(_) => {
-            AuthFailureClass::Transient.into_command_error(CONTEXT, &error.to_string())
+            AuthFailureClass::Transient
+                .into_command_error_local_storage(CONTEXT, &error.to_string())
         }
         // Request-level failure (DNS/connect/timeout) or unparseable token body.
         StorageError::Network(_) => {
@@ -1132,6 +1218,7 @@ mod auth_status_tests {
 ///   be able to re-classify a failure.
 #[cfg(test)]
 mod oauth_callback_tests {
+    use super::MAX_ERROR_BODY_CAUSE_CHARS;
     use super::{
         apply_failed_oauth_state_lifecycle, classify_refresh_failure, complete_google_drive_oauth,
         oauth_state_store, parse_refresh_error_status, peek_oauth_state, strip_refresh_error_body,
@@ -1139,12 +1226,11 @@ mod oauth_callback_tests {
         OAUTH_STATE_EXPIRY,
     };
     use crate::commands::errors::contract_fixture::{bucket_of, FrontendBucket};
-    use crate::commands::errors::{AuthFailureClass, CommandError};
+    use crate::commands::errors::{AuthFailureClass, CommandError, MAX_ERROR_CAUSE_LEN};
     use crate::storage::providers::google_drive::GoogleDriveConfig;
-    use crate::storage::{ProviderConfig, StorageConfig, StorageError, StorageManager};
-    use chrono::{Duration, Utc};
+    use crate::storage::test_support;
+    use crate::storage::{ProviderConfig, StorageError, StorageManager};
     use mockito::Server;
-    use std::path::PathBuf;
     use std::sync::OnceLock;
     use std::time::Instant;
 
@@ -1160,48 +1246,8 @@ mod oauth_callback_tests {
             .await
     }
 
-    /// Point `StorageConfig::save`/`load` at a throwaway file so tests never touch
-    /// the user's real configuration. `set_storage_config_path` is a `OnceLock`,
-    /// so the first call wins for the whole test binary.
-    fn isolate_storage_config() {
-        static PATH: OnceLock<PathBuf> = OnceLock::new();
-        PATH.get_or_init(|| {
-            let dir = std::env::temp_dir().join(format!(
-                "monark-oauth-callback-tests-{}",
-                std::process::id()
-            ));
-            let _ = std::fs::create_dir_all(&dir);
-            let path = dir.join("storage_config.json");
-            crate::storage::set_storage_config_path(path.clone());
-            path
-        });
-    }
-
-    fn google_drive_config() -> GoogleDriveConfig {
-        GoogleDriveConfig {
-            client_id: "client_id".to_string(),
-            client_secret: "client_secret".to_string(),
-            redirect_uri: "http://localhost/callback".to_string(),
-            access_token: Some("expired_access".to_string()),
-            refresh_token: Some("refresh_token".to_string()),
-            token_expires_at: Some(Utc::now() - Duration::minutes(10)),
-        }
-    }
-
     async fn manager_with_google_drive() -> StorageManager {
-        isolate_storage_config();
-        let config = StorageConfig::new_local(std::env::temp_dir().to_string_lossy().to_string());
-        let manager = StorageManager::new(config).await.unwrap();
-        manager
-            .add_provider(
-                "google_drive".to_string(),
-                ProviderConfig::GoogleDrive {
-                    config: google_drive_config(),
-                },
-            )
-            .await
-            .unwrap();
-        manager
+        test_support::manager_with_google_drive().await
     }
 
     fn callback_request(state: &str) -> OAuthCallbackRequest {
@@ -1897,13 +1943,23 @@ mod oauth_callback_tests {
 
         // TRANSIENT: persisting the refreshed tokens failed (IO/keychain) — this one
         // really is retryable, unlike the token *exchange* whose code is single-use.
+        // The wording names the *local* cause (review finding m4) while keeping the
+        // `network` keyword the frontend routes on.
         let keychain = observable_message(classify_refresh_failure(StorageError::keychain(
             "Failed to set keychain secret",
         )));
         assert_eq!(
             bucket_of(&keychain),
             FrontendBucket::NetworkError,
-            "{keychain}"
+            "a local-storage failure must stay in the transient bucket, got: {keychain}"
+        );
+        assert!(
+            keychain.contains("network or local storage error"),
+            "a keychain failure must be named as a local-storage error, got: {keychain}"
+        );
+        assert!(
+            keychain.contains("Failed to set keychain secret"),
+            "the cause must survive verbatim, got: {keychain}"
         );
 
         // OTHER: misconfiguration, no keyword.
@@ -1921,5 +1977,65 @@ mod oauth_callback_tests {
             FrontendBucket::AuthenticationFailed,
             "an unknown status defaults to the conservative terminal bucket, got: {unparseable_status}"
         );
+    }
+
+    /// m1: an unbounded upstream response body must not reach the error cause.
+    /// Classification still runs on the FULL body (the `invalid_grant` keyword
+    /// can sit anywhere in it), but the message keeps only a bounded slice.
+    #[tokio::test]
+    async fn huge_token_endpoint_body_is_classified_in_full_and_the_ipc_message_stays_bounded() {
+        let _guard = test_lock().await;
+        let mut server = Server::new_async().await;
+
+        // `invalid_grant` sits PAST the cause bound, so the class must come from
+        // the full body, not from the truncated slice.
+        let padding = "a".repeat(MAX_ERROR_BODY_CAUSE_CHARS + 500);
+        let body = format!("{padding}invalid_grant");
+        let mock = server
+            .mock("POST", "/token")
+            .with_status(400)
+            .with_body(body)
+            .create_async()
+            .await;
+
+        let manager = manager_with_google_drive().await;
+        let state = "huge-body-400-state";
+        insert_pending_state(state, "code-verifier");
+
+        let error = complete_google_drive_oauth(
+            &manager,
+            &callback_request(state),
+            &format!("{}/token", server.url()),
+        )
+        .await
+        .expect_err("a 400 must fail");
+
+        let message = observable_message(error);
+        assert_eq!(
+            bucket_of(&message),
+            FrontendBucket::AuthenticationFailed,
+            "the classification must see the full body (invalid_grant past the \
+             cause bound), got: {}",
+            message.chars().take(120).collect::<String>()
+        );
+        // The observable IPC message is bounded by `sanitize_error_cause`
+        // (MAX_ERROR_CAUSE_LEN chars + the trailing `…`), plus the fixed
+        // template prefix and at most one placeholder expansion. This does NOT
+        // pin `bounded_error_body` (sanitisation would bound the message even
+        // without it) — the intermediate cause bound is pinned by the
+        // `bounded_error_body_*` unit tests below.
+        let template_prefix = format!(
+            "authentication failed while exchanging the Google Drive \
+             authorization code (re-authenticate): "
+        );
+        assert!(
+            message.chars().count()
+                <= template_prefix.chars().count() + MAX_ERROR_CAUSE_LEN + 1,
+            "the observable message must stay within the sanitised bound ({} chars)",
+            message.chars().count()
+        );
+
+        drop_pending_state(state);
+        mock.assert_async().await;
     }
 }

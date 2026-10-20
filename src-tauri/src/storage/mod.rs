@@ -8,8 +8,13 @@ pub mod token_store;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 pub use config::reset_storage_config_path;
 pub use config::set_storage_config_path;
+#[cfg(test)]
+pub(crate) use config::with_storage_config_path;
 pub use config::{
     google_drive_config_from_env, ProviderConfig, StorageConfig, MONARK_DEFAULT_PROVIDER_NAME,
 };

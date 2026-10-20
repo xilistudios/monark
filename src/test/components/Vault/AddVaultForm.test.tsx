@@ -43,7 +43,12 @@ const HOUR_MS = 60 * 60 * 1000
  *   - AuthRejection: `authentication failed while {context} (re-authenticate): {cause}`
  *   - Transient:     `network error while {context}: {cause}`
  *   - Other:         `unexpected failure while {context}: {cause}`
- * and the refresh path (`classify_refresh_failure`,
+ * and `AuthFailureClass::into_command_error_local_storage` (same file) adds a
+ * fourth observable template for transient failures that are NOT network
+ * problems:            `network or local storage error while {context}: {cause}`
+ * (used by `classify_refresh_failure`, src-tauri/src/commands/storage.rs, for
+ * the Io|Keychain|Serialization arm). It must keep routing as `network`.
+ * The refresh path (`classify_refresh_failure`,
  * src-tauri/src/commands/storage.rs) uses the context
  * "refreshing the Google Drive access token". The Rust test
  * `refresh_failure_taxonomy_matches_the_command_contract` asserts the same
@@ -60,6 +65,12 @@ const backendAuthRejectionMessage = (cause: string) =>
 const backendOtherMessage = (cause: string) =>
   `unexpected failure while ${REFRESH_CONTEXT}: ${cause}`
 
+/** Fourth template: transient but NOT a network problem (Io/Keychain/Serialization
+ * while persisting rotated tokens), rendered by
+ * `AuthFailureClass::into_command_error_local_storage`. */
+const backendLocalStorageMessage = (cause: string) =>
+  `network or local storage error while ${REFRESH_CONTEXT}: ${cause}`
+
 /** Causes taken from the Rust tests / the real provider messages. */
 const TRANSIENT_CAUSE = 'Network error during token refresh: error sending request'
 const TRANSIENT_5XX_CAUSE =
@@ -67,10 +78,13 @@ const TRANSIENT_5XX_CAUSE =
 const AUTH_REJECTION_CAUSE =
   'Google Drive refresh token is invalid or has been revoked. Please re-authenticate.'
 const OTHER_CAUSE = 'Failed to parse token response'
+/** Real cause from the Rust side (StorageError::Keychain). */
+const LOCAL_STORAGE_CAUSE = 'Failed to set keychain secret'
 
 const TRANSIENT_MESSAGE = backendTransientMessage(TRANSIENT_CAUSE)
 const AUTH_REJECTION_MESSAGE = backendAuthRejectionMessage(AUTH_REJECTION_CAUSE)
 const OTHER_MESSAGE = backendOtherMessage(OTHER_CAUSE)
+const LOCAL_STORAGE_MESSAGE = backendLocalStorageMessage(LOCAL_STORAGE_CAUSE)
 
 /**
  * Makes the (globally mocked) Tauri `invoke` reject once for a refresh attempt.
@@ -607,6 +621,26 @@ describe('AddVaultForm with Cloud Storage', () => {
       expect(screen.queryByText(notAuthenticatedMessage)).not.toBeInTheDocument()
     })
 
+    it('should show the retryable message when the refresh fails persisting the rotated tokens (backend local-storage Transient)', async () => {
+      // Fourth observable template (`into_command_error_local_storage`): the
+      // failure is a local keychain/IO problem, not a network one, but it stays
+      // transient so the user can simply retry.
+      vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue(
+        expiredAuthInfo()
+      )
+      mockRefreshFailure(LOCAL_STORAGE_MESSAGE)
+
+      renderComponent()
+      await fillCloudVaultForm()
+
+      fireEvent.click(screen.getByText('Create Vault'))
+
+      await waitFor(() => {
+        expect(screen.getByText(transientMessage)).toBeInTheDocument()
+      })
+      expect(screen.queryByText(notAuthenticatedMessage)).not.toBeInTheDocument()
+    })
+
     it('should not refresh providers without token expiry metadata (stateless credentials)', async () => {
       mockVaultManagerInstance.createVault.mockResolvedValue('vault-id-123')
       // WebDAV style provider: Basic auth, no OAuth access token, no expiry.
@@ -785,6 +819,16 @@ describe('Refresh failure classification', () => {
     const wrapped = await wrappedRefreshError(
       backendTransientMessage(TRANSIENT_5XX_CAUSE)
     )
+
+    expect(wrapped.type).toBe(CloudStorageErrorType.NETWORK_ERROR)
+    expect(classifyRefreshFailure(wrapped)).toBe('transient')
+  })
+
+  it('classifies the backend local-storage Transient message as transient (NETWORK_ERROR)', async () => {
+    // `network or local storage error while …` (Io/Keychain/Serialization arm
+    // of `classify_refresh_failure`) must keep routing on the `network`
+    // keyword even though the cause is local, not network.
+    const wrapped = await wrappedRefreshError(LOCAL_STORAGE_MESSAGE)
 
     expect(wrapped.type).toBe(CloudStorageErrorType.NETWORK_ERROR)
     expect(classifyRefreshFailure(wrapped)).toBe('transient')

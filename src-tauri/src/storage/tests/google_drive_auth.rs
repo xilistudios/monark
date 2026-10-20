@@ -57,6 +57,16 @@ mod google_drive_auth_tests {
         }
     }
 
+    /// Hermetic setup for every test that builds a `StorageManager`: swap the
+    /// real OS keychain for keyring-core's in-memory mock and point
+    /// `StorageConfig::save`/`load` at a throwaway file, so tests never
+    /// read/write the developer's keychain or config. Must run *before* any
+    /// `add_provider`/`save`. See `crate::storage::test_support`.
+    fn isolate_storage() {
+        crate::storage::keychain::install_test_store();
+        crate::storage::test_support::isolate_storage_config();
+    }
+
     #[tokio::test]
     async fn google_drive_expired_token_triggers_automatic_refresh() {
         // Serialize because the provider uses a global env var for the token URL.
@@ -90,6 +100,7 @@ mod google_drive_auth_tests {
             "XDG_CONFIG_HOME",
             temp_dir.path().to_string_lossy().to_string(),
         );
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
         let manager = StorageManager::new(config).await.unwrap();
 
@@ -174,6 +185,7 @@ mod google_drive_auth_tests {
             "XDG_CONFIG_HOME",
             temp_dir.path().to_string_lossy().to_string(),
         );
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
         let manager = StorageManager::new(config).await.unwrap();
 
@@ -238,6 +250,7 @@ mod google_drive_auth_tests {
             "XDG_CONFIG_HOME",
             temp_dir.path().to_string_lossy().to_string(),
         );
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
         let manager = StorageManager::new(config).await.unwrap();
 
@@ -302,6 +315,7 @@ mod google_drive_auth_tests {
             "XDG_CONFIG_HOME",
             temp_dir.path().to_string_lossy().to_string(),
         );
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
         let manager = StorageManager::new(config).await.unwrap();
 
@@ -378,6 +392,7 @@ mod google_drive_auth_tests {
             "XDG_CONFIG_HOME",
             temp_dir.path().to_string_lossy().to_string(),
         );
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
         let manager = StorageManager::new(config).await.unwrap();
 
@@ -637,6 +652,7 @@ mod google_drive_auth_tests {
     #[tokio::test]
     async fn provider_auth_info_true_with_expired_access_token_and_refresh_token() {
         let temp_dir = TempDir::new().unwrap();
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string())
             .with_google_drive(expired_google_drive_config());
         let manager = StorageManager::new(config).await.unwrap();
@@ -656,6 +672,7 @@ mod google_drive_auth_tests {
     #[tokio::test]
     async fn provider_auth_info_false_without_credentials() {
         let temp_dir = TempDir::new().unwrap();
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string())
             .with_google_drive(empty_google_drive_config());
         let manager = StorageManager::new(config).await.unwrap();
@@ -719,6 +736,7 @@ mod google_drive_auth_tests {
             "XDG_CONFIG_HOME",
             temp_dir.path().to_string_lossy().to_string(),
         );
+        isolate_storage();
         let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
         let manager = StorageManager::new(config).await.unwrap();
         manager
@@ -749,5 +767,183 @@ mod google_drive_auth_tests {
         );
 
         _m.assert_async().await;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Producer round-trip tests (review finding M1).
+    //
+    // The tests above hand-write the error messages and pipe them through
+    // `classify_refresh_failure`. These tests instead exercise the REAL producer:
+    // `ensure_google_drive_token_valid` (→ `refresh_access_token_for_config`,
+    // google_drive.rs) formats `"Failed to refresh access token (<status>
+    // <reason>): <body>"`, which the command layer parses back with
+    // `parse_refresh_error_status` / `strip_refresh_error_body` (see
+    // `keep-in-sync` comments at both `format!` sites in google_drive.rs). A
+    // producer rewording must make these tests red, not silently shift every 5xx
+    // refresh failure from Transient to AuthRejection.
+    // ---------------------------------------------------------------------------
+
+    /// Run the real refresh flow against a failing mock and return the frontend
+    /// message produced by `classify_refresh_failure`. Requires the caller to
+    /// hold `lock_oauth_env()` and to have set `MONARK_GOOGLE_OAUTH_TOKEN_URL`.
+    async fn classify_real_producer_refresh_failure(
+        server: &mut Server,
+        status: u16,
+        body: &str,
+        expected_requests: usize,
+    ) -> String {
+        let mock = server
+            .mock("POST", "/token")
+            .with_status(status as usize)
+            .with_body(body)
+            .expect(expected_requests)
+            .create_async()
+            .await;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _xdg = EnvVarGuard::set(
+            "XDG_CONFIG_HOME",
+            temp_dir.path().to_string_lossy().to_string(),
+        );
+        isolate_storage();
+        let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
+        let manager = StorageManager::new(config).await.unwrap();
+        manager
+            .add_provider(
+                "google_drive".to_string(),
+                ProviderConfig::GoogleDrive {
+                    config: expired_google_drive_config(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let err = manager
+            .ensure_google_drive_token_valid("google_drive")
+            .await
+            .expect_err("refresh should fail");
+
+        mock.assert_async().await;
+        observable_refresh_message(crate::commands::storage::classify_refresh_failure(err))
+    }
+
+    /// A real 5xx from the provider (retries exhausted) must stay TRANSIENT →
+    /// frontend `NetworkError`, and the observable message must be exactly the
+    /// `(<status> <reason>)` prefix — the adversarial body must never reach the
+    /// frontend (it could otherwise re-bucket the message).
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn producer_5xx_refresh_failure_is_transient_and_strips_body() {
+        let _guard = lock_oauth_env();
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        // Adversarial body: it contains routing keywords (`authentication`,
+        // `connection`) that must not survive into the classified message.
+        let body = "<html>authentication proxy failed: connection reset</html>";
+        // A 5xx is retried, so the provider hits the mock MAX_REFRESH_RETRIES=3
+        // times (1s + 2s backoff); mirror `expect(3)`.
+        let message = classify_real_producer_refresh_failure(&mut server, 503, body, 3).await;
+
+        assert!(
+            message.contains("network"),
+            "TRANSIENT must map to NETWORK_ERROR, got: {message}"
+        );
+        assert!(
+            !message.contains("authentication") && !message.contains("connection"),
+            "the upstream body must be stripped before classification, got: {message}"
+        );
+        assert!(
+            message.contains("Failed to refresh access token (503 Service Unavailable)"),
+            "the producer's \"(<status> <reason>)\" prefix must survive verbatim, got: {message}"
+        );
+    }
+
+    /// A real 500 from the provider (retries exhausted) must also stay TRANSIENT.
+    /// Together with the 503 case this pins the whole `is_transient_status`
+    /// window (408 | 429 | 500..600) against the real producer string.
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn producer_500_refresh_failure_is_transient() {
+        let _guard = lock_oauth_env();
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        let body = "internal error: please retry later";
+        let message = classify_real_producer_refresh_failure(&mut server, 500, body, 3).await;
+
+        assert!(
+            message.contains("network"),
+            "a real 500 must stay TRANSIENT → NETWORK_ERROR, got: {message}"
+        );
+        assert!(
+            !message.contains("authentication"),
+            "the upstream body must be stripped, got: {message}"
+        );
+        assert!(
+            message.contains("Failed to refresh access token (500 Internal Server Error)"),
+            "the producer's \"(<status> <reason>)\" prefix must survive verbatim, got: {message}"
+        );
+    }
+
+    /// A non-transient, non-`invalid_grant` failure (e.g. 400) must stay
+    /// AUTH_REJECTION → frontend `AuthenticationFailed`, not be mis-bucketed as
+    /// a transient error that would be retried forever.
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn producer_400_refresh_failure_is_auth_rejection() {
+        let _guard = lock_oauth_env();
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        let body = "invalid_client: client not found";
+        let message = classify_real_producer_refresh_failure(&mut server, 400, body, 3).await;
+
+        assert!(
+            message.contains("authentication"),
+            "AUTH_REJECTION must map to AUTHENTICATION_FAILED, got: {message}"
+        );
+        assert!(
+            !message.contains("network") && !message.contains("connection"),
+            "a rejection must not look retryable, got: {message}"
+        );
+    }
+
+    /// Bonus: the dedicated `invalid_grant` wording branch still produces its
+    /// fixed message (no `(<status> <reason>)` round-trip needed) and classifies
+    /// as `AuthRejection` — rewording either the branch or the template would be
+    /// caught here.
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn producer_invalid_grant_branch_keeps_fixed_message_and_rejection() {
+        let _guard = lock_oauth_env();
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        let body =
+            r#"{"error":"invalid_grant","error_description":"Token has been expired or revoked."}"#;
+        // `invalid_grant` is non-retryable: exactly one request.
+        let message = classify_real_producer_refresh_failure(&mut server, 400, body, 1).await;
+
+        assert!(
+            message.contains("authentication"),
+            "AUTH_REJECTION must map to AUTHENTICATION_FAILED, got: {message}"
+        );
+        assert!(
+            message.contains("re-authenticate"),
+            "the invalid_grant branch must keep its re-authenticate wording, got: {message}"
+        );
     }
 }

@@ -198,6 +198,12 @@ impl GoogleDriveProvider {
                                 "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
                             ));
                         }
+                        // Keep in sync with commands::storage::parse_refresh_error_status
+                        // and strip_refresh_error_body: the "(<status> <reason>)" shape
+                        // produced here IS the refresh-failure contract. Rewording this
+                        // message breaks the producer round-trip tests in
+                        // storage::tests::google_drive_auth and can silently degrade a
+                        // 5xx refresh failure from Transient to AuthRejection.
                         let error_msg = format!(
                             "Failed to refresh access token ({}): {}",
                             status, error_text
@@ -328,6 +334,12 @@ impl GoogleDriveProvider {
                                 "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
                             ));
                         }
+                        // Keep in sync with commands::storage::parse_refresh_error_status
+                        // and strip_refresh_error_body: the "(<status> <reason>)" shape
+                        // produced here IS the refresh-failure contract. Rewording this
+                        // message breaks the producer round-trip tests in
+                        // storage::tests::google_drive_auth and can silently degrade a
+                        // 5xx refresh failure from Transient to AuthRejection.
                         let error_msg = format!(
                             "Failed to refresh access token ({}): {}",
                             status, error_text
