@@ -281,6 +281,7 @@ export default {
 			statusOk: "Autenticação bem-sucedida",
 			successTitle: "Autenticação bem-sucedida",
 			successBody: "Conclua o login no aplicativo Monark copiando as credenciais abaixo.",
+			openApp: "Abrir Monark",
 			copyHeading: "Copiar credenciais",
 			copyBody: "Copie estas credenciais e cole-as no Monark para concluir a configuração da sincronização.",
 			copyButton: "Copiar credenciais em Base64",

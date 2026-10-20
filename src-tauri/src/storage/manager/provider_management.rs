@@ -328,7 +328,9 @@ impl StorageManager {
 
         match provider_config {
             ProviderConfig::GoogleDrive { config } => {
-                let authenticated = config.access_token.is_some() && !config.is_token_expired();
+                // An expired access token with a refresh token is still authenticated:
+                // `ensure_google_drive_token_valid` renews it silently on the next call.
+                let authenticated = config.has_usable_credentials();
                 Ok((authenticated, config.token_expires_at))
             }
             ProviderConfig::WebDav { config } => {
@@ -345,11 +347,47 @@ impl StorageManager {
 }
 
 impl GoogleDriveConfig {
+    /// `true` when the access token is absent or expired (5-minute safety buffer).
+    ///
+    /// NOTE: do not use this as an "is the user logged in?" check — an expired
+    /// access token can be renewed silently with the refresh token. Use
+    /// [`GoogleDriveConfig::has_usable_credentials`] for auth-status reporting and
+    /// `StorageManager::ensure_google_drive_token_valid` to actually refresh.
     pub fn is_token_expired(&self) -> bool {
         if let (Some(_token), Some(expires_at)) = (&self.access_token, &self.token_expires_at) {
             Utc::now() >= *expires_at - chrono::Duration::minutes(5)
         } else {
             true
         }
+    }
+
+    /// `true` when we can still reach Google Drive with these credentials, either
+    /// right now (valid access token) or through a silent refresh (refresh token).
+    ///
+    /// Auth-status checkers must use this instead of
+    /// `access_token.is_some() && !is_token_expired()`: an expired access token
+    /// with a valid refresh token is not "logged out", it just needs a refresh.
+    /// Treating it as unauthenticated forced a full Google re-login every time the
+    /// ~1h access token TTL elapsed.
+    ///
+    /// Blank tokens (`Some("")`) never count as usable: a persisted-but-empty
+    /// refresh token would make the UI report "authenticated" while every refresh
+    /// attempt fails with an authentication error. `is_token_expired` already
+    /// returns `true` for a *missing* access token, but not for a present-yet-empty
+    /// one, hence the explicit emptiness check on both tokens.
+    ///
+    /// Reuses this type's own `is_token_expired` so it stays coherent with
+    /// `GoogleDriveProvider::is_token_expired` (same 5-minute buffer semantics).
+    pub fn has_usable_credentials(&self) -> bool {
+        let has_valid_access_token = self
+            .access_token
+            .as_deref()
+            .is_some_and(|token| !token.is_empty() && !self.is_token_expired());
+        let has_refresh_token = self
+            .refresh_token
+            .as_deref()
+            .is_some_and(|token| !token.is_empty());
+
+        has_valid_access_token || has_refresh_token
     }
 }
