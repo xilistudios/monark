@@ -1505,6 +1505,16 @@ h2 {
 	animation: none;
 }
 
+/* The desktop handover is a deliberate user gesture: a browser only follows a
+   custom scheme that was clicked, so the primary action in the success card is
+   a real button and not a hidden iframe. Full width keeps it the obvious next
+   step above the copy fallback. */
+.oauth-open-app {
+	width: 100%;
+	justify-content: center;
+	margin-bottom: 1.25rem;
+}
+
 .oauth-block {
 	background: var(--surface-sunken);
 	border: 1px solid var(--rule);

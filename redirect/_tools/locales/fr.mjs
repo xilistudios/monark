@@ -281,6 +281,7 @@ export default {
 		statusOk: "Authentification réussie",
 		successTitle: "Authentification réussie",
 		successBody: "Terminez la connexion dans l'application Monark en copiant les identifiants ci-dessous.",
+		openApp: "Ouvrir Monark",
 		copyHeading: "Copier les identifiants",
 		copyBody: "Copiez ces identifiants et collez-les dans Monark pour terminer la configuration de la synchronisation.",
 		copyButton: "Copier les identifiants en Base64",

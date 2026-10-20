@@ -89,6 +89,12 @@ files directly shows Chrome's own error page rather than the site.
 Worth looking at: `/` (OAuth hop), `/en/`, a language menu, `/en/privacy`,
 a bad path (404), and dark mode (`prefers-color-scheme`).
 
+The handover is worth its own look: `/?code=…&state=…` renders the success card,
+and on desktop its **Open Monark** button is the only way into the app. A
+`monark://` navigation the user did not click is dropped by every browser — the
+hidden-iframe attempt that used to live here never handed the `code` over, while
+the page still reported success. `check.mjs` now fails if that shape returns.
+
 ## Social card
 
 `og.png` is a 1200×630 render of `_tools/og/card.html`:

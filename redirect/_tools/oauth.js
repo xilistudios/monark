@@ -10,11 +10,13 @@
  *
  * The handover uses a custom-scheme deep link (`monark://oauth/callback`). On
  * Android that is an `intent://` URL so the browser can reach the installed
- * package; on iOS and desktop the scheme can be navigated to directly, and on
- * desktop it is fired from a hidden iframe so a failure cannot blank the page.
+ * package, and on iOS the scheme can be navigated to directly. Desktop is
+ * different: a browser only honours a custom scheme the user actually asked
+ * for, so there the handover is a button on the success screen rather than an
+ * automatic attempt — Firefox, Chrome and Zen all drop the latter.
  *
- * Because the deep link can fail silently (no app installed, browser blocks
- * custom schemes), the credentials are also rendered for manual copy. That
+ * Because the deep link can fail silently (no app installed, no handler
+ * registered), the credentials are also rendered for manual copy. That
  * fallback is the reason this page still needs a UI at all.
  *
  * Strings arrive as `window.MONARK_OAUTH`, injected by the build so this file
@@ -27,7 +29,6 @@
 	const strings = config.strings ?? {};
 
 	const DEEP_LINK_DELAY = 500;
-	const IFRAME_REMOVAL_DELAY = 1000;
 	const BUTTON_RESET_DELAY = 3000;
 
 	const params = new URLSearchParams(window.location.search);
@@ -68,14 +69,21 @@
 		statusEl.className = "status" + (tone ? ` status--${tone}` : "");
 	};
 
+	/** URL-encoded callback query carrying the credentials back to the app. */
+	const callbackQuery = () =>
+		`code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+
+	/** The custom-scheme deep link the app registers as its callback. */
+	const callbackDeepLink = () => `monark://oauth/callback?${callbackQuery()}`;
+
 	/**
-	 * Fire the custom-scheme deep link that hands the credentials to the app.
-	 * Returns silently when every strategy is unavailable — the manual copy
-	 * fallback on the same screen covers that case.
+	 * Fire the custom-scheme deep link on the platforms that accept it without
+	 * a user gesture — Android and iOS. Desktop is deliberately absent: see
+	 * `bindOpenApp`, which requires a click.
 	 */
 	function openDeepLink() {
-		const query = `code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
-		const deepLink = `monark://oauth/callback?${query}`;
+		const query = callbackQuery();
+		const deepLink = callbackDeepLink();
 
 		try {
 			const agent = navigator.userAgent;
@@ -85,14 +93,10 @@
 				window.location.href = `intent://oauth/callback?${query}#Intent;scheme=monark;package=com.monark.app;end`;
 			} else if (/iPhone|iPad|iPod/i.test(agent)) {
 				window.location.href = deepLink;
-			} else {
-				// Desktop: an iframe keeps the page alive when no handler exists.
-				const frame = document.createElement("iframe");
-				frame.style.display = "none";
-				frame.src = deepLink;
-				document.body.appendChild(frame);
-				window.setTimeout(() => frame.remove(), IFRAME_REMOVAL_DELAY);
 			}
+			// Desktop: nothing here, on purpose. A `monark://` navigation that no
+			// one asked for is dropped by the browser, so the handover waits for
+			// a click — see `bindOpenApp`.
 		} catch (err) {
 			console.log("Deep link attempt failed:", err);
 		}
@@ -139,6 +143,20 @@
 		});
 	}
 
+	/**
+	 * Wire the primary "open the app" button. The navigation has to happen
+	 * inside the click handler itself: a custom scheme launched from a timer,
+	 * a load event or a hidden iframe is dropped by every desktop browser.
+	 */
+	function bindOpenApp() {
+		const button = document.getElementById("oauth-open-app");
+		if (!button) return;
+
+		button.addEventListener("click", () => {
+			window.location.href = callbackDeepLink();
+		});
+	}
+
 	/* -------------------------------------------------------------- states --- */
 
 	function showSuccess() {
@@ -149,6 +167,12 @@
 
 		const heading = el("h1", null, strings.successTitle ?? "");
 		const lede = el("p", null, strings.successBody ?? "");
+
+		// The desktop handover: a real, visible button, because the browser only
+		// follows a custom scheme that the user asked for.
+		const openApp = el("button", "btn btn--primary oauth-open-app", strings.openApp ?? "");
+		openApp.id = "oauth-open-app";
+		openApp.type = "button";
 
 		const block = el("div", "oauth-block");
 		block.append(
@@ -178,8 +202,9 @@
 		const ok = el("p", "status status--ok", strings.statusOk ?? "");
 		ok.setAttribute("role", "status");
 
-		render(heading, lede, ok, block, steps, note);
+		render(heading, lede, ok, openApp, block, steps, note);
 		bindCopy();
+		bindOpenApp();
 	}
 
 	function showError(title, message, detail) {
@@ -235,7 +260,8 @@
 		return;
 	}
 
-	// Mode 2c: the real path. Hand off, then leave the manual fallback on screen.
+	// Mode 2c: the real path. Hand off where that needs no gesture, then leave
+	// the button and the manual copy fallback on screen.
 	setStatus(strings.statusOk ?? "", "ok");
 	window.setTimeout(() => {
 		openDeepLink();

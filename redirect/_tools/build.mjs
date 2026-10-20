@@ -359,6 +359,7 @@ function oauthConfig(code, { hop = null } = {}) {
 		strings: {
 			successTitle: o.successTitle,
 			successBody: o.successBody,
+			openApp: o.openApp,
 			copyHeading: o.copyHeading,
 			copyBody: o.copyBody,
 			copyButton: o.copyButton,

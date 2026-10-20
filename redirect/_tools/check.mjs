@@ -3,7 +3,7 @@
  * Locale integrity checks. Run before publishing:
  *   node _tools/check.mjs
  *
- * Six things are verified, all of which have bitten this site before:
+ * Seven things are verified, all of which have bitten this site before:
  *   1. structural parity with en.mjs (keys, nesting, array lengths)
  *   2. no leaked English outside the allow-list of protected tokens
  *   3. localization of htmlLang / ogLocale / title / description lengths
@@ -11,6 +11,8 @@
  *   5. link integrity across the emitted site — every internal href, hreflang
  *      alternate and sitemap <loc> must resolve to a file that exists
  *   6. the `hidden` attribute still hides, on the one page that relies on it
+ *   7. the desktop deep link is still a user gesture, and its button still has
+ *      a string to render
  *
  * Check 5 is the one that would have caught the `/ja/` regression: the locale
  * registry advertised a language whose copy set had not landed yet, so the
@@ -21,6 +23,11 @@
  * declaration beats the user-agent's `[hidden] { display: none }`, so the hop
  * card and the OAuth card both rendered — with the hop card's "Page not found"
  * copy sitting on top of a successful authentication.
+ *
+ * Check 7 is the one that would have caught the dead OAuth handover: the desktop
+ * deep link used to be fired from a hidden iframe on a timer, and Firefox,
+ * Chrome and Zen all drop a custom-scheme navigation that no one asked for, so
+ * the app never received the `code` — while the page happily reported success.
  */
 
 import fs from "node:fs";
@@ -232,6 +239,37 @@ for (const b of broken) failures.push(`broken link: ${b}`);
 	if (toggles && !hides) {
 		failures.push(
 			"stylesheet never restates [hidden] { display: none !important }, so the root page renders both of its cards",
+		);
+	}
+}
+
+/* --------------------------------------- deep link stays a user gesture --- */
+
+/* The desktop handover used to fire `monark://` from a hidden iframe, on a
+   timer, with no user gesture. Firefox, Chrome and Zen all drop a custom-scheme
+   navigation that nobody asked for — so the app never received the `code`, and
+   nothing failed loudly: the page reported success while the flow was dead.
+   That shape was invisible to every other check here, so pin it down. */
+{
+	const js = fs.readFileSync(path.join(OUT, "oauth.js"), "utf8");
+
+	if (/createElement\(\s*["'`]iframe["'`]\s*\)/.test(js)) {
+		failures.push(
+			"oauth.js builds an iframe — a custom-scheme handover needs a user gesture, and desktop browsers drop the rest",
+		);
+	}
+
+	if (!/oauth-open-app/.test(js)) {
+		failures.push(
+			"oauth.js has no user-initiated button for the desktop deep link, so the app cannot be reached from the success card",
+		);
+	}
+
+	const root = path.join(OUT, "index.html");
+	const html = fs.existsSync(root) ? fs.readFileSync(root, "utf8") : "";
+	if (html && !/"openApp"\s*:/.test(html)) {
+		failures.push(
+			'index.html does not embed the oauth "openApp" string, so the deep-link button would render with an empty label',
 		);
 	}
 }
