@@ -257,6 +257,7 @@
       "selectCurrentFolder": "Usar Esta Carpeta",
       "providerNotAuthenticated": "El proveedor no está autenticado. Por favor autentíquese en Configuración.",
       "authCheckFailed": "Error al verificar el estado de autenticación.",
+      "authRefreshFailed": "No se pudo renovar la sesión en la nube. Comprueba tu conexión e inténtalo de nuevo.",
       "authenticationExpired": "La autenticación ha expirado. Por favor vuelva a autenticarse en Configuración.",
       "insufficientPermissions": "Permisos insuficientes. Por favor verifique los permisos de su almacenamiento en la nube.",
       "storageQuotaExceeded": "Cuota de almacenamiento excedida. Por favor libere espacio."

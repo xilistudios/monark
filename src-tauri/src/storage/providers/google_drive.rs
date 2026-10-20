@@ -140,14 +140,10 @@ impl GoogleDriveProvider {
         Ok(())
     }
 
+    /// Delegates to [`GoogleDriveConfig::is_token_expired`] so the provider and the
+    /// config can never diverge on the expiry rule (5-minute safety buffer).
     pub fn is_token_expired(&self) -> bool {
-        if let (Some(_token), Some(expires_at)) =
-            (&self.config.access_token, &self.config.token_expires_at)
-        {
-            Utc::now() >= *expires_at - chrono::Duration::minutes(5)
-        } else {
-            true
-        }
+        self.config.is_token_expired()
     }
 
     pub fn get_config(&self) -> &GoogleDriveConfig {
@@ -534,8 +530,12 @@ impl StorageProvider for GoogleDriveProvider {
         }
     }
 
+    /// Token validity is *not* required here: an expired access token with a
+    /// refresh token still means "authenticated" (the token is refreshed on
+    /// demand by `ensure_google_drive_token_valid`). Only a total absence of
+    /// credentials means unauthenticated.
     async fn is_authenticated(&self) -> bool {
-        self.config.access_token.is_some() && !self.is_token_expired()
+        self.config.has_usable_credentials()
     }
 
     async fn list_files(&mut self, folder_id: Option<String>) -> StorageResult<Vec<StorageFile>> {

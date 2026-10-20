@@ -3,12 +3,285 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
+import { CloudStorageErrorType } from "../../../interfaces/cloud-storage.interface";
 import { updateVault, type Vault } from "../../../redux/actions/vault";
 import type { RootState } from "../../../redux/store";
 import { CloudStorageCommands } from "../../../services/cloudStorage";
 import { VaultManager } from "../../../services/vault";
 import { isMobile } from "../../../utils/platform";
 import { PasswordFieldInput } from "../PasswordFieldInput";
+
+/**
+ * Access tokens are treated as expired slightly before their real expiry so they
+ * can be refreshed in time instead of being used until the provider rejects
+ * them.
+ *
+ * 5 minutes is the buffer used by the backend (`GoogleDriveConfig::is_token_expired`
+ * in src-tauri/src/storage/manager/provider_management.rs) and by the
+ * module-private `isTokenExpired` in src/services/vault.ts:52.
+ *
+ * Review note (m2): this is the third copy of that rule. Sharing it would mean
+ * exporting the helper from src/services/vault.ts (or extracting a new shared
+ * module), which is outside the scope of this fix, so the copies are kept
+ * semantically aligned and cross-referenced instead: this constant, the helper
+ * below and `src/services/vault.ts` must stay in sync.
+ */
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+/**
+ * Tells whether an OAuth access token is missing, unreadable or close enough to
+ * its expiry that it has to be refreshed before use.
+ *
+ * Semantics, aligned with the backend contract and with the module-private
+ * `isTokenExpired` in src/services/vault.ts:52:
+ * - no expiry metadata (`null` / `undefined` / `""`) ⇒ `true`: without an expiry
+ *   there is no usable access token, and `GoogleDriveConfig::is_token_expired()`
+ *   returns `true` as well. The previous `false` made the form trust tokens that
+ *   still had to be refreshed.
+ * - unparseable date ⇒ `true` (fail closed).
+ * - otherwise the token counts as expired from `TOKEN_EXPIRY_BUFFER_MS` before
+ *   its real expiry (refresh-ahead buffer).
+ *
+ * Providers that authenticate with stateless credentials (WebDAV Basic auth) do
+ * not reach this helper: `ensureProviderAuthenticated` skips the token flow when
+ * the backend reports no `token_expires_at` at all, exactly like
+ * `VaultManager.getProviderAuthState` does in src/services/vault.ts.
+ *
+ * Exported for unit testing.
+ *
+ * @param tokenExpiresAt - ISO 8601 expiration date reported by the backend
+ */
+export const isAccessTokenExpired = (
+	tokenExpiresAt?: string | null,
+): boolean => {
+	if (!tokenExpiresAt) {
+		// No expiry metadata means no usable access token (backend contract)
+		return true;
+	}
+
+	const expiresAt = new Date(tokenExpiresAt).getTime();
+	return Number.isNaN(expiresAt)
+		? true
+		: Date.now() >= expiresAt - TOKEN_EXPIRY_BUFFER_MS;
+};
+
+/** HTTP statuses meaning "retry later" rather than "your session is gone" */
+const TRANSIENT_AUTH_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+/** Message fragments produced by network / IO level failures */
+const TRANSIENT_AUTH_ERROR_PATTERN =
+	/network|timeout|timed out|connection|econnrefused|econnreset|enotfound|ehostunreach|enetunreach|fetch failed|networkerror|err_network|offline|unavailable|temporarily|rate limit|too many requests|try again/i;
+
+/** Message fragments produced when the stored credentials were rejected */
+const AUTH_REJECTION_PATTERN =
+	/invalid_grant|invalid_token|invalid credentials|unauthorized|not authenticated|token.*(expired|revoked|invalid)|(expired|revoked|invalid).*token|re-?authenticate/i;
+
+/**
+ * Minimal `{ type, message, status }` view of an unknown thrown value.
+ *
+ * `CloudStorageCommands.refreshProviderAuth` rejects with the `CloudStorageError`
+ * built by `CloudStorageCommands.handleError` (src/services/cloudStorage.ts).
+ * That value is a **plain object** (`{ type, message, originalError }`), not an
+ * `Error` instance, so its `type` field — the classification the backend
+ * contract is designed around — has to be read explicitly.
+ *
+ * `type` is the primary signal. `message` and `status` are kept for values that
+ * never went through the wrapper (raw throws before `handleError`, e.g. the
+ * synchronous guards, which carry no `type`).
+ */
+const getAuthErrorMetadata = (
+	error: unknown,
+): { type?: CloudStorageErrorType; message: string; status?: number } => {
+	const wrapped = error as {
+		type?: unknown;
+		message?: unknown;
+		status?: unknown;
+		statusCode?: unknown;
+	} | null;
+	const rawStatus = wrapped?.status ?? wrapped?.statusCode;
+	const type =
+		typeof wrapped?.type === "string"
+			? (wrapped.type as CloudStorageErrorType)
+			: undefined;
+
+	let message: string;
+	if (error instanceof Error) {
+		message = `${error.name}: ${error.message}`;
+	} else if (typeof error === "string") {
+		message = error;
+	} else if (typeof wrapped?.message === "string") {
+		message = wrapped.message;
+	} else {
+		try {
+			message = JSON.stringify(error) ?? "";
+		} catch {
+			message = String(error);
+		}
+	}
+
+	return {
+		type,
+		message,
+		status: typeof rawStatus === "number" ? rawStatus : undefined,
+	};
+};
+
+/**
+ * Classifies a failed `refreshProviderAuth` call as a rejected credential
+ * ("auth") or as a transient problem ("transient").
+ *
+ * Transient problems must not be reported as "Provider is not authenticated":
+ * a momentary network cut would look like an expired session and push the user
+ * into a pointless re-login (review finding m6).
+ *
+ * In production the caught value is always the `CloudStorageError` thrown by
+ * `CloudStorageCommands.refreshProviderAuth`, whose `type` is derived by
+ * `CloudStorageCommands.handleError` from the message text the backend
+ * publishes (`commands::errors::AuthFailureClass` in
+ * src-tauri/src/commands/errors.rs):
+ *
+ * | `CloudStorageError.type`    | backend `AuthFailureClass` | verdict                       |
+ * |-----------------------------|----------------------------|-------------------------------|
+ * | `NETWORK_ERROR`             | `Transient`                | `transient` (retryable)       |
+ * | `AUTHENTICATION_FAILED`     | `AuthRejection`            | `auth` (terminal)             |
+ * | `TOKEN_EXPIRED`             | (`AuthRejection` rule)     | `auth` (terminal)             |
+ * | `OPERATION_FAILED` / others | `Other`                    | `auth` (conservative default) |
+ *
+ * The wrapper `type` is therefore the authoritative signal and is checked
+ * **first**; only when it is absent (error thrown before the wrapper) do the
+ * status/message patterns below act as a secondary signal. Anything that cannot
+ * be positively identified as transient is treated as an authentication
+ * failure: the conservative default (rather ask to authenticate than to retry
+ * forever).
+ *
+ * Semantics mirror `isNetworkError` / `isAuthRelatedCloudError` in
+ * src/services/vault.ts (both module-private, hence this local copy).
+ *
+ * Exported for unit testing.
+ *
+ * @param error - Error thrown by `CloudStorageCommands.refreshProviderAuth`
+ * @returns "transient" when retrying may help, "auth" otherwise
+ */
+export const classifyRefreshFailure = (
+	error: unknown,
+): "auth" | "transient" => {
+	const { type, message, status } = getAuthErrorMetadata(error);
+
+	// Primary signal: the wrapper already classified the error per the backend
+	// contract. Only a network level failure is retryable; every other type
+	// (auth rejection, expired token, and the conservative `OPERATION_FAILED` /
+	// `Other` bucket) means the credentials really have to be renewed.
+	if (type !== undefined) {
+		switch (type) {
+			case CloudStorageErrorType.NETWORK_ERROR:
+				// Backend `Transient` (network/timeout/5xx/IO): a retry may succeed.
+				return "transient";
+			case CloudStorageErrorType.AUTHENTICATION_FAILED:
+			case CloudStorageErrorType.TOKEN_EXPIRED:
+				// Backend `AuthRejection` (or the token-expired rule): terminal.
+				return "auth";
+			default:
+				// `OPERATION_FAILED` (backend `Other`) and any other type the refresh
+				// path never assigns: conservative terminal default.
+				return "auth";
+		}
+	}
+
+	// Secondary signal: the error did not come through the wrapper, so fall back
+	// to inspecting the raw status/message.
+	if (status === 401 || status === 403) {
+		return "auth";
+	}
+	if (status !== undefined && TRANSIENT_AUTH_STATUSES.has(status)) {
+		return "transient";
+	}
+	if (AUTH_REJECTION_PATTERN.test(message)) {
+		return "auth";
+	}
+	if (TRANSIENT_AUTH_ERROR_PATTERN.test(message)) {
+		return "transient";
+	}
+
+	// Conservative fallback: unclassifiable ⇒ genuine authentication failure
+	return "auth";
+};
+
+/** Outcome of a refresh-aware provider authentication check */
+type ProviderAuthCheck =
+	| { status: "authenticated" }
+	| { status: "unauthenticated" }
+	| { status: "transient_error" };
+
+/**
+ * Refresh-aware authentication check for cloud providers.
+ *
+ * `CloudStorageCommands.checkProviderAuthStatus` only reports the *current*
+ * access token state, so a provider whose access token expired (~1h for Google
+ * Drive) was reported as unauthenticated even when a valid refresh token was
+ * stored, forcing users to re-authenticate in Settings far too often.
+ *
+ * This helper instead reads the full auth info and, when the access token is
+ * expired (or the backend already reports the provider as unauthenticated),
+ * attempts a silent `refreshProviderAuth`. The three outcomes are kept apart:
+ * - `authenticated`: usable credentials, the caller may continue.
+ * - `unauthenticated`: the refresh was rejected (or no credentials are stored),
+ *   so the provider really has to be re-authenticated in Settings.
+ * - `transient_error`: the refresh could not be completed (network/IO problem),
+ *   so the caller must offer a retry instead of a re-login.
+ *
+ * The refresh-aware, retry-happy variant of this logic lives in
+ * `VaultManager.getProviderAuthState` (src/services/vault.ts) but it is private,
+ * so the IPC wrappers are used directly here with the same expiry semantics
+ * (without the automatic retries: the form leaves retrying to the user).
+ *
+ * @param providerName - Name of the storage provider to check
+ * @returns Promise resolving to the outcome of the authentication check
+ */
+const ensureProviderAuthenticated = async (
+	providerName: string,
+): Promise<ProviderAuthCheck> => {
+	const authInfo =
+		(await CloudStorageCommands.getProviderAuthInfo(providerName)) ?? null;
+	if (!authInfo) {
+		// No credentials stored for this provider: nothing to refresh.
+		return { status: "unauthenticated" };
+	}
+
+	if (authInfo.token_expires_at == null) {
+		// Providers whose credentials are stateless (WebDAV Basic auth) report no
+		// expiry and have nothing to refresh — asking for a refresh would fail with
+		// "Provider is not Google Drive". Same rule as `VaultManager.getProviderAuthState`
+		// in src/services/vault.ts.
+		return authInfo.authenticated
+			? { status: "authenticated" }
+			: { status: "unauthenticated" };
+	}
+
+	if (
+		authInfo.authenticated &&
+		!isAccessTokenExpired(authInfo.token_expires_at)
+	) {
+		return { status: "authenticated" };
+	}
+
+	try {
+		const refreshed =
+			await CloudStorageCommands.refreshProviderAuth(providerName);
+		return refreshed?.authenticated === true &&
+			!isAccessTokenExpired(refreshed.token_expires_at)
+			? { status: "authenticated" }
+			: { status: "unauthenticated" };
+	} catch (refreshError) {
+		const failureKind = classifyRefreshFailure(refreshError);
+		console.warn(
+			`Failed to refresh auth for provider ${providerName} (${failureKind}):`,
+			refreshError,
+		);
+		return failureKind === "transient"
+			? { status: "transient_error" }
+			: { status: "unauthenticated" };
+	}
+};
 
 interface AddVaultFormProps {
 	onSuccess: () => void;
@@ -100,11 +373,25 @@ export const AddVaultForm = ({
 
 		try {
 			if (storageType === "cloud") {
-				// Check authentication status before creating vault
+				// Check authentication status before creating vault.
+				// Refresh-aware: an expired access token with a valid refresh token
+				// is refreshed silently instead of asking the user to re-authenticate.
 				try {
-					const isAuthenticated =
-						await CloudStorageCommands.checkProviderAuthStatus(providerId);
-					if (!isAuthenticated) {
+					const authCheck = await ensureProviderAuthenticated(providerId);
+					if (authCheck.status === "transient_error") {
+						// The refresh could not be completed (network/IO problem). This is
+						// NOT a logout: tell the user to retry instead of sending them to
+						// Settings for a re-login (the submit button stays enabled).
+						setError(
+							t(
+								"vaultSelector.authRefreshFailed",
+								"Could not renew the cloud session. Check your connection and try again.",
+							),
+						);
+						setLoading(false);
+						return;
+					}
+					if (authCheck.status === "unauthenticated") {
 						setError(
 							t(
 								"vaultSelector.providerNotAuthenticated",

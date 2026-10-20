@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod google_drive_auth_tests {
     use crate::storage::providers::google_drive::GoogleDriveConfig;
-    use crate::storage::{ProviderConfig, StorageConfig, StorageError, StorageManager};
+    use crate::storage::providers::GoogleDriveProvider;
+    use crate::storage::{
+        ProviderConfig, StorageConfig, StorageError, StorageManager, StorageProvider,
+    };
     use chrono::{Duration, Utc};
     use mockito::Server;
     use std::sync::OnceLock;
@@ -399,5 +402,352 @@ mod google_drive_auth_tests {
         }
 
         m.assert_async().await;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Auth-status semantics: `GoogleDriveConfig::has_usable_credentials`
+    //
+    // Regression tests for "Monark asks to re-authenticate Google Drive roughly
+    // every hour on Linux". The ~1h access-token TTL made the status checkers
+    // return `authenticated = false` even though a valid refresh token (which
+    // allows a silent refresh) was present, so the UI demanded a full login.
+    // ---------------------------------------------------------------------------
+
+    /// Google Drive config with a fresh, non-expired access token.
+    fn valid_google_drive_config() -> GoogleDriveConfig {
+        GoogleDriveConfig {
+            access_token: Some("fresh_access".to_string()),
+            token_expires_at: Some(Utc::now() + Duration::hours(1)),
+            ..expired_google_drive_config()
+        }
+    }
+
+    /// Google Drive config with no credentials at all.
+    fn empty_google_drive_config() -> GoogleDriveConfig {
+        GoogleDriveConfig {
+            access_token: None,
+            refresh_token: None,
+            token_expires_at: None,
+            ..expired_google_drive_config()
+        }
+    }
+
+    #[test]
+    fn has_usable_credentials_with_valid_access_token_and_refresh_token() {
+        let config = valid_google_drive_config();
+
+        assert!(!config.is_token_expired());
+        assert!(config.has_usable_credentials());
+    }
+
+    #[test]
+    fn has_usable_credentials_with_expired_access_token_and_refresh_token() {
+        let config = expired_google_drive_config();
+
+        assert!(
+            config.is_token_expired(),
+            "precondition: the access token is past its TTL"
+        );
+        assert!(
+            config.has_usable_credentials(),
+            "an expired access token + refresh token can be renewed silently"
+        );
+    }
+
+    #[test]
+    fn has_usable_credentials_false_with_expired_access_token_and_no_refresh_token() {
+        let config = GoogleDriveConfig {
+            refresh_token: None,
+            ..expired_google_drive_config()
+        };
+
+        assert!(config.is_token_expired());
+        assert!(!config.has_usable_credentials());
+    }
+
+    #[test]
+    fn has_usable_credentials_false_without_any_credentials() {
+        let config = empty_google_drive_config();
+
+        assert!(config.is_token_expired());
+        assert!(!config.has_usable_credentials());
+    }
+
+    /// Only the long-lived refresh token survived: still authenticated, the
+    /// refresh will mint a new access token.
+    #[test]
+    fn has_usable_credentials_with_only_refresh_token() {
+        let config = GoogleDriveConfig {
+            access_token: None,
+            token_expires_at: None,
+            ..expired_google_drive_config()
+        };
+
+        assert!(config.has_usable_credentials());
+    }
+
+    /// A token inside the 5-minute safety buffer counts as expired (so the
+    /// refresh path still triggers) but not as "logged out".
+    #[test]
+    fn has_usable_credentials_with_token_inside_expiry_buffer() {
+        let config = GoogleDriveConfig {
+            access_token: Some("almost_expired".to_string()),
+            token_expires_at: Some(Utc::now() + Duration::minutes(1)),
+            ..expired_google_drive_config()
+        };
+
+        assert!(config.is_token_expired());
+        assert!(config.has_usable_credentials());
+    }
+
+    /// A persisted-but-empty refresh token is not a credential: reporting
+    /// "authenticated" from it made the UI skip the login while every refresh
+    /// attempt failed with an authentication error.
+    #[test]
+    fn has_usable_credentials_false_with_blank_refresh_token_only() {
+        let config = GoogleDriveConfig {
+            access_token: None,
+            token_expires_at: None,
+            refresh_token: Some(String::new()),
+            ..expired_google_drive_config()
+        };
+
+        assert!(config.is_token_expired());
+        assert!(
+            !config.has_usable_credentials(),
+            "an empty refresh token cannot renew anything"
+        );
+    }
+
+    /// Same with an expired access token alongside the blank refresh token.
+    #[test]
+    fn has_usable_credentials_false_with_expired_access_token_and_blank_refresh_token() {
+        let config = GoogleDriveConfig {
+            refresh_token: Some(String::new()),
+            ..expired_google_drive_config()
+        };
+
+        assert!(config.is_token_expired());
+        assert!(!config.has_usable_credentials());
+    }
+
+    /// `is_token_expired` only checks that the access token is *present* plus its
+    /// expiry, so a blank access token with a future expiry would otherwise be
+    /// accepted as a valid credential.
+    #[test]
+    fn has_usable_credentials_false_with_blank_access_token_and_no_refresh_token() {
+        let config = GoogleDriveConfig {
+            access_token: Some(String::new()),
+            token_expires_at: Some(Utc::now() + Duration::hours(1)),
+            refresh_token: None,
+            ..expired_google_drive_config()
+        };
+
+        assert!(
+            !config.is_token_expired(),
+            "precondition: expiry alone does not catch an empty access token"
+        );
+        assert!(
+            !config.has_usable_credentials(),
+            "an empty access token is not a usable credential"
+        );
+    }
+
+    /// A blank access token must not mask a valid refresh token: the refresh path
+    /// is still available.
+    #[test]
+    fn has_usable_credentials_with_blank_access_token_and_valid_refresh_token() {
+        let config = GoogleDriveConfig {
+            access_token: Some(String::new()),
+            token_expires_at: Some(Utc::now() + Duration::hours(1)),
+            ..expired_google_drive_config()
+        };
+
+        assert!(config.has_usable_credentials());
+    }
+
+    /// `ensure_google_drive_token_valid` / `GoogleDriveProvider::ensure_valid_token`
+    /// decide whether to refresh with `is_token_expired`; that rule must stay
+    /// untouched by the auth-status change.
+    ///
+    /// The provider must *delegate* expiry to its config: flipping the config in
+    /// place has to flip the provider's answer. (Comparing
+    /// `provider.is_token_expired()` with a freshly built, identically configured
+    /// `config.is_token_expired()` was tautological — with `is_token_expired`
+    /// delegating to the config, that assertion could never fail.)
+    #[test]
+    fn is_token_expired_semantics_unchanged() {
+        assert!(!valid_google_drive_config().is_token_expired());
+        assert!(expired_google_drive_config().is_token_expired());
+        assert!(empty_google_drive_config().is_token_expired());
+
+        let mut provider = GoogleDriveProvider::new(expired_google_drive_config());
+        assert!(
+            provider.is_token_expired(),
+            "an expired config must make the provider report an expired token"
+        );
+
+        // Mutating the config must be observable through the provider ⇒ it
+        // delegates to the config instead of caching its own expiry rule.
+        provider.update_config(valid_google_drive_config());
+        assert!(
+            !provider.is_token_expired(),
+            "provider must delegate token expiry to its config"
+        );
+    }
+
+    #[tokio::test]
+    async fn provider_is_authenticated_with_expired_access_token_and_refresh_token() {
+        let provider = GoogleDriveProvider::new(expired_google_drive_config());
+
+        assert!(provider.is_token_expired());
+        assert!(
+            provider.is_authenticated().await,
+            "provider must report authenticated when a silent refresh is possible"
+        );
+    }
+
+    #[tokio::test]
+    async fn provider_is_not_authenticated_without_credentials() {
+        let provider = GoogleDriveProvider::new(empty_google_drive_config());
+
+        assert!(!provider.is_authenticated().await);
+    }
+
+    #[tokio::test]
+    async fn provider_is_not_authenticated_with_blank_credentials() {
+        let provider = GoogleDriveProvider::new(GoogleDriveConfig {
+            access_token: Some(String::new()),
+            refresh_token: Some(String::new()),
+            token_expires_at: Some(Utc::now() + Duration::hours(1)),
+            ..expired_google_drive_config()
+        });
+
+        assert!(
+            !provider.is_authenticated().await,
+            "blank tokens are not usable credentials"
+        );
+    }
+
+    // --------------------------- manager level ---------------------------
+    // `StorageManager::get_provider_auth_info` backs the `get_provider_auth_info`
+    // command; `check_provider_auth_status` applies the same helper (covered by
+    // the unit tests in `commands/storage.rs`).
+
+    #[tokio::test]
+    async fn provider_auth_info_true_with_expired_access_token_and_refresh_token() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string())
+            .with_google_drive(expired_google_drive_config());
+        let manager = StorageManager::new(config).await.unwrap();
+
+        let (authenticated, expires_at) = manager
+            .get_provider_auth_info("google_drive")
+            .await
+            .unwrap();
+
+        assert!(
+            authenticated,
+            "expired access token + refresh token must be reported as authenticated"
+        );
+        assert!(expires_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn provider_auth_info_false_without_credentials() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string())
+            .with_google_drive(empty_google_drive_config());
+        let manager = StorageManager::new(config).await.unwrap();
+
+        let (authenticated, expires_at) = manager
+            .get_provider_auth_info("google_drive")
+            .await
+            .unwrap();
+
+        assert!(!authenticated);
+        assert!(expires_at.is_none());
+    }
+
+    // ---------------------------------------------------------------------------
+    // `refresh_provider_auth` command contract
+    //
+    // The command pipes `ensure_google_drive_token_valid` failures through
+    // `commands::storage::classify_refresh_failure`. These tests exercise the real
+    // refresh flow (mock token endpoint) and assert the *message* the frontend
+    // receives, so a change in the provider wording cannot silently break the
+    // classification.
+    // ---------------------------------------------------------------------------
+
+    /// Inner message the frontend keyword-matches on (the `Io` payload).
+    fn observable_refresh_message(error: crate::commands::errors::CommandError) -> String {
+        match error {
+            crate::commands::errors::CommandError::Io(message) => message,
+            other => other.to_string(),
+        }
+    }
+
+    /// A revoked refresh token (`invalid_grant`) is terminal and must be
+    /// classified as an *authentication* failure — never as a network problem,
+    /// which the UI would retry forever.
+    ///
+    /// The env-var lock is deliberately held across this test's await points: it
+    /// serializes the process-global `MONARK_GOOGLE_OAUTH_TOKEN_URL` override with
+    /// the other refresh tests (same pattern as the tests above).
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn refresh_invalid_grant_is_classified_as_authentication_failure() {
+        let _guard = lock_oauth_env();
+
+        let mut server = Server::new_async().await;
+        let _env = EnvVarGuard::set(
+            "MONARK_GOOGLE_OAUTH_TOKEN_URL",
+            format!("{}/token", server.url()),
+        );
+
+        let _m = server
+            .mock("POST", "/token")
+            .with_status(400)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"error":"invalid_grant","error_description":"Token has been expired or revoked."}"#)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _xdg = EnvVarGuard::set(
+            "XDG_CONFIG_HOME",
+            temp_dir.path().to_string_lossy().to_string(),
+        );
+        let config = StorageConfig::new_local(temp_dir.path().to_string_lossy().to_string());
+        let manager = StorageManager::new(config).await.unwrap();
+        manager
+            .add_provider(
+                "google_drive".to_string(),
+                ProviderConfig::GoogleDrive {
+                    config: expired_google_drive_config(),
+                },
+            )
+            .await
+            .unwrap();
+
+        let err = manager
+            .ensure_google_drive_token_valid("google_drive")
+            .await
+            .expect_err("refresh should be rejected");
+
+        let message =
+            observable_refresh_message(crate::commands::storage::classify_refresh_failure(err));
+
+        assert!(
+            message.contains("authentication"),
+            "AUTH_REJECTION must map to AUTHENTICATION_FAILED, got: {message}"
+        );
+        assert!(
+            !message.contains("network") && !message.contains("connection"),
+            "a credential rejection must not look retryable, got: {message}"
+        );
+
+        _m.assert_async().await;
     }
 }
