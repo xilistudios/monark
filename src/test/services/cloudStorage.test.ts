@@ -497,5 +497,14 @@ describe('CloudStorageCommands', () => {
 				expect(err.message).toContain('storage quota exceeded');
 			}
 		});
+
+		it('should fall back to the default message on a blank error message', async () => {
+			mockInvoke.mockRejectedValue('');
+
+			await expect(CloudStorageCommands.listProviders()).rejects.toMatchObject({
+				type: CloudStorageErrorType.OPERATION_FAILED,
+				message: 'Failed to list providers'
+			});
+		});
 	});
 });

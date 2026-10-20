@@ -11,7 +11,8 @@
  *   and consumed by the wrapper itself (T3);
  * - the token-expiry and message-extraction helpers that used to be duplicated
  *   in `src/components/Vault/Forms/AddVaultForm.tsx` and
- *   `src/services/deepLinkService.ts`.
+ *   `src/services/deepLinkService.ts` (the call-site copies are removed in the
+ *   follow-up commits of issue #28).
  *
  * The module deliberately imports ONLY `../interfaces/cloud-storage.interface`
  * (types + enums), never `cloudStorage.ts`, so it can never introduce an import
@@ -155,7 +156,7 @@ export interface CloudErrorRule {
 
 /**
  * Keyword ladder of `CloudStorageCommands.handleError`
- * (`src/services/cloudStorage.ts`, lines 735-757), in its exact order.
+ * (`src/services/cloudStorage.ts`, the inline ladder as of commit `266720c`), in its exact order.
  *
  * **This ladder is the wire-contract calibration and must NEVER be widened.**
  * Do not add rungs or keywords such as `timeout`, `unavailable` or
@@ -178,8 +179,12 @@ export interface CloudErrorRule {
  * 8. `credentials` OR `invalid` ⇒ `INVALID_CREDENTIALS` (terminal)
  *
  * No match ⇒ `OPERATION_FAILED` (the conservative terminal bucket).
+ *
+ * Frozen at runtime: widening this table would silently re-bucket backend
+ * `Other` messages (see the never-widen warning above), so the constraint is
+ * enforced, not just documented.
  */
-export const CLOUD_ERROR_RULES: readonly CloudErrorRule[] = [
+export const CLOUD_ERROR_RULES: readonly CloudErrorRule[] = Object.freeze([
 	{
 		keywords: ["authentication", "unauthorized"],
 		match: "any",
@@ -220,12 +225,12 @@ export const CLOUD_ERROR_RULES: readonly CloudErrorRule[] = [
 		match: "any",
 		type: CloudStorageErrorType.INVALID_CREDENTIALS,
 	},
-];
+]);
 
 /**
  * Map a raw backend message to a `CloudStorageErrorType` with the EXACT
  * 8-rung keyword ladder previously inlined in `CloudStorageCommands.handleError`
- * (`src/services/cloudStorage.ts`, lines 735-757).
+ * (`src/services/cloudStorage.ts`, the inline ladder as of commit `266720c`).
  *
  * This is a pure refactor of that inline block: the same rungs, in the same
  * order, with the same case-sensitive `String.prototype.includes` matching — so
@@ -269,7 +274,11 @@ const RAW_TRANSIENT_PATTERN =
 /** HTTP statuses that mean "the credentials were rejected" (terminal). */
 const TERMINAL_STATUSES = new Set([401, 403]);
 
-/** HTTP statuses that mean "retry later" (transient). */
+/**
+ * HTTP statuses that mean "retry later" (transient). 408/429/5xx come from the
+ * Rust `AuthFailureClass::Transient` doc; 425/502/504 mirror the historical
+ * `TRANSIENT_AUTH_STATUSES` of `AddVaultForm.tsx`.
+ */
 const TRANSIENT_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 /**
@@ -307,7 +316,12 @@ function extractStatus(error: unknown): number | undefined {
  *    everything below.
  * b. **Numeric HTTP status** on the raw error (`status ?? statusCode`):
  *    `401`/`403` ⇒ terminal; `408`/`425`/`429`/`500`/`502`/`503`/`504` ⇒
- *    transient; any other numeric status ⇒ terminal.
+ *    transient (408/429/5xx per the Rust `Transient` doc, 425/502/504 per
+ *    `AddVaultForm`'s historical `TRANSIENT_AUTH_STATUSES`). Any **other**
+ *    numeric status (400, 404, …) is *undecided* and falls through to rungs
+ *    c–e so a classifiable message is never silenced by an unrelated status
+ *    (`{status: 400, message: "timeout …"}` stays transient, as both legacy
+ *    call-site copies classified it).
  *    (`CloudStorageError` carries no status, so this rung only fires for
  *    non-wrapper errors, as today.)
  * c. **Keyword ladder** ({@link classifyCloudErrorType}) on
@@ -343,7 +357,8 @@ export function classifyCloudFailure(error: unknown): CloudFailureClass {
 		if (TRANSIENT_STATUSES.has(status)) {
 			return "transient";
 		}
-		return "terminal";
+		// Undecided status (400, 404, …): fall through to the message rungs
+		// below instead of forcing terminal — see precedence note b.
 	}
 
 	// c. The wrapper's keyword ladder, same precedence (auth rungs win).
@@ -371,7 +386,7 @@ export function classifyCloudFailure(error: unknown): CloudFailureClass {
  *
  * Source of truth: the `type` produced by `CloudStorageCommands.handleError`
  * for credential rejections, plus the `isAuthRelatedCloudError` rule in
- * `src/services/vault.ts:42-51` (its regex is kept verbatim here because
+ * `src/services/vault.ts:42-50` (its regex is kept verbatim here because
  * `src/test/services/vault.test.ts` pins it).
  *
  * - Valid wrapper `type`: true iff `AUTHENTICATION_FAILED`, `TOKEN_EXPIRED` or

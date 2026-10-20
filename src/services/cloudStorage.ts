@@ -731,7 +731,7 @@ export class CloudStorageCommands {
 
 		// Determine error type based on message content. The keyword ladder lives in
 		// `classifyCloudErrorType` (src/services/cloudStorageErrors.ts), the shared
-		// front-end failure contract; it is a byte-identical data-driven replica of
+		// front-end failure contract; it is a behaviour-identical data-driven replica of
 		// the inline ladder this call replaces (issue #28).
 		const errorType = classifyCloudErrorType(message);
 

@@ -115,6 +115,11 @@ describe("classifyCloudErrorType", () => {
 
 	it.each([
 		[
+			"the authentication rung wins over the token/expired rung",
+			"token expired: authentication failed",
+			CloudStorageErrorType.AUTHENTICATION_FAILED,
+		],
+		[
 			"the authentication rung wins over the network rung",
 			"authentication failed while reaching the token endpoint: network unreachable",
 			CloudStorageErrorType.AUTHENTICATION_FAILED,
@@ -204,6 +209,14 @@ describe("classifyCloudFailure", () => {
 				}),
 			).toBe("transient");
 		});
+
+		it("ignores an unknown wrapper type string (validation)", () => {
+			// Not a CloudStorageErrorType member ⇒ treated as a raw error and
+			// classified by the message rungs ("network" ⇒ NETWORK_ERROR).
+			expect(
+				classifyCloudFailure({ type: "TRANSIENT", message: "network error" }),
+			).toBe("transient");
+		});
 	});
 
 	describe("HTTP status rung (raw errors only)", () => {
@@ -220,10 +233,32 @@ describe("classifyCloudFailure", () => {
 			},
 		);
 
-		it("any other numeric status ⇒ terminal", () => {
+		it("any other numeric status is undecided and falls through to the message rungs", () => {
+			// With no classifiable message the conservative bucket applies.
 			expect(classifyCloudFailure({ status: 400 })).toBe("terminal");
 			expect(classifyCloudFailure({ statusCode: 418 })).toBe("terminal");
 			expect(classifyCloudFailure({ status: 404 })).toBe("terminal");
+			// But a classifiable message is never silenced by an unrelated status:
+			// {status: 400, message: "timeout …"} was transient in both legacy
+			// call-site copies and must stay transient.
+			expect(
+				classifyCloudFailure({
+					status: 400,
+					message: "timeout while refreshing",
+				}),
+			).toBe("transient");
+			expect(
+				classifyCloudFailure({
+					status: 404,
+					message: "authentication failed: invalid_grant",
+				}),
+			).toBe("terminal");
+		});
+
+		it("prefers status over statusCode (status ?? statusCode)", () => {
+			expect(classifyCloudFailure({ status: 503, statusCode: 401 })).toBe(
+				"transient",
+			);
 		});
 
 		it("ignores a non-numeric status", () => {
@@ -247,6 +282,11 @@ describe("classifyCloudFailure", () => {
 				"transient",
 			],
 			["the keyring unclassified message", "keyring unavailable", "terminal"],
+			[
+				"a 'temporarily unavailable' message (excluded words stay terminal)",
+				"temporarily unavailable",
+				"terminal",
+			],
 			["an invalid_grant Error", new Error("invalid_grant"), "terminal"],
 			["a fetch-failed TypeError", new TypeError("fetch failed"), "transient"],
 			["a timeout message", "timeout while refreshing", "transient"],
@@ -291,6 +331,11 @@ describe("isAccessTokenExpired", () => {
 	});
 
 	it("treats a token expiring within the 5 minute buffer as expired", () => {
+		// 30 seconds in the future: inside the buffer ⇒ expired (pins the buffer
+		// against a 0 ms mutant, which the rows below would not catch).
+		expect(
+			isAccessTokenExpired(new Date(Date.now() + 30 * 1000).toISOString()),
+		).toBe(true);
 		// 1 minute in the future: inside the buffer ⇒ expired
 		expect(
 			isAccessTokenExpired(new Date(Date.now() + MINUTE_MS).toISOString()),
@@ -330,6 +375,10 @@ describe("isAuthFailure", () => {
 		["an invalid_grant Error", new Error("invalid_grant"), true],
 		["a 401 status", { status: 401 }, true],
 		["a re-authenticate message", new Error("Please re-authenticate"), true],
+		// Both alternatives of the token/expired regex are load-bearing:
+		// `token.*expired` ("Access token has expired") and `expired.*token`.
+		["an expired-token message", new Error("Access token has expired"), true],
+		["an expired token message", new Error("expired token"), true],
 		["an unrelated message", new Error("boom"), false],
 		["a 403 status", { status: 403 }, false],
 	] as const)("raw error: %s ⇒ %s", (_label, error, expected) => {
