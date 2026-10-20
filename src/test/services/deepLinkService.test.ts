@@ -62,8 +62,8 @@ vi.mock("../../redux/actions/vault", () => ({
 }));
 
 import type { AppDispatch, RootState } from "../../redux/store";
+import { classifyCloudFailure } from "../../services/cloudStorageErrors";
 import {
-	classifyOAuthFailure,
 	deepLinkService,
 	MAX_PROCESSED_CALLBACKS,
 } from "../../services/deepLinkService";
@@ -868,7 +868,7 @@ describe("deepLinkService", () => {
 		});
 	});
 
-	describe("classifyOAuthFailure", () => {
+	describe("classifyCloudFailure (shared contract)", () => {
 		it.each([
 			["transient (network) contract message", NETWORK_MESSAGE, "transient"],
 			[
@@ -921,7 +921,7 @@ describe("deepLinkService", () => {
 			["unclassified Error", new Error("keyring unavailable"), "terminal"],
 			["a value without message", undefined, "terminal"],
 		])("classifies %s as %s", (_label, error, expected) => {
-			expect(classifyOAuthFailure(error)).toBe(expected);
+			expect(classifyCloudFailure(error)).toBe(expected);
 		});
 	});
 
