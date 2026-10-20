@@ -180,11 +180,15 @@ export interface CloudErrorRule {
  *
  * No match ⇒ `OPERATION_FAILED` (the conservative terminal bucket).
  *
- * Frozen at runtime: widening this table would silently re-bucket backend
+ * Deep-frozen at runtime: widening this table would silently re-bucket backend
  * `Other` messages (see the never-widen warning above), so the constraint is
- * enforced, not just documented.
+ * enforced, not just documented — the array, each rule and each keyword list
+ * are frozen.
  */
-export const CLOUD_ERROR_RULES: readonly CloudErrorRule[] = Object.freeze([
+const freezeRule = (rule: CloudErrorRule): CloudErrorRule =>
+	Object.freeze({ ...rule, keywords: Object.freeze([...rule.keywords]) });
+
+const CLOUD_ERROR_RULE_TABLE: readonly CloudErrorRule[] = [
 	{
 		keywords: ["authentication", "unauthorized"],
 		match: "any",
@@ -225,7 +229,11 @@ export const CLOUD_ERROR_RULES: readonly CloudErrorRule[] = Object.freeze([
 		match: "any",
 		type: CloudStorageErrorType.INVALID_CREDENTIALS,
 	},
-]);
+];
+
+export const CLOUD_ERROR_RULES: readonly CloudErrorRule[] = Object.freeze(
+	CLOUD_ERROR_RULE_TABLE.map(freezeRule),
+);
 
 /**
  * Map a raw backend message to a `CloudStorageErrorType` with the EXACT
@@ -320,8 +328,9 @@ function extractStatus(error: unknown): number | undefined {
  *    `AddVaultForm`'s historical `TRANSIENT_AUTH_STATUSES`). Any **other**
  *    numeric status (400, 404, …) is *undecided* and falls through to rungs
  *    c–e so a classifiable message is never silenced by an unrelated status
- *    (`{status: 400, message: "timeout …"}` stays transient, as both legacy
- *    call-site copies classified it).
+ *    (`{status: 400, message: "timeout …"}` stays transient, matching
+ *    `AddVaultForm`'s historical copy — `deepLinkService`'s copy had no raw
+ *    transient pattern and never pinned this shape).
  *    (`CloudStorageError` carries no status, so this rung only fires for
  *    non-wrapper errors, as today.)
  * c. **Keyword ladder** ({@link classifyCloudErrorType}) on

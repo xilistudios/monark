@@ -223,6 +223,10 @@ describe("classifyCloudFailure", () => {
 		it.each([401, 403])("status %s ⇒ terminal", (status) => {
 			expect(classifyCloudFailure({ status })).toBe("terminal");
 			expect(classifyCloudFailure({ statusCode: status })).toBe("terminal");
+			// A terminal status wins over a transient-looking message.
+			expect(classifyCloudFailure({ status, message: "network error" })).toBe(
+				"terminal",
+			);
 		});
 
 		it.each([408, 425, 429, 500, 502, 503, 504])(
@@ -331,8 +335,7 @@ describe("isAccessTokenExpired", () => {
 	});
 
 	it("treats a token expiring within the 5 minute buffer as expired", () => {
-		// 30 seconds in the future: inside the buffer ⇒ expired (pins the buffer
-		// against a 0 ms mutant, which the rows below would not catch).
+		// 30 seconds in the future: inside the buffer ⇒ expired.
 		expect(
 			isAccessTokenExpired(new Date(Date.now() + 30 * 1000).toISOString()),
 		).toBe(true);
