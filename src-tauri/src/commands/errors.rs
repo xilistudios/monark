@@ -987,10 +987,12 @@ mod auth_failure_class_tests {
     /// hit proves the text is produced by PRODUCTION code and not merely
     /// spelled inside a test.
     ///
-    /// Brace-counting scan (rustfmt-stable code assumed): a `#[cfg(test)]`
-    /// item is either a single line ending in `;` or a balanced block; a
-    /// mis-parse drops text and makes the substring pin go RED rather than
-    /// silently including test code.
+    /// Brace-counting scan. It assumes rustfmt-split attributes (the
+    /// `#[cfg(test)]` on its own line) and brace-balanced literals/comments:
+    /// over-skipping drops production text and turns the substring pin RED,
+    /// but under-skipping would silently re-include test text — which is why
+    /// the callers assert the stripped source carries no `cfg(test)`/`#[test]`
+    /// residue and why this function asserts it did not end mid-item.
     fn without_cfg_test_items(source: &str) -> String {
         let mut production = String::new();
         let mut skipping = false;
@@ -1002,11 +1004,15 @@ mod auth_failure_class_tests {
                     skipping = true;
                     block_started = false;
                     depth = 0;
+                    // Fall through: the attribute line may itself carry the
+                    // item's braces (`#[cfg(test)] mod t {`), which must be
+                    // counted or the first `;` inside the block would end the
+                    // skip and leak the rest of the test item.
                 } else {
                     production.push_str(line);
                     production.push('\n');
+                    continue;
                 }
-                continue;
             }
             depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
             if line.contains('{') {
@@ -1021,6 +1027,10 @@ mod auth_failure_class_tests {
                 skipping = false;
             }
         }
+        assert!(
+            !skipping,
+            "scanner ended inside a skipped item — the source is not rustfmt-stable"
+        );
         production
     }
 
@@ -1046,6 +1056,18 @@ mod auth_failure_class_tests {
     /// [`AuthFailureClass::message`]; for the `TransientLocalStorage` template
     /// it is [`AuthFailureClass::into_command_error_local_storage`] (whose
     /// `CommandError::Io` payload carries the rendered message).
+    /// Resolve `case.context` in the fixture's `contexts`, panicking with the
+    /// case id when the key is unknown.
+    fn context_of<'a>(fixture: &'a Fixture, case: &FixtureCase) -> &'a str {
+        fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
+            panic!(
+                "fixture case {}: unknown context {:?} (expected one of the 6 keys of \
+                 `contexts`)",
+                case.id, case.context
+            )
+        })
+    }
+
     fn render_with_class_renderer(fixture: &Fixture, case: &FixtureCase) -> String {
         let class = match case.rustClass.as_str() {
             "AuthRejection" => AuthFailureClass::AuthRejection,
@@ -1057,13 +1079,7 @@ mod auth_failure_class_tests {
                 case.id
             ),
         };
-        let context = fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
-            panic!(
-                "fixture case {}: unknown context {:?} (expected one of the 6 keys \
-                 of `contexts`)",
-                case.id, case.context
-            )
-        });
+        let context = context_of(fixture, case);
 
         if case.template == "TransientLocalStorage" {
             observable_message(&class.into_command_error_local_storage(context, &case.cause))
@@ -1098,13 +1114,7 @@ mod auth_failure_class_tests {
                 case.id
             ),
         };
-        let context = fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
-            panic!(
-                "fixture case {}: unknown context {:?} (expected one of the 6 keys of \
-                 `contexts`)",
-                case.id, case.context
-            )
-        });
+        let context = context_of(fixture, case);
 
         template
             .replace("{context}", context)
@@ -1147,9 +1157,10 @@ mod auth_failure_class_tests {
     ///
     /// It also verifies that every `context` string (all 6, whether or not a
     /// case references it) really is produced by the **production** code of
-    /// `commands/storage.rs` (byte-identical substring pin over the source
-    /// before its `#[cfg(test)]` module, so a context that disappears from the
-    /// producer — or survives only in a test literal — goes red here) and that
+    /// `commands/storage.rs` (byte-identical substring pin over the source with
+    /// every `#[cfg(test)]`-gated item removed — see `without_cfg_test_items` —
+    /// so a context that disappears from the producer — or survives only in a
+    /// test literal — goes red here) and that
     /// the fixture's own `version`/`cases` count are what the frontend loader
     /// expects.
     #[test]
@@ -1172,8 +1183,18 @@ mod auth_failure_class_tests {
         // test literal (the file's test modules sit between production items,
         // so a plain "cut at the first #[cfg(test)]" would drop real producers).
         let production_source = without_cfg_test_items(storage_source);
+        assert!(
+            !production_source.contains("cfg(test)"),
+            "the strip must leave no `#[cfg(test)]` gate behind"
+        );
+        assert!(
+            !production_source
+                .lines()
+                .any(|line| line.trim_start().starts_with("#[test]")),
+            "the strip must leave no `#[test]` item behind"
+        );
 
-        // (6) Every context string (all 6 — `tokenParse` has no case yet) must
+        // (1) Every context string (all 6 — `tokenParse` has no case yet) must
         // be produced verbatim by `commands/storage.rs`'s production code, so a
         // context that disappears (or is reworded) there goes red here. An
         // empty context would satisfy any substring check, hence the first
@@ -1207,15 +1228,9 @@ mod auth_failure_class_tests {
         );
 
         for case in &fixture.cases {
-            let context = fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
-                panic!(
-                    "fixture case {}: unknown context {:?} (expected one of the 6 keys \
-                     of `contexts`)",
-                    case.id, case.context
-                )
-            });
+            let context = context_of(&fixture, case);
 
-            // (1) The class renderer (the production code path) must produce
+            // (2) The class renderer (the production code path) must produce
             // exactly the pinned `message`, byte for byte.
             let rendered = render_with_class_renderer(&fixture, case);
             assert_eq!(
@@ -1225,7 +1240,7 @@ mod auth_failure_class_tests {
                 case.id
             );
 
-            // (2) The pinned `message` must also BE the pure template render —
+            // (3) The pinned `message` must also BE the pure template render —
             // except when the class renderer redacted a routing keyword out of
             // the cause (currently `oauth-state-other`, whose cause contains
             // `expired`, which `Other` rewrites to `[redacted]`).
@@ -1237,7 +1252,7 @@ mod auth_failure_class_tests {
                      `message` exactly when a routing keyword was redacted",
                     case.id
                 );
-                // The class-renderer pin (1) above already covers this case's
+                // The class-renderer pin (2) above already covers this case's
                 // redacted `message`; this branch only pins the *difference*.
             } else {
                 assert_eq!(
@@ -1248,7 +1263,7 @@ mod auth_failure_class_tests {
                 );
             }
 
-            // (3) The frontend keyword ladder must derive exactly the pinned
+            // (4) The frontend keyword ladder must derive exactly the pinned
             // `frontend.errorType` from the pinned `message`.
             let expected_bucket = frontend_bucket_of_error_type(&case.frontend.errorType);
             assert_eq!(
@@ -1260,7 +1275,7 @@ mod auth_failure_class_tests {
                 case.frontend.errorType
             );
 
-            // (4) `failureClass` is fully derivable from `errorType`: the
+            // (5) `failureClass` is fully derivable from `errorType`: the
             // frontend treats exactly `NETWORK_ERROR` as retryable (see
             // `classifyCloudFailure` in `src/services/cloudStorageErrors.ts`).
             let expected_failure_class = if expected_bucket == FrontendBucket::NetworkError {
