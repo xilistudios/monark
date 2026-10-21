@@ -1,0 +1,124 @@
+{
+	"version": 1,
+	"description": "Cross-language failure contract for Monark's Google Drive cloud-storage auth/refresh/OAuth paths (issue #28, D4). Rust derives every `message` by rendering the real AuthFailureClass templates (see `src-tauri/src/commands/errors.rs`) and the frontend classifies those exact strings with `classifyCloudFailure` (`src/services/cloudStorageErrors.ts`). Test-only: no production module imports this file; `src/test/helpers/authFailureContract.ts` is the single TS loader. The Rust `include_str!` consumer (`src-tauri/src/commands/errors.rs`) lands with T12 and the TS consumer tests with T13 — until then no consumer re-derives the `message` bytes (the schema itself is enforced at load by the TS loader).",
+	"templates": {
+		"AuthRejection": "authentication failed while {context} (re-authenticate): {cause}",
+		"Transient": "network error while {context}: {cause}",
+		"Other": "unexpected failure while {context}: {cause}",
+		"TransientLocalStorage": "network or local storage error while {context}: {cause}"
+	},
+	"contexts": {
+		"refresh": "refreshing the Google Drive access token",
+		"codeExchange": "exchanging the Google Drive authorization code",
+		"tokenParse": "parsing the Google Drive token response",
+		"oauthState": "validating the OAuth state",
+		"loadConfig": "loading the Google Drive provider configuration",
+		"tokenPersistence": "saving the Google Drive tokens that Google already issued"
+	},
+	"cases": [
+		{
+			"id": "refresh-network-transient",
+			"description": "A request-level failure (DNS/connect/timeout) during the access-token refresh: `StorageError::Network` reaches `classify_refresh_failure`'s Transient arm, rendered with the plain `Transient` template. Note the cause carries the `StorageError::Network` Display prefix (`Network error: …`) because the arm interpolates `error.to_string()`.",
+			"rustClass": "Transient",
+			"template": "Transient",
+			"context": "refresh",
+			"cause": "Network error: Network error during token refresh: error sending request",
+			"message": "network error while refreshing the Google Drive access token: Network error: Network error during token refresh: error sending request",
+			"frontend": {
+				"errorType": "NETWORK_ERROR",
+				"failureClass": "transient"
+			}
+		},
+		{
+			"id": "refresh-5xx-transient",
+			"description": "A non-2xx token-endpoint response carried structurally as `StorageError::HttpStatus` (issue #28, D3). A transient status (408/429/5xx) drops the upstream `body` — that (dropped) body is adversarial in the producer tests (`connection reset, authentication required`), while the pinned cause here is the status prefix only: the point is that no body ever reaches the rendered message, keeping the class purely `Transient`/`NETWORK_ERROR`.",
+			"rustClass": "Transient",
+			"template": "Transient",
+			"context": "refresh",
+			"cause": "Failed to refresh access token (503 Service Unavailable)",
+			"message": "network error while refreshing the Google Drive access token: Failed to refresh access token (503 Service Unavailable)",
+			"frontend": {
+				"errorType": "NETWORK_ERROR",
+				"failureClass": "transient"
+			}
+		},
+		{
+			"id": "refresh-local-storage-transient",
+			"description": "Persisting the freshly rotated tokens failed on the OS keychain (`StorageError::Keychain`). This is the fourth, distinct template rendered by `AuthFailureClass::into_command_error_local_storage` (review finding m4): it names the *local* cause while keeping the `network` keyword the frontend routes on, so it stays `NETWORK_ERROR`/`transient` — the refresh token is unchanged, so the next attempt is legitimate. The real producer appends the OS keyring error to the cause (`keychain.rs`); the fixture pins the stable prefix only, with the dynamic tail elided.",
+			"rustClass": "Transient",
+			"template": "TransientLocalStorage",
+			"context": "refresh",
+			"cause": "Keychain error: Failed to set keychain secret",
+			"message": "network or local storage error while refreshing the Google Drive access token: Keychain error: Failed to set keychain secret",
+			"frontend": {
+				"errorType": "NETWORK_ERROR",
+				"failureClass": "transient"
+			}
+		},
+		{
+			"id": "refresh-revoked-rejection",
+			"description": "Google refused the refresh token (HTTP 400 + `invalid_grant`, or an explicitly revoked token): `StorageError::Authentication` reaches `classify_refresh_failure`'s `AuthRejection` arm. The provider's fixed wording (`Google Drive refresh token is invalid or has been revoked. Please re-authenticate.`) already contains the `authentication`/`re-authenticate` keywords the frontend keys on, so no redaction applies (the AuthRejection class only redacts the retryable keywords `network`/`connection`).",
+			"rustClass": "AuthRejection",
+			"template": "AuthRejection",
+			"context": "refresh",
+			"cause": "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
+			"message": "authentication failed while refreshing the Google Drive access token (re-authenticate): Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
+			"frontend": {
+				"errorType": "AUTHENTICATION_FAILED",
+				"failureClass": "terminal"
+			}
+		},
+		{
+			"id": "code-exchange-invalid-grant",
+			"description": "The OAuth authorization-code exchange got HTTP 400 + `invalid_grant` from the token endpoint: `classify_token_endpoint_status` classifies it `AuthRejection` and `exchange_google_drive_code` renders the cause as `the token endpoint returned HTTP status {status}: {bounded_body}` (the upstream body is kept, since it is genuinely useful and the AuthRejection bucket has the highest frontend precedence).",
+			"rustClass": "AuthRejection",
+			"template": "AuthRejection",
+			"context": "codeExchange",
+			"cause": "the token endpoint returned HTTP status 400 Bad Request: {\"error\":\"invalid_grant\"}",
+			"message": "authentication failed while exchanging the Google Drive authorization code (re-authenticate): the token endpoint returned HTTP status 400 Bad Request: {\"error\":\"invalid_grant\"}",
+			"frontend": {
+				"errorType": "AUTHENTICATION_FAILED",
+				"failureClass": "terminal"
+			}
+		},
+		{
+			"id": "token-persistence-other",
+			"description": "The tokens were obtained but could not be persisted (config write / OS keychain). The authorization code is single-use (already spent), so the failure is terminal for the OAuth state (`keep_state == false`) even though the underlying cause looks like retryable IO — the lifecycle cannot be derived from the class alone (review finding MAJOR-2). The message is keyword-free by construction (`OPERATION_FAILED`, a terminal bucket) and honest about the remediation (the user must sign in again).",
+			"rustClass": "Other",
+			"template": "Other",
+			"context": "tokenPersistence",
+			"cause": "the tokens were obtained but could not be persisted; please sign in again (Keychain error: the secret service is not available)",
+			"message": "unexpected failure while saving the Google Drive tokens that Google already issued: the tokens were obtained but could not be persisted; please sign in again (Keychain error: the secret service is not available)",
+			"frontend": {
+				"errorType": "OPERATION_FAILED",
+				"failureClass": "terminal"
+			}
+		},
+		{
+			"id": "oauth-state-other",
+			"description": "The OAuth `state` is unknown or has expired: `oauth_state_terminal_error()` classifies it `Other` (the request never reached Google, so it is neither a credential rejection nor retryable). The cause contains the routing keyword `expired`, which the `Other` class redacts in full (`Other` redacts every routing keyword), pinning the real production string `… has [redacted]` — a keyword-free message that lands in the frontend's conservative terminal `OPERATION_FAILED` bucket.",
+			"rustClass": "Other",
+			"template": "Other",
+			"context": "oauthState",
+			"cause": "the OAuth state is unknown or has expired",
+			"message": "unexpected failure while validating the OAuth state: the OAuth state is unknown or has [redacted]",
+			"frontend": {
+				"errorType": "OPERATION_FAILED",
+				"failureClass": "terminal"
+			}
+		},
+		{
+			"id": "load-config-other",
+			"description": "The OAuth callback could not resolve the Google Drive provider config (precondition failure, not a credential rejection): reported as `Other` (terminal) with a keyword-free message that lands in the frontend's conservative `OPERATION_FAILED` bucket.",
+			"rustClass": "Other",
+			"template": "Other",
+			"context": "loadConfig",
+			"cause": "the provider has no stored configuration",
+			"message": "unexpected failure while loading the Google Drive provider configuration: the provider has no stored configuration",
+			"frontend": {
+				"errorType": "OPERATION_FAILED",
+				"failureClass": "terminal"
+			}
+		}
+	]
+}
