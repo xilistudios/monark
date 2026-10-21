@@ -251,7 +251,10 @@ export function renderContractMessage(
 	context: keyof ContractContexts,
 	cause: string,
 ): string {
+	// Replacement FUNCTIONS on purpose: a plain-string replacement would
+	// interpret `$&`/`$'`/`$``/`$$` in the cause as `String.replace`
+	// patterns and corrupt it.
 	return TEMPLATES[template]
-		.replace("{context}", CONTEXTS[context])
-		.replace("{cause}", cause);
+		.replace("{context}", () => CONTEXTS[context])
+		.replace("{cause}", () => cause);
 }

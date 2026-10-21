@@ -11,6 +11,7 @@ import { CloudStorageCommands } from '../../../services/cloudStorage'
 import vaultReducer from '../../../redux/actions/vault'
 import { CloudStorageErrorType, StorageProviderType } from '../../../interfaces/cloud-storage.interface'
 import type { CloudStorageError } from '../../../interfaces/cloud-storage.interface'
+import { renderContractMessage } from '../../helpers/authFailureContract'
 
 // Mock @tauri-apps/plugin-os (used by utils/platform.ts -> isMobile)
 vi.mock('@tauri-apps/plugin-os', () => ({
@@ -59,37 +60,34 @@ const mockAuthInfoFailure = (message: string) => {
 /**
  * Backend message contract (cross-language fixtures).
  *
- * `AuthFailureClass::message` (src-tauri/src/commands/errors.rs) renders:
+ * The 4 `AuthFailureClass` message templates and the refresh context live in
+ * the shared cross-language fixture (`fixtures/auth-failure-contract.json`,
+ * loaded and schema-validated by `src/test/helpers/authFailureContract.ts`):
  *   - AuthRejection: `authentication failed while {context} (re-authenticate): {cause}`
  *   - Transient:     `network error while {context}: {cause}`
  *   - Other:         `unexpected failure while {context}: {cause}`
- * and `AuthFailureClass::into_command_error_local_storage` (same file) adds a
- * fourth observable template for transient failures that are NOT network
- * problems:            `network or local storage error while {context}: {cause}`
- * (used by `classify_refresh_failure`, src-tauri/src/commands/storage.rs, for
- * the Io|Keychain|Serialization arm). It must keep routing as `network`.
- * The refresh path (`classify_refresh_failure`,
- * src-tauri/src/commands/storage.rs) uses the context
- * "refreshing the Google Drive access token". The Rust test
- * `refresh_failure_taxonomy_matches_the_command_contract` asserts the same
- * keyword contract on these strings, so the two sides cannot drift.
+ *   - TransientLocalStorage (`into_command_error_local_storage`, same Rust
+ *     file): `network or local storage error while {context}: {cause}`
+ * The refresh path (`classify_refresh_failure`, src-tauri/src/commands/storage.rs)
+ * uses the fixture's `refresh` context ("refreshing the Google Drive access
+ * token"). The Rust test `refresh_failure_taxonomy_matches_the_command_contract`
+ * asserts the same keyword contract on these strings, so the two sides cannot
+ * drift.
  */
-const REFRESH_CONTEXT = 'refreshing the Google Drive access token'
-
 const backendTransientMessage = (cause: string) =>
-  `network error while ${REFRESH_CONTEXT}: ${cause}`
+  renderContractMessage('Transient', 'refresh', cause)
 
 const backendAuthRejectionMessage = (cause: string) =>
-  `authentication failed while ${REFRESH_CONTEXT} (re-authenticate): ${cause}`
+  renderContractMessage('AuthRejection', 'refresh', cause)
 
 const backendOtherMessage = (cause: string) =>
-  `unexpected failure while ${REFRESH_CONTEXT}: ${cause}`
+  renderContractMessage('Other', 'refresh', cause)
 
 /** Fourth template: transient but NOT a network problem (Io/Keychain/Serialization
  * while persisting rotated tokens), rendered by
  * `AuthFailureClass::into_command_error_local_storage`. */
 const backendLocalStorageMessage = (cause: string) =>
-  `network or local storage error while ${REFRESH_CONTEXT}: ${cause}`
+  renderContractMessage('TransientLocalStorage', 'refresh', cause)
 
 /** Causes taken from the Rust tests / the real provider messages. */
 const TRANSIENT_CAUSE = 'Network error during token refresh: error sending request'

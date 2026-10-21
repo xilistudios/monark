@@ -67,6 +67,10 @@ import {
 	deepLinkService,
 	MAX_PROCESSED_CALLBACKS,
 } from "../../services/deepLinkService";
+import {
+	contractMessage,
+	renderContractMessage,
+} from "../helpers/authFailureContract";
 
 const OAUTH_STATE = "state-xyz";
 const PROVIDER = "google_drive";
@@ -82,15 +86,37 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 /**
  * The real messages of the backend contract (`AuthFailureClass`, see
  * `src-tauri/src/commands/errors.rs`), i.e. what the IPC handler rejects with.
+ *
+ * Derived from the shared cross-language fixture
+ * (`fixtures/auth-failure-contract.json`, loaded and schema-validated by
+ * `src/test/helpers/authFailureContract.ts`), so the two sides can never drift:
+ * - `NETWORK_MESSAGE` = the fixture's `Transient` template with the
+ *   `codeExchange` context and this test's `connection reset by peer` cause;
+ * - `AUTH_MESSAGE` = fixture case `code-exchange-invalid-grant`'s pinned bytes
+ *   (its cause is the token endpoint's bounded HTTP-400 body);
+ * - `LOCAL_STORAGE_MESSAGE` = fixture case
+ *   `refresh-local-storage-transient`'s pinned bytes (the 4th, distinct
+ *   template of `into_command_error_local_storage`).
+ *
+ * These supersede previously hand-copied literals that were slightly stale
+ * compared to the real backend bytes: the production context is "exchanging
+ * the Google Drive authorization code" (not "… the authorization code"), the
+ * code-exchange auth cause is the bounded body (not bare `invalid_grant`), and
+ * the local-storage cause carries the `Keychain error: ` prefix. Every row
+ * below asserts the classification/retry outcome only, so those byte deltas
+ * change no expectation.
  */
-const NETWORK_MESSAGE =
-	"network error while exchanging the authorization code: connection reset by peer";
-const AUTH_MESSAGE =
-	"authentication failed while exchanging the authorization code (re-authenticate): invalid_grant";
+const NETWORK_MESSAGE = renderContractMessage(
+	"Transient",
+	"codeExchange",
+	"connection reset by peer",
+);
+const AUTH_MESSAGE = contractMessage("code-exchange-invalid-grant");
 /** Fourth template of the contract (`into_command_error_local_storage`): transient
  * but caused by local keychain/IO persistence rather than the network. */
-const LOCAL_STORAGE_MESSAGE =
-	"network or local storage error while refreshing the Google Drive access token: Failed to set keychain secret";
+const LOCAL_STORAGE_MESSAGE = contractMessage(
+	"refresh-local-storage-transient",
+);
 
 /** The shapes a transient (network) failure reaches the service in. */
 const transientFailures: Array<[string, () => unknown]> = [
