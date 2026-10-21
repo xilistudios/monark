@@ -62,11 +62,15 @@ vi.mock("../../redux/actions/vault", () => ({
 }));
 
 import type { AppDispatch, RootState } from "../../redux/store";
+import { classifyCloudFailure } from "../../services/cloudStorageErrors";
 import {
-	classifyOAuthFailure,
 	deepLinkService,
 	MAX_PROCESSED_CALLBACKS,
 } from "../../services/deepLinkService";
+import {
+	contractMessage,
+	renderContractMessage,
+} from "../helpers/authFailureContract";
 
 const OAUTH_STATE = "state-xyz";
 const PROVIDER = "google_drive";
@@ -82,11 +86,37 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 /**
  * The real messages of the backend contract (`AuthFailureClass`, see
  * `src-tauri/src/commands/errors.rs`), i.e. what the IPC handler rejects with.
+ *
+ * Derived from the shared cross-language fixture
+ * (`fixtures/auth-failure-contract.json`, loaded and schema-validated by
+ * `src/test/helpers/authFailureContract.ts`), so the two sides can never drift:
+ * - `NETWORK_MESSAGE` = the fixture's `Transient` template with the
+ *   `codeExchange` context and this test's `connection reset by peer` cause;
+ * - `AUTH_MESSAGE` = fixture case `code-exchange-invalid-grant`'s pinned bytes
+ *   (its cause is the token endpoint's bounded HTTP-400 body);
+ * - `LOCAL_STORAGE_MESSAGE` = fixture case
+ *   `refresh-local-storage-transient`'s pinned bytes (the 4th, distinct
+ *   template of `into_command_error_local_storage`).
+ *
+ * These supersede previously hand-copied literals that were slightly stale
+ * compared to the real backend bytes: the production context is "exchanging
+ * the Google Drive authorization code" (not "… the authorization code"), the
+ * code-exchange auth cause is the bounded body (not bare `invalid_grant`), and
+ * the local-storage cause carries the `Keychain error: ` prefix. Every row
+ * below asserts the classification/retry outcome only, so those byte deltas
+ * change no expectation.
  */
-const NETWORK_MESSAGE =
-	"network error while exchanging the authorization code: connection reset by peer";
-const AUTH_MESSAGE =
-	"authentication failed while exchanging the authorization code (re-authenticate): invalid_grant";
+const NETWORK_MESSAGE = renderContractMessage(
+	"Transient",
+	"codeExchange",
+	"connection reset by peer",
+);
+const AUTH_MESSAGE = contractMessage("code-exchange-invalid-grant");
+/** Fourth template of the contract (`into_command_error_local_storage`): transient
+ * but caused by local keychain/IO persistence rather than the network. */
+const LOCAL_STORAGE_MESSAGE = contractMessage(
+	"refresh-local-storage-transient",
+);
 
 /** The shapes a transient (network) failure reaches the service in. */
 const transientFailures: Array<[string, () => unknown]> = [
@@ -98,6 +128,19 @@ const transientFailures: Array<[string, () => unknown]> = [
 			type: CloudStorageErrorType.NETWORK_ERROR,
 			message: NETWORK_MESSAGE,
 			originalError: NETWORK_MESSAGE,
+		}),
+	],
+	["a local-storage contract message (string)", () => LOCAL_STORAGE_MESSAGE],
+	[
+		"an Error carrying the local-storage message",
+		() => new Error(LOCAL_STORAGE_MESSAGE),
+	],
+	[
+		"a NETWORK_ERROR wrapping the local-storage message",
+		(): unknown => ({
+			type: CloudStorageErrorType.NETWORK_ERROR,
+			message: LOCAL_STORAGE_MESSAGE,
+			originalError: LOCAL_STORAGE_MESSAGE,
 		}),
 	],
 ];
@@ -202,6 +245,41 @@ const captureOpenUrlHandler = () => {
 	};
 };
 
+/**
+ * Captures the `single-instance-args` listener and returns a sender that simulates
+ * the event emitted by the second process (Windows/Linux deep-link launch).
+ */
+const captureSingleInstanceHandler = () => {
+	let handler: ((event: { payload: string[] }) => void) | null = null;
+	mocks.listen.mockImplementation(
+		(_event: string, cb: (event: { payload: string[] }) => void) => {
+			if (_event === "single-instance-args") {
+				handler = cb;
+			}
+			return Promise.resolve(() => {});
+		},
+	);
+
+	return (args: string[]) => {
+		if (!handler) {
+			throw new Error("single-instance-args listener was not registered");
+		}
+		handler({ payload: args });
+	};
+};
+
+/**
+ * Calls the private `handleDeepLink` directly (TS `private` is compile-time only),
+ * so its `Promise<boolean>` return contract can be asserted without going through
+ * a delivery channel.
+ */
+const invokeHandleDeepLink = (url: string): Promise<boolean> =>
+	(
+		deepLinkService as unknown as {
+			handleDeepLink: (url: string) => Promise<boolean>;
+		}
+	).handleDeepLink(url);
+
 /** Initializes the service with spies and returns the deep link sender. */
 const initializeService = (): ((urls: string[]) => void) => {
 	const sendOpenUrl = captureOpenUrlHandler();
@@ -210,6 +288,20 @@ const initializeService = (): ((urls: string[]) => void) => {
 		getState: buildGetState(),
 	});
 	return sendOpenUrl;
+};
+
+/**
+ * Initializes the service and returns the single-instance args sender. The listener
+ * must be *captured before* `initialize()` registers it (it resolves asynchronously),
+ * so this helper wires the capture first.
+ */
+const initializeServiceWithSingleInstance = (): ((args: string[]) => void) => {
+	const sendSingleInstance = captureSingleInstanceHandler();
+	deepLinkService.initialize({
+		dispatch: mockDispatch,
+		getState: buildGetState(),
+	});
+	return sendSingleInstance;
 };
 
 const authCall = [PROVIDER, "abc", OAUTH_STATE];
@@ -296,6 +388,25 @@ describe("deepLinkService", () => {
 			await flush();
 			expect(mocks.handleGoogleDriveOAuthCallback).not.toHaveBeenCalled();
 			expect(deepLinkService.isReady()).toBe(true);
+		});
+
+		it("processes the cold-start callback when it is not the first URL", async () => {
+			// A stale/non-OAuth URL ahead of the real callback must not swallow it
+			mocks.getCurrent.mockResolvedValue([
+				"not a url at all",
+				`https://example.com/oauth/callback?code=abc&state=${OAUTH_STATE}`,
+				VALID_URL,
+			]);
+			startOAuthFlow();
+
+			initializeService();
+
+			await vi.waitFor(() =>
+				expect(
+					mocks.handleGoogleDriveOAuthCallback,
+				).toHaveBeenCalledExactlyOnceWith(...authCall),
+			);
+			expect(mocks.clearOAuthState).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -640,9 +751,157 @@ describe("deepLinkService", () => {
 		});
 	});
 
-	describe("classifyOAuthFailure", () => {
+	describe("multi-URL batch iteration (onOpenUrl)", () => {
+		it("processes the callback delivered after a non-OAuth URL in the same batch", async () => {
+			startOAuthFlow();
+			const sendOpenUrl = initializeService();
+
+			sendOpenUrl([
+				"not a url at all",
+				`https://example.com/x?code=abc&state=${OAUTH_STATE}`,
+				VALID_URL,
+			]);
+
+			await vi.waitFor(() =>
+				expect(
+					mocks.handleGoogleDriveOAuthCallback,
+				).toHaveBeenCalledExactlyOnceWith(...authCall),
+			);
+			// ...and only once: iteration stops at the first claimed callback
+			expect(mocks.setProviderStatus).toHaveBeenCalledExactlyOnceWith({
+				providerId: PROVIDER,
+				status: "authenticated",
+			});
+			expect(mocks.clearOAuthState).toHaveBeenCalledTimes(1);
+		});
+
+		it("stops at the first claimed callback even when its state validation failed", async () => {
+			// No pending OAuth request: the first callback is *claimed* (parse accepted
+			// it) and rejected by the state validation, so iteration must stop there —
+			// a claimed callback consumes the batch even when its outcome is an error.
+			const sendOpenUrl = initializeService();
+
+			sendOpenUrl([
+				`monark://oauth/callback?code=first&state=${OAUTH_STATE}`,
+				`monark://oauth/callback?code=second&state=${OAUTH_STATE}`,
+			]);
+
+			await flush();
+			// The first one was claimed (and rejected), so the loop stopped there and the
+			// second callback was NOT processed: claiming stops the iteration.
+			expect(mocks.clearOAuthState).toHaveBeenCalledTimes(1);
+			expect(mocks.handleGoogleDriveOAuthCallback).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("single-instance args", () => {
+		it("handles an uppercase-scheme callback (parser lowercases the protocol)", async () => {
+			startOAuthFlow();
+			const sendSingleInstance = initializeServiceWithSingleInstance();
+			sendSingleInstance([
+				`Monark://oauth/callback?code=abc&state=${OAUTH_STATE}`,
+			]);
+
+			await vi.waitFor(() =>
+				expect(
+					mocks.handleGoogleDriveOAuthCallback,
+				).toHaveBeenCalledExactlyOnceWith(...authCall),
+			);
+			expect(mocks.clearOAuthState).toHaveBeenCalledTimes(1);
+		});
+
+		it("handles the callback when it is not the first arg", async () => {
+			startOAuthFlow();
+			const sendSingleInstance = initializeServiceWithSingleInstance();
+
+			sendSingleInstance(["https://example.com/x", VALID_URL]);
+
+			await vi.waitFor(() =>
+				expect(
+					mocks.handleGoogleDriveOAuthCallback,
+				).toHaveBeenCalledExactlyOnceWith(...authCall),
+			);
+		});
+
+		it("warns 'No deep link found' only when no arg is a callback", async () => {
+			const sendSingleInstance = initializeServiceWithSingleInstance();
+
+			sendSingleInstance(["https://example.com/x", "monark://vault/open"]);
+			await flush();
+
+			expect(mocks.handleGoogleDriveOAuthCallback).not.toHaveBeenCalled();
+			expect(console.warn).toHaveBeenCalledWith(
+				"[DeepLinkService] No deep link found in single-instance args",
+			);
+
+			// With a claimed callback the warning must NOT fire
+			vi.mocked(console.warn).mockClear();
+			startOAuthFlow();
+			sendSingleInstance([VALID_URL]);
+			await vi.waitFor(() =>
+				expect(
+					mocks.handleGoogleDriveOAuthCallback,
+				).toHaveBeenCalledExactlyOnceWith(...authCall),
+			);
+			expect(console.warn).not.toHaveBeenCalledWith(
+				"[DeepLinkService] No deep link found in single-instance args",
+			);
+		});
+	});
+
+	describe("handleDeepLink return contract", () => {
+		it("returns false for URLs that are not monark OAuth callbacks", async () => {
+			initializeService();
+
+			await expect(invokeHandleDeepLink("not a url at all")).resolves.toBe(
+				false,
+			);
+			await expect(
+				invokeHandleDeepLink(
+					`https://example.com/x?code=abc&state=${OAUTH_STATE}`,
+				),
+			).resolves.toBe(false);
+			// monark scheme but none of code/state/error → not a callback
+			await expect(
+				invokeHandleDeepLink("monark://vault/open?path=/vault"),
+			).resolves.toBe(false);
+			expect(mocks.setProviderStatus).not.toHaveBeenCalled();
+			expect(mocks.clearOAuthState).not.toHaveBeenCalled();
+		});
+
+		it("returns true for a claimed callback, even when the dedupe set ignores it", async () => {
+			startOAuthFlow();
+			initializeService();
+
+			await expect(invokeHandleDeepLink(VALID_URL)).resolves.toBe(true);
+			expect(
+				mocks.handleGoogleDriveOAuthCallback,
+			).toHaveBeenCalledExactlyOnceWith(...authCall);
+
+			// The duplicate is ignored by the reservation but still claimed: the caller
+			// must stop iterating at it.
+			await expect(invokeHandleDeepLink(VALID_URL)).resolves.toBe(true);
+			expect(mocks.handleGoogleDriveOAuthCallback).toHaveBeenCalledTimes(1);
+		});
+
+		it("returns true for a claimed callback rejected by state validation", async () => {
+			// No pending OAuth request → handled and rejected, but still claimed
+			initializeService();
+
+			await expect(invokeHandleDeepLink(VALID_URL)).resolves.toBe(true);
+			expect(mocks.handleGoogleDriveOAuthCallback).not.toHaveBeenCalled();
+			expect(mocks.clearOAuthState).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("classifyCloudFailure (shared contract)", () => {
 		it.each([
 			["transient (network) contract message", NETWORK_MESSAGE, "transient"],
+			[
+				"transient local-storage contract message (network or local storage error)",
+				LOCAL_STORAGE_MESSAGE,
+				"transient",
+			],
 			[
 				"unclassified message containing 'connection'",
 				"connection reset by peer",
@@ -688,7 +947,7 @@ describe("deepLinkService", () => {
 			["unclassified Error", new Error("keyring unavailable"), "terminal"],
 			["a value without message", undefined, "terminal"],
 		])("classifies %s as %s", (_label, error, expected) => {
-			expect(classifyOAuthFailure(error)).toBe(expected);
+			expect(classifyCloudFailure(error)).toBe(expected);
 		});
 	});
 

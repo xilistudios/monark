@@ -174,6 +174,17 @@
 		openApp.id = "oauth-open-app";
 		openApp.type = "button";
 
+		// An annotation on the button above it: hidden when a stale cached
+		// config lacks the string (no blank gap), and tied to the button for
+		// assistive tech when visible.
+		const openHint = el("p", "oauth-open-hint", strings.openAppHint ?? "");
+		openHint.id = "oauth-open-hint";
+		if (isMeaningful(strings.openAppHint)) {
+			openApp.setAttribute("aria-describedby", "oauth-open-hint");
+		} else {
+			openHint.hidden = true;
+		}
+
 		const block = el("div", "oauth-block");
 		block.append(
 			el("h3", null, strings.copyHeading ?? ""),
@@ -202,7 +213,7 @@
 		const ok = el("p", "status status--ok", strings.statusOk ?? "");
 		ok.setAttribute("role", "status");
 
-		render(heading, lede, ok, openApp, block, steps, note);
+		render(heading, lede, ok, openApp, openHint, block, steps, note);
 		bindCopy();
 		bindOpenApp();
 	}

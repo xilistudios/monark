@@ -18,11 +18,9 @@ import type {
 	UpdateCloudVaultRequest,
 	UpdateFileRequest,
 } from "../interfaces/cloud-storage.interface";
-import {
-	CloudStorageErrorType,
-	StorageProviderType,
-} from "../interfaces/cloud-storage.interface";
+import { StorageProviderType } from "../interfaces/cloud-storage.interface";
 import type { VaultContent } from "../interfaces/vault.interface";
+import { classifyCloudErrorType } from "./cloudStorageErrors";
 
 /**
  * CloudStorageCommands class provides methods to interact with cloud storage backend commands.
@@ -127,25 +125,6 @@ export class CloudStorageCommands {
 				error,
 				"Failed to refresh provider auth",
 			);
-		}
-	}
-
-	/**
-	 * Checks if a storage provider is authenticated
-	 * @param providerName - Name of the provider to check
-	 * @returns Promise resolving to boolean indicating if provider is authenticated
-	 */
-	static async checkProviderAuthStatus(providerName: string): Promise<boolean> {
-		if (providerName === "local") {
-			return true;
-		}
-		try {
-			return await invoke<boolean>("check_provider_auth_status", {
-				providerName,
-			});
-		} catch (error) {
-			console.error("Failed to check provider auth status:", error);
-			return false;
 		}
 	}
 
@@ -731,30 +710,11 @@ export class CloudStorageCommands {
 			originalError = String(error);
 		}
 
-		// Determine error type based on message content
-		let errorType: CloudStorageErrorType =
-			CloudStorageErrorType.OPERATION_FAILED;
-
-		if (
-			message.includes("authentication") ||
-			message.includes("unauthorized")
-		) {
-			errorType = CloudStorageErrorType.AUTHENTICATION_FAILED;
-		} else if (message.includes("token") && message.includes("expired")) {
-			errorType = CloudStorageErrorType.TOKEN_EXPIRED;
-		} else if (message.includes("network") || message.includes("connection")) {
-			errorType = CloudStorageErrorType.NETWORK_ERROR;
-		} else if (message.includes("quota") || message.includes("storage")) {
-			errorType = CloudStorageErrorType.QUOTA_EXCEEDED;
-		} else if (message.includes("not found")) {
-			errorType = CloudStorageErrorType.VAULT_NOT_FOUND;
-		} else if (message.includes("permission") || message.includes("denied")) {
-			errorType = CloudStorageErrorType.PERMISSION_DENIED;
-		} else if (message.includes("provider") && message.includes("configured")) {
-			errorType = CloudStorageErrorType.PROVIDER_NOT_CONFIGURED;
-		} else if (message.includes("credentials") || message.includes("invalid")) {
-			errorType = CloudStorageErrorType.INVALID_CREDENTIALS;
-		}
+		// Determine error type based on message content. The keyword ladder lives in
+		// `classifyCloudErrorType` (src/services/cloudStorageErrors.ts), the shared
+		// front-end failure contract; it is a behaviour-identical data-driven replica of
+		// the inline ladder this call replaces (issue #28).
+		const errorType = classifyCloudErrorType(message);
 
 		return {
 			type: errorType,

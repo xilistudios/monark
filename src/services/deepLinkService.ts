@@ -6,10 +6,14 @@
 
 import { listen } from "@tauri-apps/api/event";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import { CloudStorageErrorType } from "../interfaces/cloud-storage.interface";
 import { clearOAuthState, setProviderStatus } from "../redux/actions/vault";
 import type { AppDispatch, RootState } from "../redux/store";
 import { CloudStorageCommands } from "./cloudStorage";
+import {
+	type CloudFailureClass,
+	classifyCloudFailure,
+	extractErrorMessage,
+} from "./cloudStorageErrors";
 
 interface DeepLinkServiceConfig {
 	dispatch: AppDispatch;
@@ -26,127 +30,6 @@ interface DeepLinkServiceConfig {
  * start, which restarts the service and therefore its bookkeeping anyway.
  */
 export const MAX_PROCESSED_CALLBACKS = 64;
-
-/**
- * How a failure raised while handling an OAuth callback must be treated, mirroring
- * the backend contract (`AuthFailureClass` in `src-tauri/src/commands/errors.rs`) as
- * seen through `CloudStorageCommands.handleError`:
- *
- * - `transient`: the very same request can be retried (`NETWORK_ERROR`). The backend
- *   deliberately *keeps* the PKCE state for that retry, so the frontend must keep its
- *   Redux OAuth state too, otherwise the retry would fail the `state` validation with
- *   "No pending OAuth request found" — a terminal rejection. The callback identity is
- *   therefore *released*, so a re-delivery of the same callback is handled again.
- * - `terminal`: everything else (`AUTHENTICATION_FAILED`, `TOKEN_EXPIRED`,
- *   `OPERATION_FAILED`, any unclassified error). Retrying cannot succeed, so the flow
- *   is closed, the state cleared, and the callback identity stays remembered as a
- *   permanent mark — re-delivering it can only repeat a decision that is already made.
- *   The same holds for callbacks rejected locally (state validation, matching
- *   `?error=`) and for successful ones.
- */
-export type OAuthFailureClass = "transient" | "terminal";
-
-/**
- * Keyword ladder of `CloudStorageCommands.handleError`, in its exact order:
- * `authentication`/`unauthorized` (terminal) first, then `token`+`expired` (terminal),
- * then `network`/`connection` (transient). The order is significant: the wrapper tests
- * the auth keywords *before* the transient ones, so a raw message carrying both must be
- * classified as terminal here too. All keywords are matched case-sensitively, exactly
- * like the wrapper does, so this classification never disagrees with the `type` the
- * wrapper would have produced for the same message.
- */
-const AUTH_ERROR_KEYWORDS = ["authentication", "unauthorized"];
-const TOKEN_EXPIRED_KEYWORDS = ["token", "expired"];
-const TRANSIENT_ERROR_KEYWORDS = ["network", "connection"];
-
-/**
- * Read the message of a failure, whatever shape it has.
- * @param error - The failure to inspect
- * @returns The message, or `""` when the failure carries none
- */
-function extractErrorMessage(error: unknown): string {
-	if (typeof error === "string") {
-		return error;
-	}
-
-	if (error instanceof Error) {
-		return error.message;
-	}
-
-	if (error && typeof error === "object") {
-		const { message } = error as { message?: unknown };
-		if (typeof message === "string") {
-			return message;
-		}
-	}
-
-	return "";
-}
-
-/**
- * Read the `CloudStorageErrorType` of a `CloudStorageError`-shaped failure.
- * @param error - The failure to inspect
- * @returns The error type, or `null` when the failure is not classified
- */
-function extractCloudStorageErrorType(
-	error: unknown,
-): CloudStorageErrorType | null {
-	if (!error || typeof error !== "object") {
-		return null;
-	}
-
-	const { type } = error as { type?: unknown };
-	if (typeof type !== "string") {
-		return null;
-	}
-
-	return Object.values(CloudStorageErrorType).includes(
-		type as CloudStorageErrorType,
-	)
-		? (type as CloudStorageErrorType)
-		: null;
-}
-
-/**
- * Classify a failure raised while handling an OAuth callback with the same contract
- * the backend uses (`AuthFailureClass`), so the retry decision cannot drift from it.
- *
- * A `CloudStorageError` already carries the classification computed by
- * `CloudStorageCommands.handleError`, so its `type` is authoritative; a raw error
- * (string / `Error`) is matched against the same keyword ladder, in the same order, so
- * both paths agree on the outcome. Everything that is not explicitly retryable is
- * treated as terminal (conservative fallback).
- *
- * @param error - The failure thrown by the IPC handler
- * @returns `"transient"` when the callback can be retried, `"terminal"` otherwise
- */
-export function classifyOAuthFailure(error: unknown): OAuthFailureClass {
-	const errorType = extractCloudStorageErrorType(error);
-
-	if (errorType) {
-		return errorType === CloudStorageErrorType.NETWORK_ERROR
-			? "transient"
-			: "terminal";
-	}
-
-	const message = extractErrorMessage(error);
-
-	// Same precedence as `CloudStorageCommands.handleError`: the auth rung wins over
-	// the transient one, so "authentication failed: network unreachable" is terminal
-	// exactly like the `AUTHENTICATION_FAILED` type the wrapper would have built for it.
-	if (AUTH_ERROR_KEYWORDS.some((keyword) => message.includes(keyword))) {
-		return "terminal";
-	}
-
-	// Outcome-neutral with the fallback below, kept to mirror the wrapper's ladder.
-	if (TOKEN_EXPIRED_KEYWORDS.every((keyword) => message.includes(keyword))) {
-		return "terminal";
-	}
-
-	return TRANSIENT_ERROR_KEYWORDS.some((keyword) => message.includes(keyword))
-		? "transient"
-		: "terminal";
-}
 
 /**
  * Structural description of a parsed OAuth callback deep link.
@@ -230,7 +113,17 @@ class DeepLinkService {
 			console.log("[DeepLinkService] Number of URLs:", urls.length);
 
 			if (urls.length > 0) {
-				this.handleDeepLink(urls[0]);
+				// Iterate every delivered URL and stop at the first claimed OAuth callback,
+				// so a stale/non-OAuth URL at the front cannot swallow the real callback.
+				// Fire-and-forget: the callback stays sync, and `handleDeepLink` never
+				// rejects (it catches internally), so no unhandled rejection can escape.
+				void (async () => {
+					for (const url of urls) {
+						if (await this.handleDeepLink(url)) {
+							break;
+						}
+					}
+				})();
 			} else {
 				console.warn("[DeepLinkService] Received empty URLs array");
 			}
@@ -259,19 +152,28 @@ class DeepLinkService {
 			console.log("[DeepLinkService] Single instance args received");
 
 			const args = event.payload;
-			for (const arg of args) {
-				if (arg.startsWith("monark://")) {
+			// Every arg is handed to the parser (no `startsWith("monark://")` filter):
+			// `parseOAuthCallback` accepts any case variant of the scheme — the URL parser
+			// lowercases `protocol` — and only it can tell a callback from a plain arg.
+			void (async () => {
+				let claimed = false;
+				for (const arg of args) {
+					if (await this.handleDeepLink(arg)) {
+						claimed = true;
+						break;
+					}
+				}
+
+				if (claimed) {
 					console.log(
 						"[DeepLinkService] Deep link found in single-instance args",
 					);
-					this.handleDeepLink(arg);
-					return;
+				} else {
+					console.warn(
+						"[DeepLinkService] No deep link found in single-instance args",
+					);
 				}
-			}
-
-			console.warn(
-				"[DeepLinkService] No deep link found in single-instance args",
-			);
+			})();
 		})
 			.then((unlisten) => {
 				this.unlistenSingleInstance = unlisten;
@@ -309,7 +211,17 @@ class DeepLinkService {
 					}
 
 					console.log("[DeepLinkService] Cold-start deep link found");
-					return this.handleDeepLink(urls[0]);
+					// Iterate every cold-start URL and stop at the first claimed OAuth
+					// callback, so a stale URL at the front cannot swallow the real one.
+					// `handleDeepLink` never rejects, so no unhandled rejection can escape
+					// this `.then` (the `.catch` below still guards `getCurrent()` itself).
+					return (async () => {
+						for (const url of urls) {
+							if (await this.handleDeepLink(url)) {
+								break;
+							}
+						}
+					})();
 				})
 				.catch((error) => {
 					// A failing plugin must not break the service initialization
@@ -327,17 +239,30 @@ class DeepLinkService {
 	}
 
 	/**
-	 * Handle incoming deep link URL
+	 * Handle incoming deep link URL.
+	 *
+	 * Return contract: `true` iff `parseOAuthCallback` accepted the URL, i.e. the URL
+	 * *is* a monark OAuth callback and was therefore **claimed** — regardless of the
+	 * dedupe outcome (duplicate ignored), a transient failure, or a state mismatch.
+	 * `false` means the URL was not a monark OAuth callback (unparseable URL, another
+	 * scheme, or no `code`/`state`/`error` parameter) or the service is not
+	 * initialized, so callers iterating over several URLs can keep going.
+	 * The parse-then-reserve ordering makes iteration safe: a rejected URL never
+	 * consumes a slot of a later, valid callback in the same batch.
+	 *
+	 * Never throws: every failure is caught and reported internally.
+	 *
 	 * @param url - The deep link URL to process
+	 * @returns `true` when the URL was claimed as an OAuth callback, `false` otherwise
 	 */
-	private async handleDeepLink(url: string): Promise<void> {
+	private async handleDeepLink(url: string): Promise<boolean> {
 		console.log("[DeepLinkService] Processing deep link");
 
 		if (!this.dispatch || !this.getState) {
 			console.error(
 				"[DeepLinkService] Service not initialized - dispatch or getState is null",
 			);
-			return;
+			return false;
 		}
 
 		// Parse and validate the URL *before* touching the de-duplication set: a URL
@@ -349,7 +274,7 @@ class DeepLinkService {
 			console.log(
 				"[DeepLinkService] Not a monark OAuth callback URL - ignoring",
 			);
-			return;
+			return false;
 		}
 
 		const { id, code, state, error } = callback;
@@ -365,7 +290,8 @@ class DeepLinkService {
 			console.log(
 				"[DeepLinkService] Duplicate OAuth callback, already processed - ignoring",
 			);
-			return;
+			// Claimed (parse accepted it): the caller must stop iterating at this URL.
+			return true;
 		}
 
 		try {
@@ -385,12 +311,12 @@ class DeepLinkService {
 						"[DeepLinkService] OAuth error callback with a mismatching state - ignoring:",
 						error,
 					);
-					return;
+					return true;
 				}
 
 				console.error("[DeepLinkService] OAuth error received:", error);
 				this.handleOAuthError(error, "terminal");
-				return;
+				return true;
 			}
 
 			console.log("[DeepLinkService] Current OAuth state from Redux:");
@@ -408,7 +334,7 @@ class DeepLinkService {
 			if (!state) {
 				console.error("[DeepLinkService] No state parameter in URL");
 				this.handleOAuthError("Missing state parameter in callback URL");
-				return;
+				return true;
 			}
 
 			if (!oauthState.state) {
@@ -416,25 +342,25 @@ class DeepLinkService {
 					"[DeepLinkService] No OAuth state in Redux - may have been cleared",
 				);
 				this.handleOAuthError("No pending OAuth request found");
-				return;
+				return true;
 			}
 
 			if (state !== oauthState.state) {
 				console.error("[DeepLinkService] State mismatch!");
 				this.handleOAuthError("State mismatch - possible CSRF attack");
-				return;
+				return true;
 			}
 
 			if (!code) {
 				console.error("[DeepLinkService] No code parameter in URL");
 				this.handleOAuthError("Missing authorization code in callback URL");
-				return;
+				return true;
 			}
 
 			if (!oauthState.providerName) {
 				console.error("[DeepLinkService] No provider name in OAuth state");
 				this.handleOAuthError("Missing provider name in OAuth state");
-				return;
+				return true;
 			}
 
 			// State matches, process the OAuth callback
@@ -463,24 +389,34 @@ class DeepLinkService {
 			// Clear OAuth state after successful authentication
 			this.dispatch(clearOAuthState());
 			console.log("[DeepLinkService] OAuth state cleared");
+			return true;
 		} catch (error) {
-			const failureClass = classifyOAuthFailure(error);
+			const failureClass = classifyCloudFailure(error);
 			const message =
 				extractErrorMessage(error) || "Failed to complete authentication";
 			console.error(
 				"[DeepLinkService] Failed to handle OAuth callback:",
 				message,
 			);
-			// A terminal failure closes the flow, so the callback identity stays remembered
-			// (re-delivering it can only repeat the decision). A transient one releases the
-			// reservation so a later delivery of the very same callback (another channel, or
-			// a user-triggered retry) is processed instead of being discarded as a duplicate.
+			// OAuth lifecycle semantics of the shared class (`CloudFailureClass` in
+			// `./cloudStorageErrors`, the generic contract):
+			// - `transient`: the backend *keeps* the PKCE state for the retry, so the Redux
+			//   OAuth state must survive too (clearing it would fail the retry's `state`
+			//   validation with "No pending OAuth request found") and the callback identity
+			//   is *released* so a re-delivery of the same callback is handled again.
+			// - `terminal`: retrying cannot succeed, so the flow is closed, the state
+			//   cleared, and the callback identity stays remembered as a permanent mark —
+			//   re-delivering it can only repeat a decision that is already made. The same
+			//   holds for callbacks rejected locally (state validation, matching `?error=`)
+			//   and for successful ones.
 			if (failureClass === "transient") {
 				this.releaseCallback(id);
 			}
 			// A transient failure keeps the Redux OAuth state, because the backend keeps
 			// its PKCE state precisely so that this retry can succeed.
 			this.handleOAuthError(message, failureClass);
+			// The failure does not change the claim: the URL *was* a monark OAuth callback.
+			return true;
 		}
 	}
 
@@ -603,11 +539,16 @@ class DeepLinkService {
 	 * re-delivering the callback, or by starting the flow again).
 	 *
 	 * @param errorMessage - The error message to log and report
-	 * @param failureClass - Whether the failure can be retried (defaults to terminal)
+	 * @param failureClass - Whether the failure can be retried (defaults to terminal).
+	 *   The class comes from the shared contract (`CloudFailureClass` in
+	 *   `./cloudStorageErrors`) with OAuth lifecycle semantics attached: `transient`
+	 *   means the backend kept its PKCE state, so this method must **keep** the Redux
+	 *   OAuth state as well or the retry would die on the `state` validation; `terminal`
+	 *   closes the flow and clears the state for good.
 	 */
 	private handleOAuthError(
 		errorMessage: string,
-		failureClass: OAuthFailureClass = "terminal",
+		failureClass: CloudFailureClass = "terminal",
 	): void {
 		console.error(
 			"[DeepLinkService] Handling OAuth error:",

@@ -12,6 +12,17 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 use tauri::State;
 
+/// Upper bound on the slice of a token-endpoint response body that is embedded
+/// in the human-readable error *cause*.
+///
+/// The body is an arbitrary upstream payload (a proxy/gateway HTML page, Google's
+/// JSON error) and may be arbitrarily large; only its first
+/// [`MAX_ERROR_BODY_CAUSE_CHARS`] characters are kept for the user, with `…`
+/// appended when truncated. Classification always runs on the **full** body (see
+/// [`exchange_google_drive_code`]): this bound only limits what reaches the
+/// message, so a multi-MB 5xx body cannot blow up the IPC payload or the log.
+const MAX_ERROR_BODY_CAUSE_CHARS: usize = 960;
+
 // Global state for storage manager
 pub struct StorageState {
     pub manager: Arc<StorageManager>,
@@ -583,7 +594,11 @@ pub struct OAuthCallbackRequest {
 }
 
 /// Tokens returned by Google's OAuth token endpoint.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Deserialized straight from the token-endpoint JSON (issue #28, D8): the
+/// serde default of ignoring unknown fields absorbs the extra response fields
+/// (`token_type`, `scope`, …) without a hand-written copy.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 struct GoogleDriveTokens {
     access_token: String,
     refresh_token: Option<String>,
@@ -647,13 +662,6 @@ async fn exchange_google_drive_code(
     code: &str,
     code_verifier: &str,
 ) -> Result<GoogleDriveTokens, ClassifiedAuthError> {
-    #[derive(Deserialize)]
-    struct TokenResponse {
-        access_token: String,
-        refresh_token: Option<String>,
-        expires_in: u64,
-    }
-
     const CONTEXT: &str = "exchanging the Google Drive authorization code";
 
     let params = [
@@ -681,27 +689,27 @@ async fn exchange_google_drive_code(
             .text()
             .await
             .unwrap_or_else(|_| "unreadable response body".to_string());
+        // Classification always sees the FULL body (`invalid_grant` could sit
+        // anywhere in it); only the human-readable cause is bounded (review
+        // finding m1: an unbounded upstream body used to be embedded verbatim).
         let class = classify_token_endpoint_status(status, &body);
         let cause = if class == AuthFailureClass::AuthRejection {
-            format!("the token endpoint returned HTTP status {status}: {body}")
+            format!(
+                "the token endpoint returned HTTP status {status}: {}",
+                bounded_error_body(&body)
+            )
         } else {
             format!("the token endpoint returned HTTP status {status}")
         };
         return Err(ClassifiedAuthError::new(class, CONTEXT, &cause));
     }
 
-    let token_response: TokenResponse = response.json().await.map_err(|e| {
+    response.json().await.map_err(|e| {
         ClassifiedAuthError::new(
             AuthFailureClass::Other,
             "parsing the Google Drive token response",
             &e.to_string(),
         )
-    })?;
-
-    Ok(GoogleDriveTokens {
-        access_token: token_response.access_token,
-        refresh_token: token_response.refresh_token,
-        expires_in: token_response.expires_in,
     })
 }
 
@@ -786,14 +794,15 @@ async fn run_google_drive_oauth(
 ///   that succeeded) nor a `Transient` (the frontend would offer "check your
 ///   connection and retry" for a retry that is guaranteed to fail).
 /// * message: keyword-free by construction (`OPERATION_FAILED`, a terminal bucket
-///   in `src/services/deepLinkService.ts`) and honest about the remediation — the
+///   in `src/services/cloudStorageErrors.ts`) and honest about the remediation — the
 ///   tokens are lost, so the user has to sign in again.
 ///
 /// `authentication` was deliberately *not* embedded: it would map the failure to
 /// `AUTHENTICATION_FAILED`, whose re-login wording the message already carries,
 /// while breaking the one-keyword-per-class invariant of
-/// [`AuthFailureClass`] for no behavioural gain (`deepLinkService` and
-/// `AddVaultForm.classifyRefreshFailure` treat every terminal bucket alike).
+/// [`AuthFailureClass`] for no behavioural gain (`deepLinkService` treats
+/// every terminal bucket alike; `AddVaultForm`'s string-matching catch-site
+/// ladder ignores the class entirely).
 fn token_persistence_failure(error: &StorageError) -> ClassifiedAuthError {
     ClassifiedAuthError::terminal(
         AuthFailureClass::Other,
@@ -902,60 +911,89 @@ pub async fn get_provider_auth_info(
     })
 }
 
-/// Extract the HTTP status embedded in a token-refresh error message.
-///
-/// `GoogleDriveProvider::refresh_access_token{,_for_config}` reports a non-2xx
-/// response as `"Failed to refresh access token (<status> <reason>): <body>"`, so
-/// the failure's status survives *inside* the message even though the
-/// [`StorageError`] variant is collapsed to `Authentication` for every
-/// non-`invalid_grant` case. Returns `None` when the message carries no status
-/// (e.g. Google's dedicated `invalid_grant` wording, or "No refresh token
-/// available").
-fn parse_refresh_error_status(message: &str) -> Option<u16> {
-    let rest = &message[message.find('(')? + 1..];
-    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
-    if digits.len() == 3 {
-        digits.parse().ok()
-    } else {
-        None
-    }
-}
-
 /// Whether an HTTP status is a transient (retryable) condition.
 fn is_transient_status(status: u16) -> bool {
     matches!(status, 408 | 429) || (500..600).contains(&status)
 }
 
-/// Drop the upstream error *body* from a provider refresh message.
+/// Bound an upstream response body before embedding it in an error cause.
 ///
-/// `GoogleDriveProvider::refresh_access_token{,_for_config}` formats a non-2xx
-/// response as `"Failed to refresh access token (<status> <reason>): <body>"`;
-/// only the `(<status> <reason>)` prefix is kept. The body is an arbitrary upstream
-/// payload (a proxy/gateway HTML page, for instance) which must not reach a message
-/// the frontend classifies by keyword (review finding MAJOR-1). Returns the input
-/// unchanged when it carries no `(...)` part.
-fn strip_refresh_error_body(message: &str) -> &str {
-    match message.find(')') {
-        Some(end) => &message[..=end],
-        None => message,
+/// Returns the body unchanged when it already fits in
+/// [`MAX_ERROR_BODY_CAUSE_CHARS`] characters; otherwise its first
+/// `MAX_ERROR_BODY_CAUSE_CHARS` characters plus a `…`. The truncation is done on
+/// `char`s (not bytes) so a multi-byte code point is never split.
+///
+/// This bounds the INTERMEDIATE cause string that is formatted into
+/// `ClassifiedAuthError` (and copied by error logging): defence in depth so a
+/// multi-MB proxy page is never copied or scanned wholesale on the error path.
+/// It is NOT the final IPC bound — the
+/// observable message is bounded separately by `sanitize_error_cause`
+/// (`MAX_ERROR_CAUSE_LEN`), which runs before redaction. The intermediate bound
+/// is pinned directly by the `bounded_error_body_*` unit tests (it is not
+/// observable through the classified message, because sanitisation runs first).
+fn bounded_error_body(body: &str) -> String {
+    if body.chars().count() <= MAX_ERROR_BODY_CAUSE_CHARS {
+        return body.to_string();
+    }
+    let head: String = body.chars().take(MAX_ERROR_BODY_CAUSE_CHARS).collect();
+    format!("{head}…")
+}
+
+/// Pins the INTERMEDIATE cause bound (see [`bounded_error_body`]'s doc: this
+/// bound is not observable through the classified message, because
+/// `sanitize_error_cause` truncates first — so it needs its own tests).
+#[cfg(test)]
+mod bounded_error_body_tests {
+    use super::{bounded_error_body, MAX_ERROR_BODY_CAUSE_CHARS};
+
+    #[test]
+    fn short_input_is_returned_unchanged() {
+        assert_eq!(bounded_error_body(""), "");
+        assert_eq!(bounded_error_body("small body"), "small body");
+    }
+
+    #[test]
+    fn input_exactly_at_the_bound_is_returned_unchanged() {
+        let body = "x".repeat(MAX_ERROR_BODY_CAUSE_CHARS);
+        assert_eq!(bounded_error_body(&body), body);
+    }
+
+    #[test]
+    fn longer_input_is_truncated_to_the_bound_plus_ellipsis() {
+        let body = "x".repeat(MAX_ERROR_BODY_CAUSE_CHARS + 500);
+        let bounded = bounded_error_body(&body);
+        assert_eq!(bounded.chars().count(), MAX_ERROR_BODY_CAUSE_CHARS + 1);
+        assert!(bounded.ends_with('…'));
+    }
+
+    #[test]
+    fn a_multi_byte_char_at_the_cut_point_is_never_split() {
+        // `é` is 2 bytes but 1 char: the cut lands right after it, and the
+        // char-based slice must keep it whole (no byte split, no U+FFFD).
+        let prefix = "e".repeat(MAX_ERROR_BODY_CAUSE_CHARS - 1);
+        let body = format!("{prefix}ééé tail");
+        let bounded = bounded_error_body(&body);
+        assert_eq!(bounded.chars().count(), MAX_ERROR_BODY_CAUSE_CHARS + 1);
+        assert!(bounded.ends_with('…'));
+        assert!(bounded.contains('é'));
+        assert!(!bounded.contains('\u{FFFD}'));
     }
 }
 
 /// Classify a token-refresh failure into the [`AuthFailureClass`] contract.
 ///
 /// The refresh reaches Google through `ensure_google_drive_token_valid` →
-/// `GoogleDriveProvider::refresh_access_token_for_config`, which already
-/// distinguishes the raw signals we need, but *not* with a dedicated variant:
+/// `GoogleDriveProvider::refresh_access_token_for_config`, which now reports the
+/// raw signals we need *with dedicated structure*:
 /// * `StorageError::Authentication("...invalid or has been revoked. Please
 ///   re-authenticate.")` is produced for HTTP 400 + `invalid_grant` → the refresh
 ///   token was revoked → [`AuthFailureClass::AuthRejection`];
-/// * the provider collapses **every other** non-2xx failure to
-///   `StorageError::Authentication("Failed to refresh access token (<status> ...)")`
-///   — including a 5xx after the retry budget is exhausted — so the variant alone
-///   cannot tell a rejection from a transient server error. The embedded status
-///   is parsed back out of the message by [`parse_refresh_error_status`]:
-///   408/429/5xx → `Transient` (with the upstream body dropped by
-///   [`strip_refresh_error_body`]), anything else → `AuthRejection`;
+/// * `StorageError::HttpStatus { status, status_line, body }` carries any other
+///   non-2xx response — including a 5xx after the retry budget is exhausted —
+///   with its status *and* body attached as fields, so no message round-trip is
+///   involved: 408/429/5xx → `Transient` (with the upstream `body` dropped so an
+///   adversarial payload cannot re-classify the message), anything else →
+///   `AuthRejection` (body kept);
 /// * `StorageError::Network(_)` (request error / unparseable 2xx body),
 ///   `StorageError::Io`/`Keychain`/`Serialization` (persisting the refreshed
 ///   tokens) → `Transient`;
@@ -974,20 +1012,47 @@ pub(crate) fn classify_refresh_failure(error: StorageError) -> CommandError {
 
     match &error {
         // Persisting the refreshed tokens failed: retryable IO/keychain problem.
+        // The wording must name the real cause (a *local* storage failure, not a
+        // network one) while keeping the `network` keyword the frontend routes
+        // on — `network or local storage error while …` still maps to
+        // `NETWORK_ERROR`/`transient` (review finding m4).
         StorageError::Io(_) | StorageError::Keychain(_) | StorageError::Serialization(_) => {
-            AuthFailureClass::Transient.into_command_error(CONTEXT, &error.to_string())
+            AuthFailureClass::Transient
+                .into_command_error_local_storage(CONTEXT, &error.to_string())
         }
         // Request-level failure (DNS/connect/timeout) or unparseable token body.
         StorageError::Network(_) => {
             AuthFailureClass::Transient.into_command_error(CONTEXT, &error.to_string())
         }
-        StorageError::Authentication(message) => match parse_refresh_error_status(message) {
-            Some(status) if is_transient_status(status) => AuthFailureClass::Transient
-                .into_command_error(CONTEXT, strip_refresh_error_body(message)),
-            // `invalid_grant`, an unknown-but-statusful rejection, or a local
-            // "No refresh token available": all terminal, all need a re-login.
-            _ => AuthFailureClass::AuthRejection.into_command_error(CONTEXT, message),
-        },
+        // A non-2xx token-endpoint response, carried structurally (issue #28, D3).
+        // The transient case renders the *same* cause as today's "(<status>
+        // <reason>)" prefix — body dropped so an upstream payload can't smuggle
+        // a keyword past `must_redact`; the rejection case keeps the body
+        // verbatim, exactly as before (a 400's `invalid_client` detail is
+        // genuinely useful and `must_redact` bounds it).
+        StorageError::HttpStatus {
+            status_line,
+            body,
+            status,
+        } => {
+            if is_transient_status(*status) {
+                AuthFailureClass::Transient.into_command_error(
+                    CONTEXT,
+                    &format!("Failed to refresh access token ({status_line})"),
+                )
+            } else {
+                AuthFailureClass::AuthRejection.into_command_error(
+                    CONTEXT,
+                    &format!("Failed to refresh access token ({status_line}): {body}"),
+                )
+            }
+        }
+        StorageError::Authentication(message) => {
+            // `invalid_grant`'s fixed wording, or a local "No refresh token
+            // available": both terminal, both need a re-login. (Non-`invalid_grant`
+            // non-2xx failures now travel as `StorageError::HttpStatus`, above.)
+            AuthFailureClass::AuthRejection.into_command_error(CONTEXT, message)
+        }
         // Misconfiguration / broken invariant: terminal without any keyword.
         _ => AuthFailureClass::Other.into_command_error(CONTEXT, &error.to_string()),
     }
@@ -1132,19 +1197,17 @@ mod auth_status_tests {
 ///   be able to re-classify a failure.
 #[cfg(test)]
 mod oauth_callback_tests {
+    use super::MAX_ERROR_BODY_CAUSE_CHARS;
     use super::{
         apply_failed_oauth_state_lifecycle, classify_refresh_failure, complete_google_drive_oauth,
-        oauth_state_store, parse_refresh_error_status, peek_oauth_state, strip_refresh_error_body,
-        token_persistence_failure, ClassifiedAuthError, OAuthCallbackRequest, OAuthPendingState,
-        OAUTH_STATE_EXPIRY,
+        oauth_state_store, peek_oauth_state, token_persistence_failure, ClassifiedAuthError,
+        OAuthCallbackRequest, OAuthPendingState, OAUTH_STATE_EXPIRY,
     };
     use crate::commands::errors::contract_fixture::{bucket_of, FrontendBucket};
-    use crate::commands::errors::{AuthFailureClass, CommandError};
-    use crate::storage::providers::google_drive::GoogleDriveConfig;
-    use crate::storage::{ProviderConfig, StorageConfig, StorageError, StorageManager};
-    use chrono::{Duration, Utc};
+    use crate::commands::errors::{AuthFailureClass, CommandError, MAX_ERROR_CAUSE_LEN};
+    use crate::storage::test_support;
+    use crate::storage::{ProviderConfig, StorageError, StorageManager};
     use mockito::Server;
-    use std::path::PathBuf;
     use std::sync::OnceLock;
     use std::time::Instant;
 
@@ -1160,48 +1223,8 @@ mod oauth_callback_tests {
             .await
     }
 
-    /// Point `StorageConfig::save`/`load` at a throwaway file so tests never touch
-    /// the user's real configuration. `set_storage_config_path` is a `OnceLock`,
-    /// so the first call wins for the whole test binary.
-    fn isolate_storage_config() {
-        static PATH: OnceLock<PathBuf> = OnceLock::new();
-        PATH.get_or_init(|| {
-            let dir = std::env::temp_dir().join(format!(
-                "monark-oauth-callback-tests-{}",
-                std::process::id()
-            ));
-            let _ = std::fs::create_dir_all(&dir);
-            let path = dir.join("storage_config.json");
-            crate::storage::set_storage_config_path(path.clone());
-            path
-        });
-    }
-
-    fn google_drive_config() -> GoogleDriveConfig {
-        GoogleDriveConfig {
-            client_id: "client_id".to_string(),
-            client_secret: "client_secret".to_string(),
-            redirect_uri: "http://localhost/callback".to_string(),
-            access_token: Some("expired_access".to_string()),
-            refresh_token: Some("refresh_token".to_string()),
-            token_expires_at: Some(Utc::now() - Duration::minutes(10)),
-        }
-    }
-
     async fn manager_with_google_drive() -> StorageManager {
-        isolate_storage_config();
-        let config = StorageConfig::new_local(std::env::temp_dir().to_string_lossy().to_string());
-        let manager = StorageManager::new(config).await.unwrap();
-        manager
-            .add_provider(
-                "google_drive".to_string(),
-                ProviderConfig::GoogleDrive {
-                    config: google_drive_config(),
-                },
-            )
-            .await
-            .unwrap();
-        manager
+        test_support::manager_with_google_drive().await
     }
 
     fn callback_request(state: &str) -> OAuthCallbackRequest {
@@ -1808,50 +1831,48 @@ mod oauth_callback_tests {
         );
     }
 
+    /// `StorageError::HttpStatus` carries the status structurally (issue #28, D3):
+    /// a transient status drops the upstream body, a rejection keeps it, and both
+    /// render the exact `Failed to refresh access token (…)` cause the frontend
+    /// contract pins — no message parsing involved.
     #[test]
-    fn parse_refresh_error_status_extracts_the_embedded_http_status() {
-        assert_eq!(
-            parse_refresh_error_status(
-                "Failed to refresh access token (500 Internal Server Error): boom"
-            ),
-            Some(500)
-        );
-        assert_eq!(
-            parse_refresh_error_status("Failed to refresh access token (429 Too Many Requests)"),
-            Some(429)
-        );
-        // Google's dedicated invalid_grant wording carries no status.
-        assert_eq!(
-            parse_refresh_error_status(
-                "Google Drive refresh token is invalid or has been revoked. Please re-authenticate."
-            ),
-            None
-        );
-        assert_eq!(
-            parse_refresh_error_status("No refresh token available"),
-            None
-        );
-        // Not a three-digit status.
-        assert_eq!(
-            parse_refresh_error_status("Failed to refresh access token (9999 weird)"),
-            None
-        );
-    }
+    fn http_status_failure_carries_its_status_structurally() {
+        use tauri_plugin_http::reqwest::StatusCode;
 
-    /// The refresh path must not embed the upstream body of a non-2xx response
-    /// either: only the `(<status> <reason>)` prefix survives (MAJOR-1).
-    #[test]
-    fn strip_refresh_error_body_keeps_only_the_status_and_reason() {
+        // Transient (5xx): body dropped, cause is exactly the "(<status> <reason>)" prefix.
+        let transient = observable_message(classify_refresh_failure(StorageError::http_status(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "connection reset, authentication required",
+        )));
         assert_eq!(
-            strip_refresh_error_body(
-                "Failed to refresh access token (503 Service Unavailable): <html>authentication proxy</html>"
-            ),
-            "Failed to refresh access token (503 Service Unavailable)"
+            bucket_of(&transient),
+            FrontendBucket::NetworkError,
+            "a 5xx must be TRANSIENT whatever its body says, got: {transient}"
         );
-        // No `(...)` part: the message is returned unchanged.
         assert_eq!(
-            strip_refresh_error_body("No refresh token available"),
-            "No refresh token available"
+            transient,
+            "network error while refreshing the Google Drive access token: \
+             Failed to refresh access token (503 Service Unavailable)",
+            "the transient cause must be byte-exactly the \"(<status> <reason>)\" prefix \
+             (the upstream body dropped)"
+        );
+
+        // Rejection (400): body kept verbatim, class stays terminal.
+        let rejection = observable_message(classify_refresh_failure(StorageError::http_status(
+            StatusCode::BAD_REQUEST,
+            "invalid_client: client not found",
+        )));
+        assert_eq!(
+            bucket_of(&rejection),
+            FrontendBucket::AuthenticationFailed,
+            "a 400 must be AUTH_REJECTION, got: {rejection}"
+        );
+        assert_eq!(
+            rejection,
+            "authentication failed while refreshing the Google Drive access token \
+             (re-authenticate): Failed to refresh access token (400 Bad Request): \
+             invalid_client: client not found",
+            "a rejection must keep the upstream body verbatim, byte for byte"
         );
     }
 
@@ -1882,13 +1903,12 @@ mod oauth_callback_tests {
             "{network}"
         );
 
-        // TRANSIENT: a 5xx the provider collapsed to StorageError::Authentication,
-        // with an adversarial body that talking about authentication/connection.
-        let server_error =
-            observable_message(classify_refresh_failure(StorageError::authentication(
-                "Failed to refresh access token (503 Service Unavailable): \
-                 connection reset, authentication required",
-            )));
+        // TRANSIENT: a 5xx carried structurally as `StorageError::HttpStatus`,
+        // with an adversarial body that talks about authentication/connection.
+        let server_error = observable_message(classify_refresh_failure(StorageError::http_status(
+            tauri_plugin_http::reqwest::StatusCode::SERVICE_UNAVAILABLE,
+            "connection reset, authentication required",
+        )));
         assert_eq!(
             bucket_of(&server_error),
             FrontendBucket::NetworkError,
@@ -1897,13 +1917,23 @@ mod oauth_callback_tests {
 
         // TRANSIENT: persisting the refreshed tokens failed (IO/keychain) — this one
         // really is retryable, unlike the token *exchange* whose code is single-use.
+        // The wording names the *local* cause (review finding m4) while keeping the
+        // `network` keyword the frontend routes on.
         let keychain = observable_message(classify_refresh_failure(StorageError::keychain(
             "Failed to set keychain secret",
         )));
         assert_eq!(
             bucket_of(&keychain),
             FrontendBucket::NetworkError,
-            "{keychain}"
+            "a local-storage failure must stay in the transient bucket, got: {keychain}"
+        );
+        assert!(
+            keychain.contains("network or local storage error"),
+            "a keychain failure must be named as a local-storage error, got: {keychain}"
+        );
+        assert!(
+            keychain.contains("Failed to set keychain secret"),
+            "the cause must survive verbatim, got: {keychain}"
         );
 
         // OTHER: misconfiguration, no keyword.
@@ -1911,15 +1941,80 @@ mod oauth_callback_tests {
             StorageError::provider_not_supported("nope"),
         ));
         assert_other_message(&other);
-        // OTHER: a rejection whose message carries an unparseable status stays
-        // terminal rather than being reported as retryable.
-        let unparseable_status = observable_message(classify_refresh_failure(
-            StorageError::authentication("Failed to refresh access token (9999 weird): boom"),
-        ));
+        // The conservative default: a non-transient status the classifier does
+        // not recognise (here 404) stays terminal rather than being reported as
+        // retryable — the `HttpStatus` arm defaults any non-transient status to
+        // `AuthRejection` (which `bucket_of` maps to the conservative terminal
+        // bucket).
+        let unrecognised_status =
+            observable_message(classify_refresh_failure(StorageError::http_status(
+                tauri_plugin_http::reqwest::StatusCode::NOT_FOUND,
+                "no such resource",
+            )));
         assert_eq!(
-            bucket_of(&unparseable_status),
+            bucket_of(&unrecognised_status),
             FrontendBucket::AuthenticationFailed,
-            "an unknown status defaults to the conservative terminal bucket, got: {unparseable_status}"
+            "an unknown status defaults to the conservative terminal bucket, got: {unrecognised_status}"
         );
+    }
+
+    /// m1: an unbounded upstream response body must not reach the error cause.
+    /// Classification still runs on the FULL body (the `invalid_grant` keyword
+    /// can sit anywhere in it), but the message keeps only a bounded slice.
+    #[tokio::test]
+    async fn huge_token_endpoint_body_is_classified_in_full_and_the_ipc_message_stays_bounded() {
+        let _guard = test_lock().await;
+        let mut server = Server::new_async().await;
+
+        // `invalid_grant` sits PAST the cause bound, so the class must come from
+        // the full body, not from the truncated slice.
+        let padding = "a".repeat(MAX_ERROR_BODY_CAUSE_CHARS + 500);
+        let body = format!("{padding}invalid_grant");
+        let mock = server
+            .mock("POST", "/token")
+            .with_status(400)
+            .with_body(body)
+            .create_async()
+            .await;
+
+        let manager = manager_with_google_drive().await;
+        let state = "huge-body-400-state";
+        insert_pending_state(state, "code-verifier");
+
+        let error = complete_google_drive_oauth(
+            &manager,
+            &callback_request(state),
+            &format!("{}/token", server.url()),
+        )
+        .await
+        .expect_err("a 400 must fail");
+
+        let message = observable_message(error);
+        assert_eq!(
+            bucket_of(&message),
+            FrontendBucket::AuthenticationFailed,
+            "the classification must see the full body (invalid_grant past the \
+             cause bound), got: {}",
+            message.chars().take(120).collect::<String>()
+        );
+        // The observable IPC message is bounded by `sanitize_error_cause`
+        // (MAX_ERROR_CAUSE_LEN chars + the trailing `…`), plus the fixed
+        // template prefix and at most one placeholder expansion. This does NOT
+        // pin `bounded_error_body` (sanitisation would bound the message even
+        // without it) — the intermediate cause bound is pinned by the
+        // `bounded_error_body_*` unit tests below.
+        let template_prefix = format!(
+            "authentication failed while exchanging the Google Drive \
+             authorization code (re-authenticate): "
+        );
+        assert!(
+            message.chars().count()
+                <= template_prefix.chars().count() + MAX_ERROR_CAUSE_LEN + 1,
+            "the observable message must stay within the sanitised bound ({} chars)",
+            message.chars().count()
+        );
+
+        drop_pending_state(state);
+        mock.assert_async().await;
     }
 }

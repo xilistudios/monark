@@ -284,6 +284,7 @@ export default {
 			successTitle: "Anmeldung erfolgreich",
 			successBody: "Schließe die Anmeldung in der Anwendung Monark ab, indem du die untenstehenden Zugangsdaten kopierst.",
 			openApp: "Monark öffnen",
+			openAppHint: "Wenn nichts passiert ist, nutze die Kopieroption unten.",
 			copyHeading: "Zugangsdaten kopieren",
 			copyBody: "Kopiere diese Zugangsdaten und füge sie in Monark ein, um die Synchronisierung einzurichten.",
 			copyButton: "Zugangsdaten als Base64 kopieren",

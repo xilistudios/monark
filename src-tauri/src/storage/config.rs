@@ -5,7 +5,6 @@ use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
 /// Store sensitive fields of a GoogleDriveConfig in the keychain and return a sanitized copy.
 ///
@@ -112,17 +111,103 @@ fn load_webdav_secrets(provider_name: &str, config: &mut WebDavConfig) {
     }
 }
 
-static STORAGE_CONFIG_PATH: OnceLock<PathBuf> = OnceLock::new();
+/// Fallback pointer to the config file, used when no task-local override is in
+/// effect (see [`STORAGE_CONFIG_PATH_OVERRIDE`]). A `Mutex<Option<PathBuf>>`
+/// (not a `OnceLock`) so the app can set it at startup and tests can reset it.
+static STORAGE_CONFIG_PATH: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+// Task-local override of the config file path.
+//
+// Tests (and only tests) run each case on its own tokio task. When a test
+// installs a task-local override, `save`/`load` resolve the path from *this*
+// cell first, so concurrently-running tests never fight over the
+// process-global [`STORAGE_CONFIG_PATH`] and cannot redirect each other's
+// reads/writes. Outside a tokio task (i.e. in production), the override is
+// always `None` and the process-global cell is used.
+tokio::task_local! {
+    static STORAGE_CONFIG_PATH_OVERRIDE: PathBuf;
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test-only *thread*-local override, used when the caller is not running
+    /// inside a tokio task (e.g. a plain `#[test]`) or has spawned a blocking
+    /// thread from inside a scoped override. `config_file_path()` consults
+    /// this after the task-local override, then falls back to the
+    /// process-global cell.
+    static THREAD_LOCAL_CONFIG_PATH: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
 
 /// The name used for the default Google Drive provider created from environment variables.
 pub const MONARK_DEFAULT_PROVIDER_NAME: &str = "Google Drive";
 
+/// Write `contents` to `path` atomically: serialise to a sibling temp file,
+/// then `std::fs::rename` it over `path`.
+///
+/// `std::fs::rename` replaces the destination on Unix and on Windows
+/// (`MOVEFILE_REPLACE_EXISTING`), so a reader racing with this write observes
+/// either the old file or the new one — never a truncated/partial JSON document.
+/// The temp file lives in the same directory as `path`, which guarantees both
+/// are on the same filesystem (a rename across filesystems would fail with
+/// `EXDEV`).
+///
+/// On failure the temp file is removed and the original file is left untouched;
+/// the `rename` error is propagated.
+fn write_config_atomically(path: &std::path::Path, contents: &str) -> StorageResult<()> {
+    let temp_path = path.with_extension(format!(
+        "json.tmp-{}-{}",
+        std::process::id(),
+        // A per-call unique suffix so two concurrent `save()`s in this process
+        // (or a leftover temp file from a crashed run) never collide.
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
+    ));
+
+    if let Err(err) = std::fs::write(&temp_path, contents) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(err.into());
+    }
+
+    if let Err(err) = std::fs::rename(&temp_path, path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(err.into());
+    }
+
+    Ok(())
+}
+
 pub fn set_storage_config_path(path: PathBuf) {
-    let _ = STORAGE_CONFIG_PATH.set(path);
+    let mut guard = STORAGE_CONFIG_PATH.lock().unwrap();
+    *guard = Some(path);
+}
+
+/// Run `fut` with `StorageConfig::save`/`load` pointed at `path` for the
+/// duration of the returned future. No global state is touched, so
+/// concurrently-running tests on other tokio tasks are unaffected; the
+/// override is scoped to the future (via tokio's task-local) and cleared
+/// automatically when it completes.
+#[cfg(test)]
+pub(crate) async fn with_storage_config_path<R>(
+    path: PathBuf,
+    fut: impl std::future::Future<Output = R>,
+) -> R {
+    // Set the thread-local on the *calling* thread too, so any synchronous
+    // work done by `fut` before its first await (and any code running on this
+    // thread between polls) also sees the override.
+    let previous = THREAD_LOCAL_CONFIG_PATH.with(|c| c.borrow_mut().replace(path.clone()));
+    let result = STORAGE_CONFIG_PATH_OVERRIDE.scope(path, fut).await;
+    THREAD_LOCAL_CONFIG_PATH.with(|c| {
+        *c.borrow_mut() = previous;
+    });
+    result
 }
 
 pub fn reset_storage_config_path() {
-    let _ = STORAGE_CONFIG_PATH.get();
+    let mut guard = STORAGE_CONFIG_PATH.lock().unwrap();
+    *guard = None;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,7 +281,20 @@ impl StorageConfig {
 
     /// Get the path to the config file
     fn config_file_path() -> PathBuf {
-        STORAGE_CONFIG_PATH.get().cloned().unwrap_or_else(|| {
+        // Prefer the task-local override so tests running on distinct tokio
+        // tasks never interfere with each other.
+        if let Ok(path) = STORAGE_CONFIG_PATH_OVERRIDE.try_with(|p| p.clone()) {
+            return path;
+        }
+        // Fall back to the thread-local override (set by `with_storage_config_path`
+        // on the calling thread, for callers outside a tokio task or on blocking
+        // threads spawned from a scoped override).
+        #[cfg(test)]
+        if let Some(path) = THREAD_LOCAL_CONFIG_PATH.with(|c| c.borrow().clone()) {
+            return path;
+        }
+        let g = STORAGE_CONFIG_PATH.lock().unwrap();
+        g.clone().unwrap_or_else(|| {
             dirs::data_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join("monark")
@@ -204,7 +302,16 @@ impl StorageConfig {
         })
     }
 
+    /// Test-only: expose the resolved config file path so tests can read back
+    /// the exact file that `save`/`load` will use (respecting task-local and
+    /// thread-local overrides).
+    #[cfg(test)]
+    pub(crate) fn config_file_path_for_test() -> PathBuf {
+        Self::config_file_path()
+    }
+
     /// Load configuration from disk, merging secrets from the OS keychain.
+    #[track_caller]
     pub fn load() -> StorageResult<Self> {
         let config_path = Self::config_file_path();
 
@@ -235,6 +342,14 @@ impl StorageConfig {
     /// embedded in the binary) is **never** written to disk.
     /// Sensitive fields (client_secret, tokens) for user-added Google Drive
     /// providers are stored in the OS keychain and stripped before writing.
+    ///
+    /// The write is **atomic**: the JSON is serialised to a sibling temp file
+    /// first and then `rename`d over the destination, so a concurrent reader
+    /// (another `StorageConfig::load`, a `migrate_secrets_from_disk`, the test
+    /// suite's shared config path) either sees the previous file or the new one
+    /// — never a truncated/partial file. `std::fs::rename` replaces the
+    /// destination on both Unix and Windows (`MOVEFILE_REPLACE_EXISTING`), so
+    /// the observable behaviour (same path, same contents) is unchanged.
     pub fn save(&self) -> StorageResult<()> {
         let config_path = Self::config_file_path();
 
@@ -280,7 +395,7 @@ impl StorageConfig {
 
         let config_str = serde_json::to_string_pretty(&to_save)?;
 
-        std::fs::write(&config_path, config_str)?;
+        write_config_atomically(&config_path, &config_str)?;
 
         Ok(())
     }
@@ -425,7 +540,7 @@ impl StorageConfig {
         };
 
         let sanitized_str = serde_json::to_string_pretty(&sanitized)?;
-        std::fs::write(&config_path, sanitized_str)?;
+        write_config_atomically(&config_path, &sanitized_str)?;
 
         Ok(true)
     }

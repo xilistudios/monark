@@ -54,6 +54,10 @@ quick-xml = { version = "0.36", features = ["serialize"] }
 
 [dev-dependencies]
 mockito = "1"
+# In-memory credential store used to keep tests away from the real OS keychain.
+# Resolves to the same 1.0.0 the `keyring` crate already depends on, so no extra
+# copy ends up in the lockfile.
+keyring-core = "1"
 
 # Keychain backends — platform-specific via keyring v4.
 # v1 feature = backward-compatible Entry API (same as v3)

@@ -290,6 +290,7 @@ export default {
 			successTitle: "Authentication successful",
 			successBody: "Finish signing in inside the Monark application by copying the credentials below.",
 			openApp: "Open Monark",
+			openAppHint: "If nothing happened, use the copy fallback below.",
 			copyHeading: "Copy credentials",
 			copyBody: "Copy these credentials and paste them into Monark to complete the sync setup.",
 			copyButton: "Copy credentials as Base64",
