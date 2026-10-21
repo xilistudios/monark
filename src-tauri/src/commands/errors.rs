@@ -797,26 +797,22 @@ mod auth_failure_class_tests {
     /// m3: every context string this crate interpolates into a message must be
     /// keyword-free, so the defense-in-depth redaction of the context is a no-op
     /// for the messages the frontend contract fixtures pin. If a new context with
-    /// a routing keyword is ever added, it must be added here too (it would be
-    /// silently redacted, changing the observable message).
+    /// a routing keyword is ever added, it must be added to the shared fixture
+    /// too (it would be silently redacted, changing the observable message).
+    ///
+    /// The context list is no longer hand-maintained: it is read from the shared
+    /// fixture (`fixtures/auth-failure-contract.json`), which is the single
+    /// source of truth for the 6 context strings (the fixture itself pins them
+    /// byte-for-byte against `commands/storage.rs` in
+    /// [`shared_fixture_pins_templates_contexts_and_classes`]).
     #[test]
     fn every_context_string_used_by_the_crate_is_keyword_free() {
-        let contexts = [
-            // `commands::storage`: `classify_refresh_failure`.
-            "refreshing the Google Drive access token",
-            // `commands::storage`: `exchange_google_drive_code`.
-            "exchanging the Google Drive authorization code",
-            // `commands::storage`: `exchange_google_drive_code` (2xx JSON parse).
-            "parsing the Google Drive token response",
-            // `commands::storage`: `oauth_state_terminal_error`.
-            "validating the OAuth state",
-            // `commands::storage`: `run_google_drive_oauth` (precondition).
-            "loading the Google Drive provider configuration",
-            // `commands::storage`: `token_persistence_failure`.
-            "saving the Google Drive tokens that Google already issued",
-        ];
-
-        for context in contexts {
+        for context in load_shared_fixture().contexts.values() {
+            assert!(
+                !context.trim().is_empty(),
+                "the fixture context {context:?} must not be empty (an empty string \
+                 would pass every keyword check below)"
+            );
             for class in [
                 AuthFailureClass::AuthRejection,
                 AuthFailureClass::Transient,
@@ -856,5 +852,459 @@ mod auth_failure_class_tests {
             FrontendBucket::NetworkError,
             "the frontend must keep routing on `network`: {rendered}"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // Shared fixture contract (`fixtures/auth-failure-contract.json`, issue #28
+    // D4/T11): the Rust `include_str!` consumer. The fixture is the single
+    // cross-language source of truth for the message templates, the context
+    // strings, and the curated `cases` the frontend classifies with
+    // `classifyCloudFailure` (`src/services/cloudStorageErrors.ts`).
+    // ------------------------------------------------------------------
+
+    /// Mirror of the fixture's `templates` object: the 4 `AuthFailureClass`
+    /// message templates, keyed by template name.
+    ///
+    /// The field names mirror the fixture's JSON keys exactly (hence the
+    /// `non_snake_case` allowance): `serde` maps each key by name, so any
+    /// renaming here would silently desync from the fixture.
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    #[allow(non_snake_case)]
+    struct FixtureTemplates {
+        AuthRejection: String,
+        Transient: String,
+        Other: String,
+        /// `into_command_error_local_storage`'s distinct 4th template (m4).
+        TransientLocalStorage: String,
+    }
+
+    /// Mirror of the fixture's `contexts` object: the 6 Google Drive context
+    /// strings, keyed by context name (see [`FixtureTemplates`] for why the
+    /// field names are left in the fixture's own casing).
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    #[allow(non_snake_case)]
+    struct FixtureContexts {
+        refresh: String,
+        codeExchange: String,
+        tokenParse: String,
+        oauthState: String,
+        loadConfig: String,
+        tokenPersistence: String,
+    }
+
+    impl FixtureContexts {
+        /// The context string for `key` (`refresh`, `codeExchange`, …), or
+        /// `None` when `key` is not one of the 6 known context names.
+        fn value_of(&self, key: &str) -> Option<&str> {
+            let context = match key {
+                "refresh" => &self.refresh,
+                "codeExchange" => &self.codeExchange,
+                "tokenParse" => &self.tokenParse,
+                "oauthState" => &self.oauthState,
+                "loadConfig" => &self.loadConfig,
+                "tokenPersistence" => &self.tokenPersistence,
+                _ => return None,
+            };
+            Some(context.as_str())
+        }
+
+        /// Every context string, in a stable order.
+        fn values(&self) -> [&str; 6] {
+            [
+                &self.refresh,
+                &self.codeExchange,
+                &self.tokenParse,
+                &self.oauthState,
+                &self.loadConfig,
+                &self.tokenPersistence,
+            ]
+        }
+    }
+
+    /// Mirror of the fixture's `frontend` object: the classification the
+    /// frontend must derive from the pinned `message` (see
+    /// [`FixtureTemplates`] for why the field names are left in the fixture's
+    /// own casing).
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    #[allow(non_snake_case)]
+    struct FixtureFrontend {
+        /// A `CloudStorageErrorType` name, validated against the 9-variant
+        /// mapping in [`frontend_bucket_of_error_type`].
+        errorType: String,
+        /// `"transient"` or `"terminal"`: the fixture's retry class. Asserted
+        /// against the frontend's derivation rule (exactly `NETWORK_ERROR` is
+        /// retryable) in [`shared_fixture_pins_templates_contexts_and_classes`].
+        failureClass: String,
+    }
+
+    /// Mirror of one fixture `case`: a rendered message plus the class that
+    /// rendered it and the classification the frontend must derive from it
+    /// (see [`FixtureTemplates`] for why the field names are left in the
+    /// fixture's own casing).
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    #[allow(non_snake_case)]
+    struct FixtureCase {
+        id: String,
+        /// Not asserted here (it is prose for the fixture's human reader), but
+        /// kept as a typed field so the schema stays in lockstep with the
+        /// fixture.
+        #[allow(dead_code)]
+        description: String,
+        /// An `AuthFailureClass` variant name (`AuthRejection`/`Transient`/
+        /// `Other`), validated against the enum in [`AuthFailureClass`].
+        rustClass: String,
+        /// Key into [`FixtureTemplates`].
+        template: String,
+        /// Key into [`FixtureContexts`].
+        context: String,
+        /// The sanitized/redacted cause interpolated into the template.
+        cause: String,
+        /// The exact rendered bytes (generated by rendering the real Rust
+        /// templates, never hand-typed).
+        message: String,
+        frontend: FixtureFrontend,
+    }
+
+    /// Mirror of the whole fixture document (see [`FixtureTemplates`] for why
+    /// the field names are left in the fixture's own casing).
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Fixture {
+        version: u32,
+        /// Not asserted here: the fixture's prose description of the contract.
+        #[allow(dead_code)]
+        description: String,
+        templates: FixtureTemplates,
+        contexts: FixtureContexts,
+        cases: Vec<FixtureCase>,
+    }
+
+    /// `source` with every `#[cfg(test)]`-gated item removed, so a substring
+    /// hit proves the text is produced by PRODUCTION code and not merely
+    /// spelled inside a test.
+    ///
+    /// Brace-counting scan (rustfmt-stable code assumed): a `#[cfg(test)]`
+    /// item is either a single line ending in `;` or a balanced block; a
+    /// mis-parse drops text and makes the substring pin go RED rather than
+    /// silently including test code.
+    fn without_cfg_test_items(source: &str) -> String {
+        let mut production = String::new();
+        let mut skipping = false;
+        let mut block_started = false;
+        let mut depth: i32 = 0;
+        for line in source.lines() {
+            if !skipping {
+                if line.trim_start().starts_with("#[cfg(test)]") {
+                    skipping = true;
+                    block_started = false;
+                    depth = 0;
+                } else {
+                    production.push_str(line);
+                    production.push('\n');
+                }
+                continue;
+            }
+            depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
+            if line.contains('{') {
+                block_started = true;
+            }
+            if !block_started {
+                // A single-line item such as `#[cfg(test)] use foo;`.
+                if line.trim_end().ends_with(';') {
+                    skipping = false;
+                }
+            } else if depth <= 0 {
+                skipping = false;
+            }
+        }
+        production
+    }
+
+    /// Load the shared fixture from the repo-root `fixtures/` directory.
+    ///
+    /// The `include_str!` path is relative to *this* file
+    /// (`src-tauri/src/commands/errors.rs`): three levels up reaches the repo
+    /// root, then down into `fixtures/`. `serde`'s `deny_unknown_fields` (on
+    /// every mirror struct) makes any schema drift a hard load error rather
+    /// than a silently-ignored extra key, and the `.expect` below names the
+    /// fixture so a parse failure is self-describing.
+    fn load_shared_fixture() -> Fixture {
+        serde_json::from_str::<Fixture>(include_str!(
+            "../../../fixtures/auth-failure-contract.json"
+        ))
+        .expect("the shared fixture must parse")
+    }
+
+    /// Render `case`'s message with the *class renderer* — the exact code path
+    /// the Google Drive commands use in production.
+    ///
+    /// For the `AuthRejection`/`Transient`/`Other` templates this is
+    /// [`AuthFailureClass::message`]; for the `TransientLocalStorage` template
+    /// it is [`AuthFailureClass::into_command_error_local_storage`] (whose
+    /// `CommandError::Io` payload carries the rendered message).
+    fn render_with_class_renderer(fixture: &Fixture, case: &FixtureCase) -> String {
+        let class = match case.rustClass.as_str() {
+            "AuthRejection" => AuthFailureClass::AuthRejection,
+            "Transient" => AuthFailureClass::Transient,
+            "Other" => AuthFailureClass::Other,
+            other => panic!(
+                "fixture case {}: unknown rustClass {other:?} (expected one of \
+                 AuthRejection/Transient/Other)",
+                case.id
+            ),
+        };
+        let context = fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
+            panic!(
+                "fixture case {}: unknown context {:?} (expected one of the 6 keys \
+                 of `contexts`)",
+                case.id, case.context
+            )
+        });
+
+        if case.template == "TransientLocalStorage" {
+            observable_message(&class.into_command_error_local_storage(context, &case.cause))
+        } else {
+            assert_eq!(
+                case.template,
+                case.rustClass,
+                "fixture case {}: the {template:?} template must be rendered by its \
+                 same-named class",
+                case.id,
+                template = case.template
+            );
+            class.message(context, &case.cause)
+        }
+    }
+
+    /// Render `case`'s message from the fixture's `templates`/`contexts`/`cause`
+    /// directly — the *pure* template interpolation, with NO redaction,
+    /// truncation, or sanitisation (the Rust-side twin of the TS loader's
+    /// `renderContractMessage`). Used to assert that every pinned `message`
+    /// really is the template render, except for the one documented case whose
+    /// cause carries a routing keyword the class renderer redacts.
+    fn render_pure_template(fixture: &Fixture, case: &FixtureCase) -> String {
+        let template = match case.template.as_str() {
+            "AuthRejection" => &fixture.templates.AuthRejection,
+            "Transient" => &fixture.templates.Transient,
+            "Other" => &fixture.templates.Other,
+            "TransientLocalStorage" => &fixture.templates.TransientLocalStorage,
+            other => panic!(
+                "fixture case {}: unknown template {other:?} (expected one of the 4 \
+                 keys of `templates`)",
+                case.id
+            ),
+        };
+        let context = fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
+            panic!(
+                "fixture case {}: unknown context {:?} (expected one of the 6 keys of \
+                 `contexts`)",
+                case.id, case.context
+            )
+        });
+
+        template
+            .replace("{context}", context)
+            .replace("{cause}", &case.cause)
+    }
+
+    /// Map a fixture `frontend.errorType` (`CloudStorageErrorType` name) to the
+    /// matching [`FrontendBucket`] variant, so the fixture's classification can
+    /// be validated against the keyword replica's output.
+    fn frontend_bucket_of_error_type(error_type: &str) -> FrontendBucket {
+        match error_type {
+            "AUTHENTICATION_FAILED" => FrontendBucket::AuthenticationFailed,
+            "TOKEN_EXPIRED" => FrontendBucket::TokenExpired,
+            "NETWORK_ERROR" => FrontendBucket::NetworkError,
+            "QUOTA_EXCEEDED" => FrontendBucket::QuotaExceeded,
+            "VAULT_NOT_FOUND" => FrontendBucket::VaultNotFound,
+            "PERMISSION_DENIED" => FrontendBucket::PermissionDenied,
+            "PROVIDER_NOT_CONFIGURED" => FrontendBucket::ProviderNotConfigured,
+            "INVALID_CREDENTIALS" => FrontendBucket::InvalidCredentials,
+            "OPERATION_FAILED" => FrontendBucket::OperationFailed,
+            other => panic!(
+                "unknown frontend.errorType {other:?} (expected one of the 9 \
+                 CloudStorageErrorType names)"
+            ),
+        }
+    }
+
+    /// The fixture is the single source of truth for the contract; this test is
+    /// its Rust `include_str!` consumer (issue #28, D4/T12). It pins, for every
+    /// one of the 8 curated `cases`:
+    ///
+    /// 1. the exact bytes the class renderer produces (the production code
+    ///    path), byte for byte;
+    /// 2. that the pinned `message` IS the pure template render — except for the
+    ///    one documented case whose cause carries a routing keyword
+    ///    (`oauth-state-other`: `expired` is redacted by `Other`);
+    /// 3. that the frontend's keyword ladder (`bucket_of`) derives exactly the
+    ///    `frontend.errorType` the fixture pins, and that the pinned
+    ///    `failureClass` matches the frontend's derivation from it.
+    ///
+    /// It also verifies that every `context` string (all 6, whether or not a
+    /// case references it) really is produced by the **production** code of
+    /// `commands/storage.rs` (byte-identical substring pin over the source
+    /// before its `#[cfg(test)]` module, so a context that disappears from the
+    /// producer — or survives only in a test literal — goes red here) and that
+    /// the fixture's own `version`/`cases` count are what the frontend loader
+    /// expects.
+    #[test]
+    fn shared_fixture_pins_templates_contexts_and_classes() {
+        let fixture = load_shared_fixture();
+
+        assert_eq!(
+            fixture.version, 1,
+            "the shared fixture's schema version must stay at 1"
+        );
+        assert_eq!(
+            fixture.cases.len(),
+            8,
+            "the shared fixture must pin exactly 8 curated cases"
+        );
+
+        let storage_source = include_str!("storage.rs");
+        // The producer source WITHOUT its `#[cfg(test)]`-gated items: a
+        // context must be produced by production code, not merely spelled in a
+        // test literal (the file's test modules sit between production items,
+        // so a plain "cut at the first #[cfg(test)]" would drop real producers).
+        let production_source = without_cfg_test_items(storage_source);
+
+        // (6) Every context string (all 6 — `tokenParse` has no case yet) must
+        // be produced verbatim by `commands/storage.rs`'s production code, so a
+        // context that disappears (or is reworded) there goes red here. An
+        // empty context would satisfy any substring check, hence the first
+        // assert.
+        for context in fixture.contexts.values() {
+            assert!(
+                !context.trim().is_empty(),
+                "the fixture context {context:?} must not be empty"
+            );
+            assert!(
+                production_source.contains(context),
+                "the context {context:?} must appear verbatim in the production code \
+                 of `commands/storage.rs` — it is no longer produced by the crate"
+            );
+        }
+
+        // Exactly the one documented case may take the redaction exception
+        // below (`oauth-state-other`: its cause carries `expired`, which
+        // `Other` rewrites to `[redacted]`). A second case must not silently
+        // escape the strong pure-render pin.
+        let redacted_ids: Vec<&str> = fixture
+            .cases
+            .iter()
+            .filter(|case| case.message.contains(REDACTION_PLACEHOLDER))
+            .map(|case| case.id.as_str())
+            .collect();
+        assert_eq!(
+            redacted_ids,
+            ["oauth-state-other"],
+            "exactly the documented case may pin the redacted (class-renderer) form"
+        );
+
+        for case in &fixture.cases {
+            let context = fixture.contexts.value_of(&case.context).unwrap_or_else(|| {
+                panic!(
+                    "fixture case {}: unknown context {:?} (expected one of the 6 keys \
+                     of `contexts`)",
+                    case.id, case.context
+                )
+            });
+
+            // (1) The class renderer (the production code path) must produce
+            // exactly the pinned `message`, byte for byte.
+            let rendered = render_with_class_renderer(&fixture, case);
+            assert_eq!(
+                rendered, case.message,
+                "fixture case {}: the class renderer's output for context {context:?} \
+                 must match the pinned `message` byte for byte",
+                case.id
+            );
+
+            // (2) The pinned `message` must also BE the pure template render —
+            // except when the class renderer redacted a routing keyword out of
+            // the cause (currently `oauth-state-other`, whose cause contains
+            // `expired`, which `Other` rewrites to `[redacted]`).
+            let pure = render_pure_template(&fixture, case);
+            if case.message.contains(REDACTION_PLACEHOLDER) {
+                assert_ne!(
+                    pure, case.message,
+                    "fixture case {}: the pure render must differ from the pinned \
+                     `message` exactly when a routing keyword was redacted",
+                    case.id
+                );
+                // The class-renderer pin (1) above already covers this case's
+                // redacted `message`; this branch only pins the *difference*.
+            } else {
+                assert_eq!(
+                    pure, case.message,
+                    "fixture case {}: the pinned `message` must be the pure template \
+                     render (no redaction was expected)",
+                    case.id
+                );
+            }
+
+            // (3) The frontend keyword ladder must derive exactly the pinned
+            // `frontend.errorType` from the pinned `message`.
+            let expected_bucket = frontend_bucket_of_error_type(&case.frontend.errorType);
+            assert_eq!(
+                bucket_of(&case.message),
+                expected_bucket,
+                "fixture case {}: the frontend bucket derived from the pinned \
+                 `message` must match `frontend.errorType` ({})",
+                case.id,
+                case.frontend.errorType
+            );
+
+            // (4) `failureClass` is fully derivable from `errorType`: the
+            // frontend treats exactly `NETWORK_ERROR` as retryable (see
+            // `classifyCloudFailure` in `src/services/cloudStorageErrors.ts`).
+            let expected_failure_class = if expected_bucket == FrontendBucket::NetworkError {
+                "transient"
+            } else {
+                "terminal"
+            };
+            assert_eq!(
+                case.frontend.failureClass, expected_failure_class,
+                "fixture case {}: the pinned `failureClass` must match the frontend's \
+                 derivation from `errorType` ({})",
+                case.id, case.frontend.errorType
+            );
+        }
+    }
+
+    /// The 9-name `frontend.errorType` → [`FrontendBucket`] mapping this test
+    /// module uses to interpret the fixture is itself pinned in full: only 3 of
+    /// the 9 names occur in today's 8 cases, so a typo in one of the other arms
+    /// would otherwise stay invisible until a future case exercises it.
+    #[test]
+    fn frontend_error_type_mapping_is_pinned_in_full() {
+        for (name, expected) in [
+            (
+                "AUTHENTICATION_FAILED",
+                FrontendBucket::AuthenticationFailed,
+            ),
+            ("TOKEN_EXPIRED", FrontendBucket::TokenExpired),
+            ("NETWORK_ERROR", FrontendBucket::NetworkError),
+            ("QUOTA_EXCEEDED", FrontendBucket::QuotaExceeded),
+            ("VAULT_NOT_FOUND", FrontendBucket::VaultNotFound),
+            ("PERMISSION_DENIED", FrontendBucket::PermissionDenied),
+            (
+                "PROVIDER_NOT_CONFIGURED",
+                FrontendBucket::ProviderNotConfigured,
+            ),
+            ("INVALID_CREDENTIALS", FrontendBucket::InvalidCredentials),
+            ("OPERATION_FAILED", FrontendBucket::OperationFailed),
+        ] {
+            assert_eq!(
+                frontend_bucket_of_error_type(name),
+                expected,
+                "the {name} name must map to {expected:?}"
+            );
+        }
     }
 }
