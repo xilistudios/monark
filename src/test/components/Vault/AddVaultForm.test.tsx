@@ -5,7 +5,8 @@ import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { I18nextProvider } from 'react-i18next'
 import i18n from '../../../i18n'
-import { AddVaultForm, classifyRefreshFailure, isAccessTokenExpired } from '../../../components/Vault/Forms/AddVaultForm'
+import { AddVaultForm } from '../../../components/Vault/Forms/AddVaultForm'
+import { classifyCloudFailure } from '../../../services/cloudStorageErrors'
 import { CloudStorageCommands } from '../../../services/cloudStorage'
 import vaultReducer from '../../../redux/actions/vault'
 import { CloudStorageErrorType, StorageProviderType } from '../../../interfaces/cloud-storage.interface'
@@ -35,6 +36,25 @@ vi.mock('@tauri-apps/api/path', () => ({
 // backend message contract instead of a self-fulfilling mock.
 
 const HOUR_MS = 60 * 60 * 1000
+
+/**
+ * Stubs the REAL `CloudStorageCommands.getProviderAuthInfo` wrapper to reject
+ * with a raw `Error(message)`, like the backend would. Used by the B14 row to
+ * pin the mapping of a failure of the auth CHECK itself (previously this
+ * surfaced as the form's `authCheckFailed` message).
+ *
+ * NOTE the rejection is stubbed at the WRAPPER level for directness. The
+ * mocked `invoke` does reach the wrapper in this file (the refresh rows stub
+ * `getProviderAuthInfo` at the wrapper level and let the mocked `invoke`
+ * reject through `handleError`), so an `invoke`-level rejection would work
+ * too; a raw `Error(message)` is the same contract object `handleError`
+ * produces, so the classification the form observes is identical.
+ */
+const mockAuthInfoFailure = (message: string) => {
+  vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockRejectedValueOnce(
+    new Error(message)
+  )
+}
 
 /**
  * Backend message contract (cross-language fixtures).
@@ -501,8 +521,13 @@ describe('AddVaultForm with Cloud Storage', () => {
         'google-drive'
       )
       expect(screen.queryByText(notAuthenticatedMessage)).not.toBeInTheDocument()
-      // The raw, non refresh-aware check is no longer used
-      expect(CloudStorageCommands.checkProviderAuthStatus).not.toHaveBeenCalled()
+      // The raw, non refresh-aware check is no longer used (arity-free: a
+      // 1-arg `invoke(...)` was invisible to the old shape-based assertion)
+      expect(
+        vi.mocked(invoke).mock.calls.filter(
+          ([cmd]) => cmd === 'check_provider_auth_status'
+        )
+      ).toHaveLength(0)
     })
 
     it('should block when the refresh is rejected with an auth error (backend AuthRejection)', async () => {
@@ -604,6 +629,31 @@ describe('AddVaultForm with Cloud Storage', () => {
       expect(screen.queryByText(notAuthenticatedMessage)).not.toBeInTheDocument()
     })
 
+    it('shows the transient message when the auth CHECK itself fails with a network error (B14: was authCheckFailed)', async () => {
+      // A network-level rejection of the info call classifies as transient
+      // (the same verdict the wrapper's ladder would derive from the
+      // message); NO_RETRY_POLICY means the verdict is not retried. The
+      // rejection is stubbed at the wrapper level (see `mockAuthInfoFailure`).
+      mockAuthInfoFailure('network request failed')
+
+      renderComponent()
+      await fillCloudVaultForm()
+
+      fireEvent.click(screen.getByText('Create Vault'))
+
+      await waitFor(() => {
+        expect(screen.getByText(transientMessage)).toBeInTheDocument()
+      })
+      // The transient verdict must not masquerade as a logout …
+      expect(screen.queryByText(notAuthenticatedMessage)).not.toBeInTheDocument()
+      // … and the old behaviour (the authCheckFailed copy) must be gone
+      expect(
+        screen.queryByText(/Failed to verify authentication status/)
+      ).not.toBeInTheDocument()
+      expect(CloudStorageCommands.refreshProviderAuth).not.toHaveBeenCalled()
+      expect(mockVaultManagerInstance.createVault).not.toHaveBeenCalled()
+    })
+
     it('should show the retryable message when the refresh is rate limited (429) or a 5xx (backend Transient)', async () => {
       vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue(
         expiredAuthInfo()
@@ -645,9 +695,9 @@ describe('AddVaultForm with Cloud Storage', () => {
       mockVaultManagerInstance.createVault.mockResolvedValue('vault-id-123')
       // WebDAV style provider: Basic auth, no OAuth access token, no expiry.
       // The provider level rule (skip the token flow) mirrors
-      // VaultManager.getProviderAuthState in src/services/vault.ts, while
-      // isAccessTokenExpired keeps the backend semantics for tokens (see the
-      // 'Access token expiry semantics' suite).
+      // `getProviderAuthState` in src/services/providerAuth.ts, while
+      // `isAccessTokenExpired` keeps the backend semantics for tokens (see
+      // cloudStorageErrors.test.ts).
       vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
         authenticated: true,
         token_expires_at: null,
@@ -695,6 +745,86 @@ describe('AddVaultForm with Cloud Storage', () => {
         expect(mockVaultManagerInstance.createVault).toHaveBeenCalled()
       })
       expect(CloudStorageCommands.refreshProviderAuth).not.toHaveBeenCalled()
+    })
+
+    // B14: a terminal failure of the auth CHECK itself (getProviderAuthInfo
+    // rejecting) resolves to `unauthenticated` through getProviderAuthState;
+    // previously it propagated to the form's `authCheckFailed` catch. The
+    // catch is retained as a defensive net for programming errors
+    // (getProviderAuthState never rejects). MINOR-5 (inherited): an
+    // inconsistent backend state `authenticated: false` + a FRESH expiry
+    // resolves to `unauthenticated` WITHOUT attempting a refresh (module
+    // rung 3) — inherited from providerAuth.getProviderAuthState.
+    it('blocks when the auth CHECK itself fails terminally (B14: was authCheckFailed)', async () => {
+      // The conservative terminal contract message ("Cloud storage operation
+      // failed") reaches the ladder's storage rung (QUOTA_EXCEEDED) — still
+      // terminal — and the form resolves to `unauthenticated`.
+      mockAuthInfoFailure('Cloud storage operation failed')
+
+      renderComponent()
+      await fillCloudVaultForm()
+
+      fireEvent.click(screen.getByText('Create Vault'))
+
+      await waitFor(() => {
+        expect(screen.getByText(notAuthenticatedMessage)).toBeInTheDocument()
+      })
+      // The old behaviour (the authCheckFailed copy) must be gone
+      expect(
+        screen.queryByText(/Failed to verify authentication status/)
+      ).not.toBeInTheDocument()
+      expect(CloudStorageCommands.refreshProviderAuth).not.toHaveBeenCalled()
+      expect(mockVaultManagerInstance.createVault).not.toHaveBeenCalled()
+    })
+
+    it('blocks when the access token is fresh but the auth check reports the provider as unauthenticated (MINOR-5: no refresh attempted)', async () => {
+      // Inconsistent backend state: NOT authenticated + a FRESH expiry.
+      // Module rung 3 resolves it to `unauthenticated` WITHOUT attempting a
+      // refresh — the form must block and must not call refreshProviderAuth.
+      vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
+        authenticated: false,
+        token_expires_at: new Date(Date.now() + HOUR_MS).toISOString(),
+      })
+
+      renderComponent()
+      await fillCloudVaultForm()
+
+      fireEvent.click(screen.getByText('Create Vault'))
+
+      await waitFor(() => {
+        expect(screen.getByText(notAuthenticatedMessage)).toBeInTheDocument()
+      })
+      expect(screen.queryByText(transientMessage)).not.toBeInTheDocument()
+      expect(CloudStorageCommands.refreshProviderAuth).not.toHaveBeenCalled()
+      expect(mockVaultManagerInstance.createVault).not.toHaveBeenCalled()
+    })
+
+    // MINOR-4: makes `!state.expired` in ensureProviderAuthenticated's mapping
+    // falsifiable — `if (state.authenticated)` alone would survive the whole
+    // suite.
+    it('blocks when the refresh reports authenticated but the new token is already expired', async () => {
+      // The backend claims the refresh succeeded, but hands back a token that
+      // is ALREADY past its expiry (1 h past, well beyond the 5-minute
+      // buffer): the mapping
+      // must not read `authenticated: true` alone and let the vault be created.
+      vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue(
+        expiredAuthInfo()
+      )
+      vi.mocked(invoke).mockResolvedValueOnce({
+        authenticated: true,
+        token_expires_at: new Date(Date.now() - HOUR_MS).toISOString(),
+      })
+
+      renderComponent()
+      await fillCloudVaultForm()
+
+      fireEvent.click(screen.getByText('Create Vault'))
+
+      await waitFor(() => {
+        expect(screen.getByText(notAuthenticatedMessage)).toBeInTheDocument()
+      })
+      expect(screen.queryByText(transientMessage)).not.toBeInTheDocument()
+      expect(mockVaultManagerInstance.createVault).not.toHaveBeenCalled()
     })
   })
 
@@ -760,45 +890,6 @@ describe('AddVaultForm with Cloud Storage', () => {
   })
 })
 /**
- * m2: the expiry helper must follow the backend contract
- * (`GoogleDriveConfig::is_token_expired` in
- * src-tauri/src/storage/manager/provider_management.rs) and the module-private
- * `isTokenExpired` in src/services/vault.ts:52 — a missing expiry means "not
- * usable" and the 5 minute refresh-ahead buffer applies.
- */
-describe('Access token expiry semantics', () => {
-  const MINUTE_MS = 60 * 1000
-
-  it('treats a missing expiry as expired (backend contract)', () => {
-    expect(isAccessTokenExpired(null)).toBe(true)
-    expect(isAccessTokenExpired(undefined)).toBe(true)
-    expect(isAccessTokenExpired('')).toBe(true)
-  })
-
-  it('treats an unparseable expiry as expired', () => {
-    expect(isAccessTokenExpired('not-a-date')).toBe(true)
-  })
-
-  it('treats a token expiring within the 5 minute buffer as expired', () => {
-    expect(
-      isAccessTokenExpired(new Date(Date.now() + 4 * MINUTE_MS).toISOString())
-    ).toBe(true)
-  })
-
-  it('treats a token expiring outside the 5 minute buffer as valid', () => {
-    expect(
-      isAccessTokenExpired(new Date(Date.now() + 6 * MINUTE_MS).toISOString())
-    ).toBe(false)
-  })
-
-  it('treats an already expired token as expired', () => {
-    expect(
-      isAccessTokenExpired(new Date(Date.now() - MINUTE_MS).toISOString())
-    ).toBe(true)
-  })
-})
-
-/**
  * G2: the refresh verdict is driven by the `CloudStorageError.type` produced by
  * `CloudStorageCommands.handleError` from the backend message contract
  * (`AuthFailureClass::message`). Every fixture is therefore pushed through the
@@ -811,8 +902,8 @@ describe('Refresh failure classification', () => {
 
     // The wrapper must derive the type from the backend message …
     expect(wrapped.type).toBe(CloudStorageErrorType.NETWORK_ERROR)
-    // … and the classifier must honor it (never "auth").
-    expect(classifyRefreshFailure(wrapped)).toBe('transient')
+    // … and the classifier must honor it (never "terminal").
+    expect(classifyCloudFailure(wrapped)).toBe('transient')
   })
 
   it('classifies the backend 5xx/429 Transient message as transient', async () => {
@@ -821,7 +912,7 @@ describe('Refresh failure classification', () => {
     )
 
     expect(wrapped.type).toBe(CloudStorageErrorType.NETWORK_ERROR)
-    expect(classifyRefreshFailure(wrapped)).toBe('transient')
+    expect(classifyCloudFailure(wrapped)).toBe('transient')
   })
 
   it('classifies the backend local-storage Transient message as transient (NETWORK_ERROR)', async () => {
@@ -831,21 +922,21 @@ describe('Refresh failure classification', () => {
     const wrapped = await wrappedRefreshError(LOCAL_STORAGE_MESSAGE)
 
     expect(wrapped.type).toBe(CloudStorageErrorType.NETWORK_ERROR)
-    expect(classifyRefreshFailure(wrapped)).toBe('transient')
+    expect(classifyCloudFailure(wrapped)).toBe('transient')
   })
 
-  it('classifies the backend AuthRejection message as auth (AUTHENTICATION_FAILED)', async () => {
+  it('classifies the backend AuthRejection message as terminal (AUTHENTICATION_FAILED)', async () => {
     const wrapped = await wrappedRefreshError(AUTH_REJECTION_MESSAGE)
 
     expect(wrapped.type).toBe(CloudStorageErrorType.AUTHENTICATION_FAILED)
-    expect(classifyRefreshFailure(wrapped)).toBe('auth')
+    expect(classifyCloudFailure(wrapped)).toBe('terminal')
   })
 
-  it('classifies the backend Other message conservatively as auth (OPERATION_FAILED)', async () => {
+  it('classifies the backend Other message conservatively as terminal (OPERATION_FAILED)', async () => {
     const wrapped = await wrappedRefreshError(OTHER_MESSAGE)
 
     expect(wrapped.type).toBe(CloudStorageErrorType.OPERATION_FAILED)
-    expect(classifyRefreshFailure(wrapped)).toBe('auth')
+    expect(classifyCloudFailure(wrapped)).toBe('terminal')
   })
 
   /**
@@ -856,33 +947,33 @@ describe('Refresh failure classification', () => {
    */
   describe('secondary signal for unwrapped errors', () => {
     it('classifies network level failures as transient', () => {
-      expect(classifyRefreshFailure(new TypeError('fetch failed'))).toBe(
+      expect(classifyCloudFailure(new TypeError('fetch failed'))).toBe(
         'transient'
       )
       expect(
-        classifyRefreshFailure(
+        classifyCloudFailure(
           new Error('timeout while contacting the provider')
         )
       ).toBe('transient')
       expect(
-        classifyRefreshFailure({ status: 503, message: 'Service Unavailable' })
+        classifyCloudFailure({ status: 503, message: 'Service Unavailable' })
       ).toBe('transient')
     })
 
-    it('classifies rejected credentials as auth failures', () => {
-      expect(classifyRefreshFailure(new Error('invalid_grant'))).toBe('auth')
+    it('classifies rejected credentials as terminal failures', () => {
+      expect(classifyCloudFailure(new Error('invalid_grant'))).toBe('terminal')
       expect(
-        classifyRefreshFailure({ status: 401, message: 'Unauthorized' })
-      ).toBe('auth')
+        classifyCloudFailure({ status: 401, message: 'Unauthorized' })
+      ).toBe('terminal')
     })
 
-    it('defaults to auth when the error cannot be classified (conservative)', () => {
+    it('defaults to terminal when the error cannot be classified (conservative)', () => {
       // An unwrapped error carries no machine readable class, so it must not be
       // treated as retryable.
       expect(
-        classifyRefreshFailure(new Error('Failed to refresh provider auth'))
-      ).toBe('auth')
-      expect(classifyRefreshFailure(null)).toBe('auth')
+        classifyCloudFailure(new Error('Failed to refresh provider auth'))
+      ).toBe('terminal')
+      expect(classifyCloudFailure(null)).toBe('terminal')
     })
   })
 })

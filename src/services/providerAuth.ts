@@ -10,9 +10,9 @@
  *   a distinguishable `transientError: true` result instead of a thrown
  *   error).
  *
- * AddVaultForm's `ensureProviderAuthenticated` (which carries its own
- * `isAccessTokenExpired` + `classifyRefreshFailure` copy) remains a known
- * duplicate pending migration.
+ * AddVaultForm's `ensureProviderAuthenticated` is now a thin mapping over this
+ * module; the local classification ladder that remains in its
+ * `handleCreateVault` is a known duplicate pending migration.
  *
  * The merged semantics are the manager's (its callers read `transientError`),
  * parameterised by a {@link RetryPolicy} so the instance keeps its one-shot
@@ -73,11 +73,18 @@ export interface RetryPolicy {
 }
 
 /**
- * Policy of `VaultInstance` (unlock / sync): a single auth-state call, no
- * backoff. The unlock path already prompts a re-auth on
- * `!authenticated || expired`, so a transient check failure resolving as
- * `transientError: true` (i.e. `authenticated: false`) converges on the same
- * prompt as today (behaviour change B4).
+ * Policy of `VaultInstance` (unlock / sync) and of `AddVaultForm`
+ * (`ensureProviderAuthenticated`): a single auth-state call, no backoff. The
+ * unlock path already prompts a re-auth on `!authenticated || expired`, so a
+ * transient check failure resolving as `transientError: true` (i.e.
+ * `authenticated: false`) converges on the same prompt as today (behaviour
+ * change B4).
+ *
+ * NOTE the two consumers read `transientError` DIFFERENTLY: while the unlock
+ * path converges on its re-auth prompt, `AddVaultForm` maps
+ * `transientError` to its retryable "refresh failed" UI ("Could not renew the
+ * cloud session…", `vaultSelector.authRefreshFailed`) — it is NOT a re-auth
+ * prompt.
  */
 export const NO_RETRY_POLICY: RetryPolicy = Object.freeze({
 	retries: 0,

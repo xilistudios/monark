@@ -9,9 +9,9 @@
  *   documented precedence (wrapper type > HTTP status > keyword ladder > raw
  *   transient pattern > conservative terminal), including the raw-message rows
  *   pinned by `deepLinkService.test.ts` / `vault.test.ts`;
- * - `isAccessTokenExpired`: the semantics of the copy in
- *   `src/test/components/Vault/AddVaultForm.test.tsx` (`Access token expiry
- *   semantics` suite);
+ * - `isAccessTokenExpired`: the semantics of the former AddVaultForm copy —
+ *   this file IS their home now (the `Access token expiry semantics` suite of
+ *   `src/test/components/Vault/AddVaultForm.test.tsx` is removed by issue #28);
  * - `isAuthFailure`: the narrow "re-login prompt" rule (type wins, 401, and the
  *   regex verbatim from `src/services/vault.ts`).
  */

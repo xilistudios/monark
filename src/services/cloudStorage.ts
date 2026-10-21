@@ -129,25 +129,6 @@ export class CloudStorageCommands {
 	}
 
 	/**
-	 * Checks if a storage provider is authenticated
-	 * @param providerName - Name of the provider to check
-	 * @returns Promise resolving to boolean indicating if provider is authenticated
-	 */
-	static async checkProviderAuthStatus(providerName: string): Promise<boolean> {
-		if (providerName === "local") {
-			return true;
-		}
-		try {
-			return await invoke<boolean>("check_provider_auth_status", {
-				providerName,
-			});
-		} catch (error) {
-			console.error("Failed to check provider auth status:", error);
-			return false;
-		}
-	}
-
-	/**
 	 * Tests a WebDAV connection before saving the provider
 	 * @param serverUrl - WebDAV server URL
 	 * @param username - WebDAV username

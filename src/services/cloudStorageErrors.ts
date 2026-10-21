@@ -57,8 +57,9 @@ export const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 /**
  * Decide whether a Google Drive access token counts as expired.
  *
- * Exact semantics of the copy in `src/components/Vault/Forms/AddVaultForm.tsx`
- * (lines 54-66), which itself mirrors `GoogleDriveConfig::is_token_expired`
+ * Semantics formerly duplicated in `src/components/Vault/Forms/AddVaultForm.tsx`;
+ * this module is now the only copy (that call-site copy is removed by issue
+ * #28). The implementation still mirrors `GoogleDriveConfig::is_token_expired`
  * (backend source of truth, see {@link TOKEN_EXPIRY_BUFFER_MS}):
  *
  * - missing expiry (`null` / `undefined` / `""`) ⇒ `true` (no usable token);

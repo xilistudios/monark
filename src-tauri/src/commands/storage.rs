@@ -803,14 +803,15 @@ async fn run_google_drive_oauth(
 ///   that succeeded) nor a `Transient` (the frontend would offer "check your
 ///   connection and retry" for a retry that is guaranteed to fail).
 /// * message: keyword-free by construction (`OPERATION_FAILED`, a terminal bucket
-///   in `src/services/deepLinkService.ts`) and honest about the remediation — the
+///   in `src/services/cloudStorageErrors.ts`) and honest about the remediation — the
 ///   tokens are lost, so the user has to sign in again.
 ///
 /// `authentication` was deliberately *not* embedded: it would map the failure to
 /// `AUTHENTICATION_FAILED`, whose re-login wording the message already carries,
 /// while breaking the one-keyword-per-class invariant of
-/// [`AuthFailureClass`] for no behavioural gain (`deepLinkService` and
-/// `AddVaultForm.classifyRefreshFailure` treat every terminal bucket alike).
+/// [`AuthFailureClass`] for no behavioural gain (`deepLinkService` treats
+/// every terminal bucket alike; `AddVaultForm`'s string-matching catch-site
+/// ladder ignores the class entirely).
 fn token_persistence_failure(error: &StorageError) -> ClassifiedAuthError {
     ClassifiedAuthError::terminal(
         AuthFailureClass::Other,
