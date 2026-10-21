@@ -775,12 +775,13 @@ mod google_drive_auth_tests {
     // The tests above hand-write the error messages and pipe them through
     // `classify_refresh_failure`. These tests instead exercise the REAL producer:
     // `ensure_google_drive_token_valid` (→ `refresh_access_token_for_config`,
-    // google_drive.rs) formats `"Failed to refresh access token (<status>
-    // <reason>): <body>"`, which the command layer parses back with
-    // `parse_refresh_error_status` / `strip_refresh_error_body` (see
-    // `keep-in-sync` comments at both `format!` sites in google_drive.rs). A
-    // producer rewording must make these tests red, not silently shift every 5xx
-    // refresh failure from Transient to AuthRejection.
+    // google_drive.rs) reports a non-2xx response as
+    // `StorageError::HttpStatus { status, status_line, body }` — the status and
+    // body travel structurally (issue #28, D3), so `classify_refresh_failure`
+    // renders the `"Failed to refresh access token (…)"` cause directly instead
+    // of parsing it back out of a formatted string. A producer rewording (or a
+    // regression to the old message-round-trip) must make these tests red, not
+    // silently shift every 5xx refresh failure from Transient to AuthRejection.
     // ---------------------------------------------------------------------------
 
     /// Run the real refresh flow against a failing mock and return the frontend

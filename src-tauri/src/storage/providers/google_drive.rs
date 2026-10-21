@@ -198,12 +198,11 @@ impl GoogleDriveProvider {
                                 "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
                             ));
                         }
-                        // Keep in sync with commands::storage::parse_refresh_error_status
-                        // and strip_refresh_error_body: the "(<status> <reason>)" shape
-                        // produced here IS the refresh-failure contract. Rewording this
-                        // message breaks the producer round-trip tests in
-                        // storage::tests::google_drive_auth and can silently degrade a
-                        // 5xx refresh failure from Transient to AuthRejection.
+                        // Generic non-2xx (not invalid_grant): the status/body
+                        // travel structurally (issue #28, D3), classified by
+                        // `classify_refresh_failure` without re-parsing the
+                        // formatted message. `error_msg` below is log-only; the
+                        // error itself carries the status/body structurally.
                         let error_msg = format!(
                             "Failed to refresh access token ({}): {}",
                             status, error_text
@@ -213,7 +212,7 @@ impl GoogleDriveProvider {
                                 "[Google Drive] Token refresh failed after {} attempts: {}",
                                 attempt, error_msg
                             );
-                            return Err(StorageError::authentication(error_msg));
+                            return Err(StorageError::http_status(status, error_text));
                         }
                         println!(
                             "[Google Drive] Token refresh failed (attempt {}): {}",
@@ -334,12 +333,11 @@ impl GoogleDriveProvider {
                                 "Google Drive refresh token is invalid or has been revoked. Please re-authenticate.",
                             ));
                         }
-                        // Keep in sync with commands::storage::parse_refresh_error_status
-                        // and strip_refresh_error_body: the "(<status> <reason>)" shape
-                        // produced here IS the refresh-failure contract. Rewording this
-                        // message breaks the producer round-trip tests in
-                        // storage::tests::google_drive_auth and can silently degrade a
-                        // 5xx refresh failure from Transient to AuthRejection.
+                        // Generic non-2xx: the status/body travel structurally
+                        // (issue #28, D3), classified by `classify_refresh_failure`
+                        // without re-parsing the formatted message. `error_msg`
+                        // below is log-only; the error itself carries the
+                        // status/body structurally.
                         let error_msg = format!(
                             "Failed to refresh access token ({}): {}",
                             status, error_text
@@ -349,7 +347,7 @@ impl GoogleDriveProvider {
                                 "[Google Drive] Token refresh failed after {} attempts: {}",
                                 attempt, error_msg
                             );
-                            return Err(StorageError::authentication(error_msg));
+                            return Err(StorageError::http_status(status, error_text));
                         }
                         println!(
                             "[Google Drive] Token refresh failed (attempt {}): {}",

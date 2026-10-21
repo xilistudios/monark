@@ -3,7 +3,7 @@ use crate::commands::storage::StorageState;
 use crate::crypto;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
 use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
-use crate::storage::{StorageError, StorageManager};
+use crate::storage::StorageManager;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::fs;
@@ -229,10 +229,7 @@ pub async fn read_cloud_vault(
                 vault_id, provider_cache_key, err
             );
 
-            if matches!(
-                err,
-                StorageError::Network(_) | StorageError::Authentication(_)
-            ) {
+            if err.is_offline_or_auth_like() {
                 match load_cached_vault(&provider_cache_key, &vault_id) {
                     Ok(cached) => {
                         println!(
