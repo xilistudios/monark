@@ -1515,6 +1515,15 @@ h2 {
 	margin-bottom: 1.25rem;
 }
 
+/* The hint is an annotation on the button above it, not body copy: smaller and
+   quieter, pulled up so it hugs the button it refers to. --ink-tertiary is
+   asserted >=4.5:1 on --surface by check.mjs, so the contrast check covers it. */
+.oauth-open-hint {
+	font-size: 0.8125rem;
+	color: var(--ink-tertiary);
+	margin: -0.75rem 0 1.5rem;
+}
+
 .oauth-block {
 	background: var(--surface-sunken);
 	border: 1px solid var(--rule);

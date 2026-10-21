@@ -311,6 +311,7 @@ export default {
 			successTitle: "验证成功",
 			successBody: "请在 Monark 应用程序内复制下方凭据，以完成登录。",
 			openApp: "打开 Monark",
+			openAppHint: "如果没有反应，请使用下方的复制方式。",
 			copyHeading: "复制凭据",
 			copyBody: "复制这些凭据并粘贴到 Monark 中，即可完成同步设置。",
 			copyButton: "以 Base64 复制凭据",

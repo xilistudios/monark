@@ -290,6 +290,7 @@ export default {
 			successTitle: "認証に成功しました",
 			successBody: "下の認証情報をコピーして、Monark アプリケーション内でサインインを完了してください。",
 			openApp: "Monarkを開く",
+			openAppHint: "何も起こらなかった場合は、下のコピー方法を使ってください。",
 			copyHeading: "認証情報をコピー",
 			copyBody: "この認証情報をコピーし、Monark に貼り付けて同期の設定を完了してください。",
 			copyButton: "認証情報を Base64 でコピー",

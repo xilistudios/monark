@@ -11,8 +11,9 @@
  *   5. link integrity across the emitted site — every internal href, hreflang
  *      alternate and sitemap <loc> must resolve to a file that exists
  *   6. the `hidden` attribute still hides, on the one page that relies on it
- *   7. the desktop deep link is still a user gesture, and its button still has
- *      a string to render
+ *   7. the desktop deep link is still a user gesture, its button and its
+ *      copy-fallback hint still have strings to render, and the hint is
+ *      actually wired into the success card
  *
  * Check 5 is the one that would have caught the `/ja/` regression: the locale
  * registry advertised a language whose copy set had not landed yet, so the
@@ -265,11 +266,33 @@ for (const b of broken) failures.push(`broken link: ${b}`);
 		);
 	}
 
+	// Clicking the button navigates to `monark://…`, and with no handler
+	// registered some browsers replace the page with a protocol-error screen —
+	// which takes the Base64 copy fallback with it. The hint tells the user
+	// where to go if nothing happened, so it must survive into the artifact
+	// AND actually be rendered after the button: a hint that is built but
+	// never passed to `render(...)` is exactly the silent regression here.
+	if (!/oauth-open-hint/.test(js)) {
+		failures.push(
+			"oauth.js has no hint pointing at the copy fallback, so a dead deep link leaves the user with no next step",
+		);
+	}
+	if (!/render\([^)]*\bopenApp\s*,\s*openHint\b/.test(js)) {
+		failures.push(
+			"oauth.js builds the copy-fallback hint but does not render it right after the deep-link button",
+		);
+	}
+
 	const root = path.join(OUT, "index.html");
 	const html = fs.existsSync(root) ? fs.readFileSync(root, "utf8") : "";
-	if (html && !/"openApp"\s*:/.test(html)) {
+	if (!/"openApp"\s*:/.test(html)) {
 		failures.push(
 			'index.html does not embed the oauth "openApp" string, so the deep-link button would render with an empty label',
+		);
+	}
+	if (!/"openAppHint"\s*:/.test(html)) {
+		failures.push(
+			'index.html does not embed the oauth "openAppHint" string, so the copy-fallback hint would render empty',
 		);
 	}
 }
