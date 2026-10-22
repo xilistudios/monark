@@ -1,7 +1,5 @@
 use commands::storage::StorageState;
 #[cfg(desktop)]
-use tauri::image::Image;
-#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
 #[cfg(desktop)]
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
@@ -15,6 +13,8 @@ pub mod io;
 pub mod models;
 pub mod state;
 pub mod storage;
+#[cfg(desktop)]
+pub mod tray_theme;
 pub mod vault;
 
 pub fn run() {
@@ -172,11 +172,19 @@ fn build_app() {
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
-                let tray_icon = Image::from_bytes(include_bytes!("../icons/systray_32.png"))
-                    .expect("failed to load tray icon");
+                // Initial icon follows the *system* color scheme (Linux) with a
+                // white fallback; macOS/Windows always use the white asset.
+                #[cfg(target_os = "linux")]
+                let initial_tone = tray_theme::read_system_color_scheme()
+                    .and_then(tray_theme::icon_tone_for_color_scheme)
+                    .unwrap_or(tray_theme::IconTone::Light);
+                #[cfg(not(target_os = "linux"))]
+                let initial_tone = tray_theme::IconTone::Light;
+
+                let tray_icon = tray_theme::image_for_tone(initial_tone);
 
                 let app_handle = app.handle().clone();
-                let _tray = TrayIconBuilder::new()
+                let _tray = TrayIconBuilder::with_id("main-tray")
                     .icon(tray_icon)
                     .tooltip("Monark Password Manager")
                     .menu(&menu)
@@ -210,6 +218,22 @@ fn build_app() {
                         }
                     })
                     .build(app)?;
+
+                // Linux: watch the system color scheme and retint the tray live.
+                #[cfg(target_os = "linux")]
+                {
+                    let app_handle_for_tray = app.handle().clone();
+                    tray_theme::spawn_scheme_watcher(move |scheme| {
+                        let tone = scheme
+                            .and_then(tray_theme::icon_tone_for_color_scheme)
+                            .unwrap_or(tray_theme::IconTone::Light);
+                        if let Some(tray) = app_handle_for_tray.tray_by_id("main-tray") {
+                            if let Err(e) = tray.set_icon(Some(tray_theme::image_for_tone(tone))) {
+                                println!("[TrayTheme] failed to update tray icon: {}", e);
+                            }
+                        }
+                    });
+                }
 
                 // Intercept window close to hide to tray instead of quitting
                 let main_window = app
