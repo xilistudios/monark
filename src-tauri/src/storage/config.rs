@@ -215,6 +215,9 @@ pub struct StorageConfig {
     pub providers: HashMap<String, ProviderConfig>,
     pub default_provider: String,
     pub vault_folder: String,
+    /// Legacy plaintext tokens kept while the keychain migration cannot run.
+    #[serde(skip)]
+    pub(crate) pending_legacy_google_drive_tokens: Option<GoogleDriveConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,6 +244,7 @@ impl StorageConfig {
             providers,
             default_provider: "local".to_string(),
             vault_folder: "Monark".to_string(), // Use "Monark" to match existing Google Drive folder structure
+            pending_legacy_google_drive_tokens: None,
         }
     }
 
@@ -261,6 +265,15 @@ impl StorageConfig {
 
     pub fn add_provider(&mut self, name: String, config: ProviderConfig) {
         self.providers.insert(name, config);
+    }
+
+    /// Keep (`Some`) or drop (`None`) the legacy plaintext Google Drive tokens
+    /// that are re-written by [`Self::save`] while the keychain cannot take them.
+    pub(crate) fn set_pending_legacy_google_drive_tokens(
+        &mut self,
+        tokens: Option<GoogleDriveConfig>,
+    ) {
+        self.pending_legacy_google_drive_tokens = tokens;
     }
 
     pub fn get_provider_config(&self, name: &str) -> Option<&ProviderConfig> {
@@ -361,7 +374,7 @@ impl StorageConfig {
         // Filter out the built-in Monark provider — its credentials are embedded
         // in the binary and must never be written to disk.
         // For remaining Google Drive providers, strip secrets into keychain.
-        let to_save = StorageConfig {
+        let mut to_save = StorageConfig {
             providers: self
                 .providers
                 .iter()
@@ -391,7 +404,20 @@ impl StorageConfig {
                 self.default_provider.clone()
             },
             vault_folder: self.vault_folder.clone(),
+            pending_legacy_google_drive_tokens: None,
         };
+
+        // The plaintext legacy entry is the only surviving copy of the tokens
+        // while the keychain migration cannot run: keep it, verbatim (no keychain
+        // write, no stripping), so the next launch retries the migration.
+        if let Some(legacy) = &self.pending_legacy_google_drive_tokens {
+            to_save.providers.insert(
+                MONARK_DEFAULT_PROVIDER_NAME.to_string(),
+                ProviderConfig::GoogleDrive {
+                    config: legacy.clone(),
+                },
+            );
+        }
 
         let config_str = serde_json::to_string_pretty(&to_save)?;
 
@@ -537,6 +563,7 @@ impl StorageConfig {
                 .collect::<Result<HashMap<_, _>, StorageError>>()?,
             default_provider: config.default_provider.clone(),
             vault_folder: config.vault_folder.clone(),
+            pending_legacy_google_drive_tokens: None,
         };
 
         let sanitized_str = serde_json::to_string_pretty(&sanitized)?;

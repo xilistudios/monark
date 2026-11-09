@@ -68,6 +68,15 @@ pub(crate) async fn with_isolated_storage_config_for<R>(
     crate::storage::with_storage_config_path(path, fut).await
 }
 
+/// Serializes every test that reads or writes the `monark_token_store` keychain
+/// key: the mock store is process-wide, so per-module locks do not exclude each
+/// other and cargo runs the tests of one binary in parallel threads.
+pub(crate) async fn lock_token_store_key() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let lock = LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
+    lock.lock().await
+}
+
 /// A Google Drive config with (expired) test credentials — the shape the
 /// OAuth/refresh tests rely on.
 pub(crate) fn test_google_drive_config() -> GoogleDriveConfig {

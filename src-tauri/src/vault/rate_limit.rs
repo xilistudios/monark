@@ -75,8 +75,7 @@ impl RateLimiter {
         // Best-effort pruning to bound memory growth under load.
         if self.attempts.len() > MAX_ENTRIES {
             let cutoff = Instant::now() - Duration::from_secs(ENTRY_TTL_SECS);
-            self.attempts
-                .retain(|_key, rec| rec.last_failure > cutoff);
+            self.attempts.retain(|_key, rec| rec.last_failure > cutoff);
         }
     }
 
@@ -99,7 +98,8 @@ fn required_delay(failures: u32) -> Duration {
     Duration::from_secs(capped)
 }
 
-static RATE_LIMITER: LazyLock<Mutex<RateLimiter>> = LazyLock::new(|| Mutex::new(RateLimiter::new()));
+static RATE_LIMITER: LazyLock<Mutex<RateLimiter>> =
+    LazyLock::new(|| Mutex::new(RateLimiter::new()));
 
 /// Global gate: call BEFORE attempting password derivation.
 pub fn check_attempts(key: &str) -> Result<(), CommandError> {
@@ -178,7 +178,11 @@ mod tests {
                 // Parse the reported seconds and require at least 1s remaining.
                 let seconds = msg
                     .split_whitespace()
-                    .find_map(|tok| tok.trim_matches(|c: char| !c.is_ascii_digit()).parse::<u64>().ok())
+                    .find_map(|tok| {
+                        tok.trim_matches(|c: char| !c.is_ascii_digit())
+                            .parse::<u64>()
+                            .ok()
+                    })
                     .expect("error message should contain a seconds value");
                 assert!(seconds >= 1, "expected positive wait, got {}", seconds);
             }

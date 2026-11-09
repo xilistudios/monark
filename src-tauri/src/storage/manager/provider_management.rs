@@ -212,9 +212,12 @@ impl StorageManager {
         provider_name: &str,
         new_config: GoogleDriveConfig,
     ) -> StorageResult<()> {
+        // Resolve BEFORE taking the config write lock (`resolve_provider_key` reads it).
+        let resolved_name = self.resolve_provider_key(provider_name).await;
+
         println!(
-            "update_google_drive_config called for provider: {}",
-            provider_name
+            "update_google_drive_config called for provider: {} (resolved: {})",
+            provider_name, resolved_name
         );
         println!(
             "New config has access_token: {}",
@@ -223,7 +226,7 @@ impl StorageManager {
 
         {
             let mut config = self.config.write().await;
-            if let Some(provider_config) = config.providers.get_mut(provider_name) {
+            if let Some(provider_config) = config.providers.get_mut(&resolved_name) {
                 if let ProviderConfig::GoogleDrive { config } = provider_config {
                     println!("Updating GoogleDrive config in memory");
                     *config = new_config.clone();
@@ -233,13 +236,11 @@ impl StorageManager {
                     ));
                 }
             } else {
-                return Err(StorageError::provider_not_supported(
-                    provider_name.to_string(),
-                ));
+                return Err(StorageError::provider_not_supported(resolved_name));
             }
 
             // Persist changes
-            if provider_name == crate::storage::MONARK_DEFAULT_PROVIDER_NAME {
+            if resolved_name == crate::storage::MONARK_DEFAULT_PROVIDER_NAME {
                 // For the built-in provider, save only tokens to the token store
                 // (credentials are embedded in the binary, never written to disk).
                 let mut token_store = crate::storage::TokenStore::load()?;
@@ -256,8 +257,7 @@ impl StorageManager {
 
         {
             let mut providers = self.providers.write().await;
-            let actual_name = self.resolve_provider_key(provider_name).await;
-            if let Some(provider) = providers.get_mut(&actual_name) {
+            if let Some(provider) = providers.get_mut(&resolved_name) {
                 *provider = Box::new(GoogleDriveProvider::new(new_config));
             }
         }

@@ -983,6 +983,26 @@ mod auth_failure_class_tests {
         cases: Vec<FixtureCase>,
     }
 
+    /// Every source file of the split storage command module, concatenated.
+    ///
+    /// `commands/storage` is a directory module, so a single `include_str!` only
+    /// sees one file. The files are pinned with `include_str!` (not read at run
+    /// time) so a context reworded anywhere in the module still fails the pin.
+    /// A new submodule must be added here: the
+    /// `storage_mod_rs_lists_only_known_submodules` guard turns that into a test
+    /// failure instead of a silently uncovered producer.
+    fn storage_module_source() -> String {
+        [
+            include_str!("storage/mod.rs"),
+            include_str!("storage/error.rs"),
+            include_str!("storage/oauth.rs"),
+            include_str!("storage/oauth/tests.rs"),
+            include_str!("storage/providers.rs"),
+            include_str!("storage/auth_status.rs"),
+        ]
+        .join("\n")
+    }
+
     /// `source` with every `#[cfg(test)]`-gated item removed, so a substring
     /// hit proves the text is produced by PRODUCTION code and not merely
     /// spelled inside a test.
@@ -1163,6 +1183,31 @@ mod auth_failure_class_tests {
     /// test literal — goes red here) and that
     /// the fixture's own `version`/`cases` count are what the frontend loader
     /// expects.
+    /// `storage_module_source` hardcodes the file list (it must: `include_str!`
+    /// is a compile-time macro). This guard keeps that list honest — every
+    /// `mod` declared by `commands/storage/mod.rs` must be pinned, so a new
+    /// submodule cannot be added without also being covered by the
+    /// producer-context pin.
+    #[test]
+    fn storage_mod_rs_lists_only_known_submodules() {
+        let mod_rs = include_str!("storage/mod.rs");
+
+        let mut declared: Vec<&str> = mod_rs
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("pub(crate) mod "))
+            .filter_map(|rest| rest.strip_suffix(';'))
+            .map(str::trim)
+            .collect();
+        declared.sort_unstable();
+
+        assert_eq!(
+            declared,
+            ["auth_status", "error", "oauth", "providers"],
+            "a submodule was added to or removed from `commands/storage/mod.rs`; \
+             update `storage_module_source` so its producers stay pinned"
+        );
+    }
+
     #[test]
     fn shared_fixture_pins_templates_contexts_and_classes() {
         let fixture = load_shared_fixture();
@@ -1177,12 +1222,17 @@ mod auth_failure_class_tests {
             "the shared fixture must pin exactly 8 curated cases"
         );
 
-        let storage_source = include_str!("storage.rs");
+        // The producers are spread over the split `commands/storage/` module:
+        // the OAuth flow (`oauth.rs`) mints most contexts and the token refresh
+        // (`auth_status.rs`) the remaining one. Concatenating every file keeps
+        // this pin covering the whole module, exactly as it did when the
+        // commands lived in a single `storage.rs`.
+        let storage_source = storage_module_source();
         // The producer source WITHOUT its `#[cfg(test)]`-gated items: a
         // context must be produced by production code, not merely spelled in a
         // test literal (the file's test modules sit between production items,
         // so a plain "cut at the first #[cfg(test)]" would drop real producers).
-        let production_source = without_cfg_test_items(storage_source);
+        let production_source = without_cfg_test_items(&storage_source);
         assert!(
             !production_source.contains("cfg(test)"),
             "the strip must leave no `#[cfg(test)]` gate behind"
@@ -1207,7 +1257,7 @@ mod auth_failure_class_tests {
             assert!(
                 production_source.contains(context),
                 "the context {context:?} must appear verbatim in the production code \
-                 of `commands/storage.rs` — it is no longer produced by the crate"
+                 of the storage command module — it is no longer produced by the crate"
             );
         }
 
