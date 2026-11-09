@@ -293,19 +293,31 @@ mod tests {
 
     #[test]
     fn validate_argon2_params_accepts_defaults() {
-        let p = params(ARGON2_MEMORY_COST_KIB, ARGON2_ITERATIONS, ARGON2_PARALLELISM);
+        let p = params(
+            ARGON2_MEMORY_COST_KIB,
+            ARGON2_ITERATIONS,
+            ARGON2_PARALLELISM,
+        );
         assert!(validate_argon2_params(&p).is_ok());
     }
 
     #[test]
     fn validate_argon2_params_rejects_excessive_memory_cost() {
-        let p = params(ARGON2_MAX_MEMORY_COST_KIB + 1, ARGON2_ITERATIONS, ARGON2_PARALLELISM);
+        let p = params(
+            ARGON2_MAX_MEMORY_COST_KIB + 1,
+            ARGON2_ITERATIONS,
+            ARGON2_PARALLELISM,
+        );
         assert!(validate_argon2_params(&p).is_err());
     }
 
     #[test]
     fn validate_argon2_params_rejects_excessive_iterations() {
-        let p = params(ARGON2_MEMORY_COST_KIB, ARGON2_MAX_ITERATIONS + 1, ARGON2_PARALLELISM);
+        let p = params(
+            ARGON2_MEMORY_COST_KIB,
+            ARGON2_MAX_ITERATIONS + 1,
+            ARGON2_PARALLELISM,
+        );
         assert!(validate_argon2_params(&p).is_err());
     }
 

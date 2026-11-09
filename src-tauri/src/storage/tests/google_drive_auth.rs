@@ -948,3 +948,180 @@ mod google_drive_auth_tests {
         );
     }
 }
+
+/// Pins the alias resolution of `StorageManager::update_google_drive_config`.
+///
+/// Hazard pinned by the first test: the config lookup inside that method is by
+/// EXACT key. Before the fix, a caller passing an alias (`"google_drive"`,
+/// `"drive"`) while the provider was stored under another key got
+/// `provider_not_supported` — *after* Google had already consumed the single-use
+/// authorization code — so the freshly minted token set was dropped and the
+/// callback reported "the tokens were obtained but could not be persisted;
+/// please sign in again". That is the "the tokens are never saved" symptom.
+#[cfg(test)]
+mod update_google_drive_config_alias_tests {
+    use crate::storage::providers::google_drive::GoogleDriveConfig;
+    use crate::storage::{
+        test_support, ProviderConfig, StorageConfig, StorageError, StorageManager, TokenStore,
+        MONARK_DEFAULT_PROVIDER_NAME,
+    };
+    use chrono::{Duration, Utc};
+    use tempfile::TempDir;
+
+    /// The token set returned by a successful OAuth exchange / refresh.
+    fn minted_config() -> GoogleDriveConfig {
+        GoogleDriveConfig {
+            client_id: "client_id".to_string(),
+            client_secret: "client_secret".to_string(),
+            redirect_uri: "http://localhost/callback".to_string(),
+            access_token: Some("minted_access".to_string()),
+            refresh_token: Some("minted_refresh".to_string()),
+            token_expires_at: Some(Utc::now() + Duration::hours(1)),
+        }
+    }
+
+    #[tokio::test]
+    async fn google_drive_alias_is_resolved_to_the_stored_provider_key() {
+        crate::storage::keychain::install_test_store();
+
+        test_support::with_isolated_storage_config_for("update_gdrive_config_alias", async {
+            let temp_dir = TempDir::new().unwrap();
+            let manager = StorageManager::new(StorageConfig::new_local(
+                temp_dir.path().to_string_lossy().to_string(),
+            ))
+            .await
+            .unwrap();
+
+            // Stored under the normalized key, updated through the alias.
+            manager
+                .add_provider(
+                    "drive".to_string(),
+                    ProviderConfig::GoogleDrive {
+                        config: test_support::test_google_drive_config(),
+                    },
+                )
+                .await
+                .unwrap();
+
+            manager
+                .update_google_drive_config("google_drive", minted_config())
+                .await
+                .expect(
+                    "the alias must resolve to the stored 'drive' provider instead of \
+                         failing with provider_not_supported",
+                );
+
+            // In memory...
+            let config = manager.get_config().await;
+            let ProviderConfig::GoogleDrive { config: updated } = config
+                .get_provider_config("drive")
+                .expect("the provider must still be stored under 'drive'")
+                .clone()
+            else {
+                panic!("expected a GoogleDrive provider");
+            };
+            assert_eq!(updated.access_token.as_deref(), Some("minted_access"));
+            assert_eq!(updated.refresh_token.as_deref(), Some("minted_refresh"));
+
+            // ...and on disk: `save` strips the tokens into the (mock) keychain
+            // and `load` merges them back, so this proves persistence.
+            let reloaded = StorageConfig::load().expect("the isolated config must load");
+            let ProviderConfig::GoogleDrive { config: persisted } = reloaded
+                .get_provider_config("drive")
+                .expect("the persisted config must keep the provider")
+                .clone()
+            else {
+                panic!("expected a persisted GoogleDrive provider");
+            };
+            assert_eq!(persisted.access_token.as_deref(), Some("minted_access"));
+            assert_eq!(persisted.refresh_token.as_deref(), Some("minted_refresh"));
+        })
+        .await;
+    }
+
+    /// The built-in provider is stored under `MONARK_DEFAULT_PROVIDER_NAME`, so the
+    /// token-store branch must key off the RESOLVED name: going by the raw alias
+    /// falls through to `config.save()`, which filters the built-in provider out.
+    #[tokio::test]
+    async fn builtin_provider_alias_writes_the_tokens_to_the_token_store() {
+        crate::storage::keychain::install_test_store();
+        // `update_google_drive_config` rewrites the whole token store on every call,
+        // so the well-known token-store keychain key is owned by one test at a time:
+        // the guard is crate-wide because other suites write the same key.
+        let _guard = test_support::lock_token_store_key().await;
+
+        test_support::with_isolated_storage_config_for(
+            "update_gdrive_config_builtin_alias",
+            async {
+                let temp_dir = TempDir::new().unwrap();
+                let manager = StorageManager::new(StorageConfig::new_local(
+                    temp_dir.path().to_string_lossy().to_string(),
+                ))
+                .await
+                .unwrap();
+
+                // Stored under the built-in name, updated through the alias.
+                manager
+                    .add_provider(
+                        MONARK_DEFAULT_PROVIDER_NAME.to_string(),
+                        ProviderConfig::GoogleDrive {
+                            config: test_support::test_google_drive_config(),
+                        },
+                    )
+                    .await
+                    .unwrap();
+
+                manager
+                    .update_google_drive_config("google_drive", minted_config())
+                    .await
+                    .expect("the alias must resolve to the built-in provider");
+
+                // The tokens went to the token store — never to the config file, which
+                // leaves the built-in provider out entirely.
+                let store = TokenStore::load().expect("the token store must be readable");
+                let stored = store
+                    .get_monark_tokens()
+                    .expect("the built-in provider's tokens must be in the token store");
+                assert_eq!(stored.access_token.as_deref(), Some("minted_access"));
+                assert_eq!(stored.refresh_token.as_deref(), Some("minted_refresh"));
+
+                // ...and the in-memory config is updated under the resolved key.
+                let config = manager.get_config().await;
+                let ProviderConfig::GoogleDrive { config: updated } = config
+                    .get_provider_config(MONARK_DEFAULT_PROVIDER_NAME)
+                    .expect("the built-in provider must still be stored")
+                    .clone()
+                else {
+                    panic!("expected a GoogleDrive provider");
+                };
+                assert_eq!(updated.access_token.as_deref(), Some("minted_access"));
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn unknown_provider_still_fails_with_provider_not_supported() {
+        crate::storage::keychain::install_test_store();
+
+        test_support::with_isolated_storage_config_for("update_gdrive_config_unknown", async {
+            let temp_dir = TempDir::new().unwrap();
+            let manager = StorageManager::new(StorageConfig::new_local(
+                temp_dir.path().to_string_lossy().to_string(),
+            ))
+            .await
+            .unwrap();
+
+            let error = manager
+                .update_google_drive_config("does-not-exist", minted_config())
+                .await
+                .expect_err("an unknown provider must not be silently created");
+
+            assert!(
+                matches!(error, StorageError::ProviderNotSupported(_)),
+                "unexpected error: {error:?}"
+            );
+        })
+        .await;
+    }
+}

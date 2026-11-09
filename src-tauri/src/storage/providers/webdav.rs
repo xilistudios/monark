@@ -507,10 +507,7 @@ impl WebDavProvider {
                         // malicious/compromised server redirecting our credentials
                         // to a different host or downgraded scheme.
                         if !self.is_same_host(&href) {
-                            println!(
-                                "[WebDAV] Skipping href with mismatched host: {}",
-                                href
-                            );
+                            println!("[WebDAV] Skipping href with mismatched host: {}", href);
                             continue;
                         }
                         href.clone()
