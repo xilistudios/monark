@@ -2742,6 +2742,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "zbus",
  "zeroize",
 ]
 

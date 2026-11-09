@@ -73,3 +73,9 @@ android-native-keyring-store = "1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2.2.0"
+
+# Linux-only: FreeDesktop settings portal (system color scheme) for the
+# theme-aware tray icon. zbus 5.x is already in the lockfile (keyring/ashpd),
+# so this adds no new crate versions.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
