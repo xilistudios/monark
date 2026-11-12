@@ -9,7 +9,8 @@
 # (bun run test:run) and `cargo test` (bun run test:rust). Nothing type-checks a
 # PR (tsc runs only in `bun run build`, which CI never invokes), nothing lints
 # (no biome, no clippy, no actionlint), and nothing builds Android — that only
-# happens in tauri-release.yml on a `v*` tag. There is also no PR template, no
+# happens in tauri-release.yml on a `v*` tag or a manual workflow_dispatch run.
+# There is also no PR template, no
 # CODEOWNERS and no dependabot. So the only automated signal on a PR today is a
 # test failure; types, lint, platform builds and design/security review are
 # uncovered, and the profile below is tuned for that.
@@ -140,10 +141,20 @@ reviews:
     # `!` — disables that default without turning this list into an allowlist
     # (docs.coderabbit.ai/configuration/path-instructions, "Exact default
     # overrides are exempt"): `**/*.lock` (the default skips lock files) and
-    # `**/gen/**` (the default skips src-tauri/gen/android/**). The match is on
-    # the exact string, so a typo in either line leaves the default in force and
-    # the intent above silently dead — if lockfiles or the Android scaffold stop
-    # showing up in reviews, look here first.
+    # `**/gen/**` (the default skips src-tauri/gen/android/**; the override is
+    # repo-wide, so it also re-includes any other gen/ directory a future codegen
+    # step adds).
+    #
+    # The match is on the exact string, so a typo in either line leaves the
+    # default in force and the intent above silently dead — if lockfiles or the
+    # Android scaffold stop showing up in reviews, look here first.
+    #
+    # Documented side effect: path_filters also drive the clone's git
+    # sparse-checkout, and sparse-checkout matching differs from review
+    # matching, so tools may see a different file set; if biome/clippy/actionlint
+    # start reporting nothing, these two lines are the first suspect. Cost, for
+    # the record: Cargo.lock (7334 lines) and bun.lock come back into review
+    # scope on every dependency PR.
     - "**/*.lock"
     - "**/gen/**"
     - "!**/node_modules/**"
@@ -334,8 +345,9 @@ reviews:
         The script must never print a credential anywhere except as the value of
         a `cargo:rustc-env=` directive — that is how the value is embedded, so
         the directive itself is required (note that `-vv` builds echo build
-        script output). It must never emit one in a `cargo:warning=`, a plain
-        `println!`, a panic message or an error string, and a missing variable
+        script output). It must never emit one in a `cargo:warning=`, a
+        `println!` that is not a `cargo:` directive, a panic message or an error
+        string, and a missing variable
         must never fall back to a credential committed in the source.
 
     - path: "src-tauri/capabilities/**"
