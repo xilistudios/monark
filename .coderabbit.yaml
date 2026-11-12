@@ -44,6 +44,10 @@ reviews:
 
   high_level_summary: true
   review_status: true
+  # A review that dies on an error currently ends as a neutral check, which
+  # reads exactly like a clean pass. This makes that case fail instead.
+  # Rate-limited reviews never fail, so the free-tier limit stays a soft signal.
+  fail_commit_status: true
   collapse_walkthrough: true
   changed_files_summary: true
   estimate_code_review_effort: true
@@ -130,13 +134,16 @@ reviews:
   # scaffold is effectively source; only its gradle-wrapper.jar binary is
   # excluded, by `!**/*.jar`).
   path_filters:
-    # CodeRabbit ships its own default ignored paths and they apply ON TOP of
-    # this list, so the two exclusions above would be dead without these lines.
-    # Copying a default pattern here WITHOUT its leading `!` disables that
-    # default without turning the list into an allowlist
+    # CodeRabbit applies its own default ignored paths on top of this list, so
+    # the lockfiles and the src-tauri/gen/android/** tree described above would
+    # never be reviewed. Copying a default pattern here verbatim — no leading
+    # `!` — disables that default without turning this list into an allowlist
     # (docs.coderabbit.ai/configuration/path-instructions, "Exact default
     # overrides are exempt"): `**/*.lock` (the default skips lock files) and
-    # `**/gen/**` (the default skips src-tauri/gen/android/**).
+    # `**/gen/**` (the default skips src-tauri/gen/android/**). The match is on
+    # the exact string, so a typo in either line leaves the default in force and
+    # the intent above silently dead — if lockfiles or the Android scaffold stop
+    # showing up in reviews, look here first.
     - "**/*.lock"
     - "**/gen/**"
     - "!**/node_modules/**"
@@ -150,7 +157,9 @@ reviews:
     - "!**/*.icns"
     - "!**/*.woff2"
     # Binary: the gradle wrapper jar. gradle-wrapper.properties is NOT excluded
-    # — its distributionUrl is a supply-chain lever.
+    # — its distributionUrl is a supply-chain lever. This line is the only thing
+    # keeping the jar out (see the `**/gen/**` override above), so do not drop it
+    # while the scaffold is in review scope.
     - "!**/*.jar"
     # The generated pages under redirect/ are emitted by redirect/_tools/build.mjs
     # and committed; the generator is reviewed instead. The patterns are
@@ -374,10 +383,14 @@ reviews:
         vault material or credentials. Two cross-cutting rules apply wherever
         such code lives, not only in the files that implement them: call
         `invoke` through a wrapper in src/services/** rather than calling it
-        directly (ImportVaultForm.tsx is the one existing exception), and copy
-        a password, TOTP code or other vault material through `copySensitive`
-        in src/utils/clipboard.ts — a bare `writeText`/`navigator.clipboard`
-        call skips the auto-clear and leaves the secret on the clipboard.
+        directly, and copy a password, TOTP code or other vault material through
+        `copySensitive` in src/utils/clipboard.ts — a bare
+        `writeText`/`navigator.clipboard` call skips the auto-clear and leaves
+        the secret on the clipboard. Three files outside src/services/** already
+        call `invoke` directly (ImportVaultForm.tsx, OtpFieldView.tsx,
+        UpdateSection.tsx) — they are pre-existing, not precedent: a NEW direct
+        caller is the finding, and those three are only in scope if the PR
+        changes the call itself.
 
     - path: "src/**/*.tsx"
       instructions: >-
@@ -390,9 +403,10 @@ reviews:
         banned. User-facing strings go through `react-i18next` with keys added
         to BOTH src/i18n/locales/en.json and es.json. Do not demand reformatting
         of pre-existing lines — legacy files are mid-migration to Biome tabs and
-        double quotes. Two cross-cutting rules apply here too: do not call
-        `invoke` from a component (go through src/services/**, ImportVaultForm.tsx
-        is the one existing exception), and never copy vault material with
+        double quotes. Two cross-cutting rules apply here too: a component must
+        not start calling `invoke` directly (go through src/services/**;
+        ImportVaultForm.tsx, OtpFieldView.tsx and UpdateSection.tsx already do
+        and are pre-existing, not precedent), and never copy vault material with
         `navigator.clipboard.writeText` or a bare `writeText` — use
         `copySensitive` from src/utils/clipboard.ts, which clears the clipboard
         after 30 s.
@@ -400,8 +414,10 @@ reviews:
     - path: "src/services/**"
       instructions: >-
         Service wrappers are the normal place that calls `invoke` (the
-        src/**/*.ts entry also applies); ImportVaultForm.tsx is the one existing
-        exception that calls `invoke` directly — do not add more. Keep the
+        src/**/*.ts entry also applies). Three files outside src/services/**
+        call it directly today — ImportVaultForm.tsx, OtpFieldView.tsx and
+        UpdateSection.tsx — so a new direct caller, not those three, is the
+        finding. Keep the
         command name and argument shape in lockstep
         with `lib.rs::invoke_handler` and the Rust signature, and type the
         result. Never swallow an error into a falsy value and never log an error
@@ -523,9 +539,12 @@ reviews:
         that entry), but it is deliberately kept in review scope because it is
         the page that receives `code`; a hand edit here that no generator change
         accounts for is a defect, and the next `bun run site:build` silently
-        reverts it — note that `bun run site:check` verifies locale and link
-        integrity only, it does not diff the output against the generator, so
-        divergence is caught here or nowhere. Its `window.MONARK_OAUTH` strings
+        reverts it — note that `bun run site:check` never rebuilds, so it cannot
+        diff the output against the generator; it re-checks locale parity, the
+        link graph, the contrast tokens, and the two runtime behaviours of this
+        page (the `[hidden]` cascade and the deep-link gesture), which catches
+        the damage a bad hand edit does but not the edit itself. Divergence from
+        the generator is therefore caught here or nowhere. Its `window.MONARK_OAUTH` strings
         blob is generated from the locale copy and must not be hand-edited. Keep
         every `<script>` reference local and relative (this page loads
         `oauth.js` only), keep `?code=&state=` out of the markup and the DOM, and
