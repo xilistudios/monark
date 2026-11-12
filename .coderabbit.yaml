@@ -1,0 +1,528 @@
+# CodeRabbit configuration for Monark, consumed by the CodeRabbit GitHub App.
+#
+# The App reads this file from the branch under review, not from the default
+# branch, so a PR can change its own review rules — treat edits to this file as
+# review-infrastructure changes.
+#
+# What CI does and does not cover here, because it decides what this file has to
+# do: .github/workflows/test.yml runs on every pull_request, but only `vitest`
+# (bun run test:run) and `cargo test` (bun run test:rust). Nothing type-checks a
+# PR (tsc runs only in `bun run build`, which CI never invokes), nothing lints
+# (no biome, no clippy, no actionlint), and nothing builds Android — that only
+# happens in tauri-release.yml on a `v*` tag. There is also no PR template, no
+# CODEOWNERS and no dependabot. So tests are gated; types, lint, platform builds
+# and design/security review are not, and the profile below is tuned for that.
+
+language: "en-US"
+
+# Hard limit is 250 characters. These rules exist because CI only runs tests —
+# nothing else checks types or lint — and because legacy files are mid-migration
+# to Biome (tabs, double quotes), so repo-wide reformat demands would be noise.
+tone_instructions: >-
+  Name file/function/line. For security findings, state the attack scenario in
+  one sentence. Comment only on lines the PR touches — never demand repo-wide
+  reformatting. No praise, no restating the diff.
+
+reviews:
+  # Assertive, because the PR workflow only runs the test suites: no tsc, no
+  # biome, no clippy, no actionlint, no Android build. The usual cost of an
+  # assertive profile — nitpicks about style — is partly mitigated by
+  # tone_instructions above, which forbids reformat demands, and by the
+  # path_instructions that explicitly scope comments to changed lines. It is NOT
+  # fully mitigated: findings raised by the tools below (biome, clippy,
+  # actionlint, zizmor, gitleaks, reactDoctor) bypass tone_instructions
+  # entirely, so tool noise is expected and is not a reason to weaken the
+  # profile. Older files in src/services, src/store and src/test still use
+  # spaces/single quotes; that debt is not a review finding.
+  profile: "assertive"
+
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  estimate_code_review_effort: true
+  # IPC commands, the vault lifecycle and the OAuth hand-off all span JS, Rust
+  # and the static redirect site; a sequence diagram is often the only readable
+  # summary of a cross-boundary change.
+  sequence_diagrams: true
+  poem: false
+  suggested_labels: false
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+    # Additive, not exclusive: the default branch (main) is always reviewed.
+    # develop is listed so a long-lived integration branch is reviewed too.
+    base_branches:
+      - "develop"
+
+  # Honest semantics: this block is consumed ONLY by
+  # reviews.auto_approvals.max_security_risk, which is an Advanced-plan-and-above
+  # feature. Auto-approval is deliberately NOT enabled in this file, so today the
+  # text below does not gate anything automatically — it documents the trust
+  # boundary for humans reading a PR and becomes live only if auto-approval is
+  # ever turned on. Keep it accurate for that future.
+  #
+  # Facts that move the security risk rating. Monark is a local-first password
+  # manager, so the Rust<->JS IPC surface is the trust boundary: everything that
+  # can be reached through `invoke` is reachable by any script running in the
+  # webview, and everything that crosses it is attacker-controlled input.
+  security_risk_instructions: >-
+    Monark is a local-first password manager. The Rust<->JS IPC surface is the
+    trust boundary: anything reachable from a Tauri `invoke` command is
+    reachable by any code running in the webview, and every argument is
+    untrusted input. High risk: changes to crypto parameters or algorithms
+    (src-tauri/src/crypto/**, argon2/chacha/hmac/totp/random/constants),
+    nonce/IV generation or reuse, MAC/tag verification, key derivation,
+    zeroization of secrets, OS keychain storage (storage/keychain.rs,
+    storage/token_store.rs), unlock rate limiting (vault/rate_limit.rs),
+    OAuth state/PKCE handling, the CSP in src-tauri/tauri.conf.json, Tauri
+    capabilities, and anything that widens what crosses IPC (models.rs,
+    state.rs::merge_volatile, commands/**). Also high risk: build.rs, which
+    bakes the Google Drive OAuth client secret into the binary, and
+    .github/workflows/**, which holds the signing keys. Low risk: UI-only
+    changes under src/components and src/screens, docs/**, and copy changes in
+    redirect/_tools/locales/**. Releases are code-signed and self-updating via
+    the Tauri updater, so a bad build reaches every installed user without a
+    store review step in between.
+
+  # What makes a PR risky to merge. The PR workflow runs the web and Rust test
+  # suites and nothing else, so a type error, a lint-level defect, a broken
+  # Android build or a release-workflow mistake reaches a signed release before
+  # anyone notices.
+  merge_risk_instructions: >-
+    Dependency bumps of tauri, react, vite, keyring, reqwest,
+    chacha20poly1305 or argon2 are high risk: a previous Tauri bump (a499551)
+    was reverted after it broke the Android build, and the PR workflow would not
+    have caught it — it builds neither Android nor any platform bundle. Changes to the IPC contract are high risk when only one side
+    moves — src-tauri/src/models.rs and src/interfaces/*.interface.ts must
+    change together, as must a command signature and its wrapper in
+    src/services/*.ts. Adding Tauri capabilities or loosening the CSP is high
+    risk. Touching .github/workflows/tauri-release.yml is high risk because it
+    is the only path to a signed release. Docs-only, test-only and locale-copy
+    changes are low risk.
+
+  # Exclusion-only: everything not listed here is reviewed. Deliberately NOT
+  # excluded: bun.lock and src-tauri/Cargo.lock (dependency churn is the
+  # riskiest recurring change in this repo and the test suites do not cover it —
+  # handled by the `**/*.lock` path instruction instead), and
+  # src-tauri/gen/android/** (the committed Tauri scaffold is effectively
+  # source; only its gradle-wrapper.jar binary is excluded, by `!**/*.jar`).
+  path_filters:
+    - "!**/node_modules/**"
+    - "!dist/**"
+    # Generated by TanStack Router and committed; the file header says it must
+    # not be edited and is overwritten on every dev/build run.
+    - "!src/routeTree.gen.ts"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.ico"
+    - "!**/*.icns"
+    - "!**/*.woff2"
+    # Binary: the gradle wrapper jar. gradle-wrapper.properties is NOT excluded
+    # — its distributionUrl is a supply-chain lever.
+    - "!**/*.jar"
+    # The generated pages under redirect/ are emitted by redirect/_tools/build.mjs
+    # and committed; the generator is reviewed instead. The two patterns are
+    # deliberately narrow: `!redirect/*.html` covers the root-level pages
+    # (index, 404, home, privacy, terms) and `!redirect/*/*.html` covers the
+    # per-locale pages (redirect/<locale>/index.html and friends). A deeper
+    # `redirect/**/*.html` would also swallow redirect/_tools/og/card.html,
+    # which is a hand-written template rendered by redirect/_tools/og/render.sh
+    # and must stay reviewed.
+    - "!redirect/*.html"
+    - "!redirect/*/*.html"
+    - "!redirect/sitemap.xml"
+    - "!redirect/robots.txt"
+
+  # Test entries come first on purpose: CodeRabbit applies EVERY matching
+  # path_instructions entry (docs.coderabbit.ai/configuration/path-instructions),
+  # so a test file also matches the `src/**/*.ts(x)` entries further down. These
+  # entries state which rules win.
+  path_instructions:
+    - path: "src/test/**/*.test.ts"
+      instructions: >-
+        This is a test file, so the component and service rules for src/** do
+        not apply to it; the testing rules below win. Assert observable
+        behaviour (returned values, thrown errors, emitted actions) rather than
+        implementation details or private helpers. The PR workflow runs this
+        suite (`bun run test:run`) but never type-checks it: `tsc` excludes
+        src/test, so a type error or wrong call arity here passes CI and
+        `bun run build` alike — call those out explicitly. Mocks for
+        `@tauri-apps/api/core` and the
+        plugin modules must be registered before the module under test is
+        imported, otherwise the real binding is captured. No real secrets, keys
+        or vault passwords in fixtures, and no `setTimeout`-based
+        synchronisation: await the promise or use `vi.waitFor`.
+
+    - path: "src/test/**/*.test.tsx"
+      instructions: >-
+        This is a test file: the testing rules apply, not the component rules
+        for src/**, and the PR workflow runs the suite without type-checking it
+        (`tsc` excludes src/test), so type errors here pass CI. Use Testing
+        Library properly — query by role or
+        accessible name, prefer `user-event` over `fireEvent`, and rely on the
+        `jest-dom` matchers already loaded by src/test/setup.ts. Never weaken a
+        crypto or vault assertion (relaxing a matcher, mocking away the
+        encryption, asserting on a spy instead of the result) just to make a
+        test pass; that is a defect in the test, not in the code.
+
+    - path: "src-tauri/src/**/tests/**"
+      instructions: >-
+        This is a Rust test module: the testing rules win over the general
+        src-tauri/src/**/*.rs entry, which still applies for everything else.
+        Assert on returned values and error variants, not on log strings or
+        message text. Use `mockito` for HTTP instead of hitting a live endpoint.
+        Do not `unwrap()` shared or global state (the rate limiter's static
+        map, the vault state) — a poisoned lock must not abort the suite. Tests
+        must not depend on wall-clock time: the rate limiter is TTL-driven, so
+        drive it through its own clock/injection rather than sleeping. Never
+        touch the real OS keychain in a test.
+
+    - path: ".github/workflows/**"
+      instructions: >-
+        Every `uses:` must be pinned to a full commit SHA with a trailing
+        version comment (`# v4`); a bare tag or branch is a regression. One
+        existing pin does not meet this yet — the Android job's
+        tauri-apps/tauri-action (tauri-release.yml:166) has no version comment —
+        so flag it only if the PR touches that line, and add the comment when
+        the line is next touched. Never interpolate `github.event.*` values (PR
+        title, body, head ref, commit message) into `run:` scripts; pass them
+        through `env:`. Keep `permissions:` least-privilege per job. Signing
+        keys (TAURI_PRIVATE_KEY, TAURI_KEY_PASSWORD, ANDROID_KEY_*) and the
+        Google Drive client secret must come only from `secrets.` and must never
+        be echoed, even in debug steps. The "Setup Android signing" step
+        (tauri-release.yml:145-151) is the one accepted exception that
+        interpolates secrets directly into `run:` — it predates this rule, so do
+        not fire on it unless the PR edits it. Any NEW step must pass secrets
+        through `env:` instead of `${{ secrets.* }}` inside `run:`, nothing may
+        run with `set -x` in that step (it would echo the keystore password),
+        and the keystore must stay under `$RUNNER_TEMP` so it is discarded with
+        the runner. No `pull_request_target` that checks out the PR head.
+
+    - path: "src-tauri/src/**/*.rs"
+      instructions: >-
+        Use `thiserror` and `?` propagation, preferring `#[from]` conversions
+        over manual matching. No new `unwrap()`/`expect()` on runtime paths
+        (I/O, deserialisation, locks, env lookups) — return the error instead.
+        Never run blocking `std::fs` or network I/O inside a `#[tauri::command]`
+        on the main thread: use `#[tauri::command(async)]` or `spawn_blocking`.
+        No `unsafe`. Secrets must never be logged or formatted into error
+        strings, and `CommandError` messages must stay flattened at the IPC
+        boundary. Do not introduce new global mutable state.
+
+    - path: "src-tauri/src/crypto/**"
+      instructions: >-
+        Constant-time comparison only: MACs and tags must be checked with a
+        constant-time verify (e.g. `hmac::Mac::verify_slice`), never with `==`
+        on byte slices. A nonce/IV must never be reused with the same key —
+        flag any nonce that is derived from a counter, a timestamp or a fixed
+        value. Randomness must come from crypto/random.rs only, never from
+        `rand::random` or `thread_rng` directly. Argon2id parameters are floors:
+        never lower them. crypto/argon2.rs passes its caller's parameters
+        straight to `argon2::Params::new` and enforces no ceiling of its own, so
+        it must not grow its own defaults or upper bound that would bypass the
+        DoS bounds checked in vault/lifecycle.rs. Secrets must be zeroized after
+        use and must never appear in logs, error strings or derived `Debug`
+        output. Changing crypto/constants.rs (KEY_LEN, NONCE_LEN, SALT_LEN) is a
+        vault format break.
+
+    - path: "src-tauri/src/io/**"
+      instructions: >-
+        Vault persistence: writes must stay atomic (temp file + rename) so a
+        crash or a full disk cannot truncate an existing vault. The `p->monark/`
+        prefix in signature.rs is a magic marker for format detection, NOT an
+        authentication boundary — never treat it as proof of integrity or
+        authenticity. Errors must not leak filesystem paths or plaintext.
+
+    - path: "src-tauri/src/vault/**"
+      instructions: >-
+        Unlock lifecycle: the progressive rate-limiting floors must not be
+        weakened (3 free attempts, 60 s maximum delay), and the rate-limit state
+        must stay TTL-pruned so it cannot grow without bound. The
+        `validate_vault_path` canonicalisation and the `.monark` extension check
+        (lifecycle.rs) must not be bypassed, including for paths that arrive
+        from the frontend or from a cloud provider. The Argon2 DoS upper bounds
+        (256 MiB memory, 10 iterations, 16 lanes — ARGON2_MAX_* in
+        lifecycle.rs) are enforced here and must not be raised or removed.
+        `kdf_key` must be zeroized immediately after use, and a failed unlock
+        must leave no decrypted material and no unlocked flag behind. Cloud
+        lifecycle commands (cloud_lifecycle.rs) must never write plaintext to
+        disk — not to a temp file, not to a cache, not to the store plugin.
+
+    - path: "src-tauri/src/storage/**"
+      instructions: >-
+        Provider and keychain layer: refresh tokens, access tokens and provider
+        secrets live ONLY in the OS keychain (keychain.rs, token_store.rs) —
+        never in config, store.json, logs or error strings. Redact tokens,
+        authorisation codes and `Authorization` headers on every error path.
+        Validate URLs and WebDAV `PROPFIND` hrefs before use: absolute or
+        off-host hrefs were a credential-leak vector (commit ff7e833), and a
+        token must never be put in a query string. Keep the plaintext->keychain
+        migration idempotent so a re-run cannot duplicate or lose a token.
+        `StorageProvider` implementations must not block the async runtime.
+
+    - path: "src-tauri/src/commands/**"
+      instructions: >-
+        This is the IPC surface. Every new or changed command needs a sanitised
+        `CommandError` variant — never a raw `Display` of an internal error, a
+        path or a secret. Validate inputs before any I/O. Use
+        `#[tauri::command(async)]` for anything touching the filesystem or the
+        network. A signature change requires the mirrored type in
+        src/interfaces/*.interface.ts and the wrapper in src/services/*.ts in
+        the same PR. Never widen what crosses the IPC boundary: the vault
+        credential is stripped in state.rs::merge_volatile — keep it that way.
+        OAuth (commands/storage/oauth.rs): pending states must stay single-use,
+        expiry-checked and bounded — the map is in-memory and must not grow
+        without bound, so a new entry needs a matching removal or prune. The
+        PKCE verifier must stay CSPRNG-derived and `S256` (never `plain`), and a
+        state that is unknown, expired or already used must fail closed without
+        exchanging the code. Updater (commands/updater.rs): the minisign
+        signature is verified inside the plugin's `Update::download` — never
+        bypass or disable that verification, never allow a downgrade, and keep
+        the `pubkey` in tauri.conf.json matching the `TAURI_PRIVATE_KEY` used in
+        CI.
+
+    - path: "src-tauri/build.rs"
+      instructions: >-
+        This build script bakes the Google Drive OAuth credentials into the
+        binary at compile time via `option_env!`. No hard-coded fallback secret
+        may ever be committed. An absent variable must fail closed (or keep the
+        provider disabled) rather than silently shipping a shared credential.
+        The script must never print the values it reads — `cargo:rustc-env`
+        lines are fine, `println!` of a secret is not.
+
+    - path: "src-tauri/capabilities/**"
+      instructions: >-
+        Tauri capabilities are the app's permission model. Keep them least
+        privilege: add one permission at a time, never a blanket plugin default
+        set. Scope filesystem and biometry permissions to the app's own
+        identifiers (the biometry entries are already scoped to
+        `com.monark.app`). Never add remote origins to `connect-src`/`http`
+        scopes.
+
+    - path: "src-tauri/tauri.conf.json"
+      instructions: >-
+        The CSP must not be loosened: no `unsafe-eval`, no `*`, no `http:`, no
+        remote script or style origins. A CSP change is a security change and
+        needs a justification in the PR description. The updater endpoint and
+        pubkey must stay HTTPS and unchanged unless the key rotation is
+        explicitly part of the PR. The updater's trust rests on the plugin
+        verifying the minisign signature inside `Update::download`
+        (commands/updater.rs) — never disable that check, never allow a
+        downgrade, and the `pubkey` here must match the `TAURI_PRIVATE_KEY` the
+        release workflow signs with.
+
+    - path: "src-tauri/gen/android/**"
+      instructions: >-
+        This is committed Tauri scaffold that is effectively source. Check
+        AndroidManifest.xml for `android:allowBackup`, `usesCleartextTraffic`
+        and exported components, and for accidentally exported services or
+        receivers. Signing must come from CI: keystore.properties stays
+        gitignored, and no keystore password, alias or base64 keystore may be
+        committed. No secrets in strings.xml or build.gradle.kts. The
+        gradle-wrapper.properties `distributionUrl` must stay pinned to a real
+        Gradle release over HTTPS.
+
+    - path: "src/**/*.ts"
+      instructions: >-
+        TypeScript strict mode is on and `tsc` runs on every `bun run build`.
+        No `any` — Biome only warns on `suspicious/noExplicitAny`, so this needs
+        the reviewer. No non-null assertions on IPC results and no `as` casts
+        used to escape the interface contract. src/interfaces/*.interface.ts
+        must match the Rust serde shapes field for field, including rename and
+        serde attributes. The zod schemas in src/utils/validation/** are a trust
+        boundary: loosening one (allowing extra keys, dropping a check,
+        switching to `z.any`) is a security regression. Services must never log
+        vault material or credentials.
+
+    - path: "src/**/*.tsx"
+      instructions: >-
+        React 18 function components and hooks only. Respect the Rules of Hooks
+        (no conditional hooks, complete dependency arrays) and do not set state
+        after unmount on async Tauri calls. No `dangerouslySetInnerHTML`.
+        Accessibility is enforced: 35 Biome a11y rules are errors, so keyboard
+        handlers must accompany `onClick`, elements must be semantic,
+        `label`/control association is required, and positive `tabindex` is
+        banned. User-facing strings go through `react-i18next` with keys added
+        to BOTH src/i18n/locales/en.json and es.json. Do not demand reformatting
+        of pre-existing lines — legacy files are mid-migration to Biome tabs and
+        double quotes.
+
+    - path: "src/services/**"
+      instructions: >-
+        Service wrappers are the normal place that calls `invoke` (the
+        src/**/*.ts entry also applies); ImportVaultForm.tsx is the one existing
+        exception that calls `invoke` directly — do not add more. Keep the
+        command name and argument shape in lockstep
+        with `lib.rs::invoke_handler` and the Rust signature, and type the
+        result. Never swallow an error into a falsy value and never log an error
+        payload that may contain vault material. deepLinkService.ts receives
+        `monark://oauth/callback?code=&state=`, so its input URL carries an
+        OAuth code: keep the scheme check (`monark:` only — the deep link is
+        delivered by the OS, so any app can forge one) and keep the rule that a
+        callback whose `state` does not match the pending request is ignored
+        without touching the vault state or the provider status. Never log or
+        persist the raw URL, and keep redacting `code`/`state` the way the
+        existing log lines do; the processed-callback de-duplication set must
+        stay bounded.
+
+    - path: "src/utils/clipboard.ts"
+      instructions: >-
+        `copySensitive` is the only sanctioned path for passwords, TOTP codes
+        and other vault material. Keep both its auto-clear (30 s,
+        CLIPBOARD_CLEAR_DELAY_MS) and the behaviour that cancels the previous
+        clear timer when a new sensitive copy happens — dropping either leaves
+        secrets on the clipboard indefinitely or clears a newer copy early.
+        Secrets must never be written with a bare `writeText` (no auto-clear)
+        and never logged; a new call site that copies vault material directly
+        is a finding.
+
+    - path: "src/utils/validation/**"
+      instructions: >-
+        Validation schemas are the last line of defence for imported data (the
+        src/**/*.ts entry also applies). The form-level schemas in
+        vaultSchemas.ts must never loosen: no optional-by-default fields, no
+        `passthrough`, no `z.any` on data that reaches the vault. In
+        importValidation.ts, skipping an invalid entry with a console warning is
+        the documented design (see the module header) — do not demand a
+        redesign that blocks the whole import. What must be flagged is a NEW
+        silent drop (an entry or field discarded with no warning), a skipped or
+        imported count that never reaches the user, or a check that starts
+        coercing a value that does not match the expected shape instead of
+        rejecting it.
+
+    - path: "src/redux/**"
+      instructions: >-
+        The vault password lives in memory in `volatile.credential` and must
+        never be persisted (the plugin-store/SettingsStore path), logged, put in
+        a Redux devtools payload, or serialised into an action that reaches
+        disk. Keep `devTools: false` in store.tsx. Selectors must not hand
+        decrypted material to components that do not need it. On lock, the
+        credential must be cleared.
+
+    - path: "src/i18n/locales/*.json"
+      instructions: >-
+        Resource files: every key added, renamed or removed must change en.json
+        and es.json in the same PR with identical structure — no orphan keys, no
+        `{{placeholder}}` mismatch between locales. Keep the JSON valid and
+        stably ordered. Flag keys left behind in components after a rename.
+
+    - path: "**/*.lock"
+      instructions: >-
+        Lockfiles (bun.lock, src-tauri/Cargo.lock): do not police version churn.
+        Report only new or removed transitive dependencies, a changed registry
+        or source (git/URL/path dependencies), a major jump in tauri, react,
+        vite, reqwest, keyring, chacha20poly1305 or argon2, and a Cargo.lock
+        entry that no longer matches Cargo.toml. Above all, flag any removal of
+        the package.json `overrides` that pin CVE fixes (seroval, tar, rollup,
+        postcss, nanoid, picomatch, ws, vite).
+
+    - path: "package.json"
+      instructions: >-
+        Keep the CVE `overrides` block intact (seroval, tar, rollup, postcss,
+        nanoid, picomatch, ws, vite). A major bump of React, Vite or Tauri must
+        be justified in the PR: a previous Tauri bump (a499551) was reverted
+        after breaking the Android build and the PR workflow (tests only) would
+        not have caught it.
+        `@types/react` 19 against React 18 is a known mismatch — do not treat it
+        as a bug to "fix" without a runtime bump. Keep bun.lock in sync with any
+        dependency edit.
+
+    - path: "src-tauri/Cargo.toml"
+      instructions: >-
+        Crate manifest: `tokio`'s `test-util` feature belongs in
+        `[dev-dependencies]`, not `[dependencies]`. The crate `version` (0.2.3)
+        drifts from package.json and tauri.conf.json (0.2.8) — flag the drift on
+        release PRs. Keep the platform-gated `keyring` backends intact (Android
+        needs `android-native-keyring-store`). A bump of a crypto crate (argon2,
+        chacha20poly1305, hmac, sha2) changes the vault format's assumptions and
+        is high risk.
+
+    - path: "redirect/_tools/**"
+      instructions: >-
+        This is the site build pipeline that produces every committed page in
+        redirect/. Output must be regenerated with `bun run site:build` followed
+        by `site:check` in the same PR — a hand-edited redirect/**/*.html with
+        no generator change is a defect. Every interpolated string or locale
+        copy must be HTML-escaped, because content is compiled into static
+        pages. The OAuth landing at `/` must keep passing `?code=&state=`
+        through untouched and must never write those values to the page, a log
+        or analytics; changes to oauth.js/site.js must not put tokens in URLs.
+        oauth.js and site.js here are the source of truth for the copies at
+        redirect/oauth.js and redirect/site.js.
+
+    - path: "redirect/*.js"
+      instructions: >-
+        redirect/oauth.js and redirect/site.js are byte-identical copies that
+        redirect/_tools/build.mjs copies into place (see its "Copy the
+        hand-written runtime assets" loop); the source of truth is
+        redirect/_tools/{oauth,site}.js. An edit here without a matching
+        generator change is a hand-edit that the next `bun run site:build`
+        silently reverts — flag it. What the runtime must protect: oauth.js
+        forwards `code` and `state` to `monark://oauth/callback?code=…&state=…`
+        and renders a base64 `{code,state}` payload for the "no app installed"
+        manual-copy path, so that hand-off must stay byte-faithful and the
+        base64 payload must not gain extra data. No remote script or origin, no
+        `eval`, no `innerHTML` with anything that is not a static literal, and
+        the code/state must never be sent to a third-party endpoint (analytics,
+        uptime pings, error reporting).
+
+    - path: "**/*.md"
+      instructions: >-
+        These are the architecture docs and the READMEs (docs/*.md, README.md,
+        redirect/README.md, src-tauri/src/storage/README.md). A behaviour change
+        in the code a doc describes must update that doc in the same PR. Flag
+        docs that now contradict the implementation, and broken links — README
+        links a docs/security-audit.md that no longer exists.
+
+    - path: "firebase.json"
+      instructions: >-
+        This file decides what of redirect/ is published. `_tools/**` must stay
+        in the ignore list: publishing it exposes the build sources and
+        mock.mjs. The OAuth landing at `/` must not be cached (`cleanUrls` plus
+        any cache headers added here), and any header policy added applies to
+        the page that receives the OAuth code.
+
+    - path: "tsconfig*.json"
+      instructions: >-
+        `exclude: ["src/test"]` is deliberate and is the reason test type errors
+        are invisible to `tsc` — do not remove it without adding a type gate for
+        tests in the same PR. Do not relax `strict`, `noUnusedLocals`,
+        `noUnusedParameters` or `noFallthroughCasesInSwitch`.
+
+    - path: "biome.json"
+      instructions: >-
+        The 35 a11y rules are `error` on purpose: downgrading one to warning or
+        off is a review-infrastructure change that needs justification in the
+        PR. Keep tabs, double quotes and `organizeImports`, and do not turn
+        `suspicious/noExplicitAny` off — it is the only machine check for `any`.
+
+  tools:
+    # Enabled even though the legacy files (src/services/vault.ts, src/store/*,
+    # src/test/*) still fail format and carry noExplicitAny warnings: that debt
+    # is expected and is not a review finding, but Biome is the repo's own
+    # linter, so new code must be checked with it.
+    biome:
+      enabled: true
+    # Needs the Tauri/native toolchain; it will be a no-op if the sandbox
+    # cannot build the crate.
+    clippy:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    # A password manager must never commit a secret.
+    gitleaks:
+      enabled: true
+    reactDoctor:
+      enabled: true
+
+chat:
+  auto_reply: true
