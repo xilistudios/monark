@@ -254,6 +254,12 @@ mod tests {
             after.credentials, before.credentials,
             "the master key must be re-wrapped"
         );
+        // Review finding T01-1: `assert_ne!` above only proves the salt changed.
+        // Pin the cost parameters too, so a silent KDF downgrade in the re-wrap
+        // path (e.g. hardcoding `iterations = 1`) cannot pass every gate.
+        assert_eq!(after.argon2_params.memory_cost_kib, 65_536);
+        assert_eq!(after.argon2_params.iterations, 3);
+        assert_eq!(after.argon2_params.parallelism, 4);
 
         Ok(())
     }
