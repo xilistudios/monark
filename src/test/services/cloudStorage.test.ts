@@ -167,7 +167,7 @@ describe('CloudStorageCommands', () => {
 				vaultName: 'test-vault',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},
@@ -193,7 +193,7 @@ describe('CloudStorageCommands', () => {
 				vaultId: 'vault-1',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},

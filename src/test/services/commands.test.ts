@@ -136,7 +136,7 @@ describe('VaultCommands', () => {
 				vaultName: 'test-vault',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},
@@ -162,7 +162,7 @@ describe('VaultCommands', () => {
 				vaultId: 'vault-1',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},
@@ -290,11 +290,9 @@ describe('VaultCommands', () => {
 				vaultId: vaultPath,
 				vaultName,
 				password,
-				vaultContent: {
-					updatedAt: vaultContent.updated_at,
-					hmac: vaultContent.hmac,
-					entries: vaultContent.entries,
-				},
+				// The backend `VaultView` is snake_case: the payload is forwarded
+				// unchanged (no camelCase `updatedAt`).
+				vaultContent,
 				providerName
 			});
 			expect(result).toBe('vault-1');
@@ -397,7 +395,7 @@ describe('VaultCommands', () => {
 					vaultName: 'test-vault',
 					password: 'password',
 					vaultContent: {
-						updatedAt: '2023-01-01T00:00:00Z',
+						updated_at: '2023-01-01T00:00:00Z',
 						hmac: 'test-hmac',
 						entries: []
 					},
@@ -425,7 +423,7 @@ describe('VaultCommands', () => {
 				vaultId: 'vault-1',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},

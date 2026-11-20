@@ -17,7 +17,7 @@
 mod tests {
     use crate::commands::errors::CommandError;
     use crate::io;
-    use crate::models::{Entry, Field, Vault};
+    use crate::models::{Entry, Field, Vault, VaultView};
     use crate::vault::lifecycle;
     use chrono::Utc;
     use tempfile::tempdir;
@@ -60,7 +60,7 @@ mod tests {
         lifecycle::write_vault(
             file_path.clone(),
             OLD_PASSWORD.to_string(),
-            vault_with_entry(),
+            VaultView::from(&vault_with_entry()),
         )?;
         Ok(file_path)
     }

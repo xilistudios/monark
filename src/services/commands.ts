@@ -5,7 +5,8 @@ import type {
 	CreateCloudVaultRequest,
 	UpdateCloudVaultRequest,
 	DeleteCloudVaultRequest,
-	CloudVaultMetadata
+	CloudVaultMetadata,
+	VaultContentView
 } from "../interfaces/cloud-storage.interface";
 
 /**
@@ -34,11 +35,7 @@ export default class VaultCommands {
   static async write(
     filePath: string,
     password: string,
-    vaultContent: {
-      updated_at: string;
-      hmac: string;
-      entries: any[];
-    }
+    vaultContent: VaultContentView
   ) {
     return await invoke('write_vault', { filePath, password, vaultContent });
   }
@@ -204,11 +201,7 @@ export default class VaultCommands {
   static async writeVault(
     vaultPath: string,
     password: string,
-    vaultContent: {
-      updated_at: string;
-      hmac: string;
-      entries: any[];
-    },
+    vaultContent: VaultContentView,
     providerName?: string,
     vaultName?: string
   ): Promise<string> {
@@ -219,16 +212,14 @@ export default class VaultCommands {
 
     // If provider name is provided, assume it's a cloud vault
     if (providerName) {
-      // Convert snake_case to camelCase for the interface
+      // The backend `VaultView` is snake_case, exactly like the local payload:
+      // pass it through unchanged (a camelCase `updatedAt` would be rejected by
+      // serde, which is what this used to send).
       return this.writeCloudVault({
         vaultId: vaultPath,
         vaultName: vaultName || vaultPath,
         password,
-        vaultContent: {
-          updatedAt: vaultContent.updated_at,
-          hmac: vaultContent.hmac,
-          entries: vaultContent.entries,
-        },
+        vaultContent,
         providerName,
       });
     }

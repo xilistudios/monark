@@ -4,6 +4,7 @@ use crate::crypto;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile, VaultView};
 use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
 use crate::storage::StorageManager;
+use crate::vault::merge::merge_vault_view;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::fs;
@@ -105,14 +106,38 @@ async fn resolve_provider_name(
 pub async fn write_cloud_vault(
     vault_name: String,
     password: String,
-    vault_content: Vault,
+    vault_content: VaultView,
     provider_name: Option<String>,
     parent_id: Option<String>,
     vault_id: Option<String>,
     state: tauri::State<'_, StorageState>,
 ) -> Result<String, CommandError> {
-    let storage_manager = &state.manager;
+    write_cloud_vault_with(
+        vault_name,
+        password,
+        vault_content,
+        provider_name,
+        parent_id,
+        vault_id,
+        &state.manager,
+    )
+    .await
+}
 
+/// Body of [`write_cloud_vault`], taking the storage manager directly.
+///
+/// The `tauri::State` wrapper only exists for IPC; keeping the logic here lets
+/// the write-path merge be tested end to end against a real (local) provider
+/// without building a Tauri app.
+pub(crate) async fn write_cloud_vault_with(
+    vault_name: String,
+    password: String,
+    vault_content: VaultView,
+    provider_name: Option<String>,
+    parent_id: Option<String>,
+    vault_id: Option<String>,
+    storage_manager: &Arc<StorageManager>,
+) -> Result<String, CommandError> {
     // If vault_id is provided, directly update the existing vault
     if let Some(id) = vault_id {
         update_existing_cloud_vault(
@@ -212,7 +237,16 @@ pub async fn read_cloud_vault(
     provider_name: Option<String>,
     state: tauri::State<'_, StorageState>,
 ) -> Result<VaultView, CommandError> {
-    let storage_manager = &state.manager;
+    read_cloud_vault_with(vault_id, password, provider_name, &state.manager).await
+}
+
+/// Body of [`read_cloud_vault`], taking the storage manager directly.
+pub(crate) async fn read_cloud_vault_with(
+    vault_id: String,
+    password: String,
+    provider_name: Option<String>,
+    storage_manager: &Arc<StorageManager>,
+) -> Result<VaultView, CommandError> {
     let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
 
     let vault_data = match storage_manager
@@ -426,11 +460,20 @@ async fn create_new_cloud_vault(
     vault_name: &str,
     vault_path: &str,
     password: &str,
-    mut initial_vault_content: Vault,
+    initial_vault_content: VaultView,
     parent_id: Option<String>,
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<String, CommandError> {
+    // A brand-new vault has no stored key material, so any passkey in the
+    // creation payload fails closed here (see `merge_vault_view`).
+    let empty_disk_vault = Vault {
+        updated_at: Utc::now(),
+        hmac: String::new(),
+        entries: Vec::new(),
+    };
+    let mut initial_vault_content = merge_vault_view(initial_vault_content, &empty_disk_vault)?;
+
     let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
     let master_key_vec = crypto::random::generate_key()?;
     let master_key: [u8; KEY_LENGTH] = master_key_vec
@@ -511,7 +554,7 @@ async fn create_new_cloud_vault(
 async fn update_existing_cloud_vault(
     vault_id: &str,
     password: &str,
-    mut new_vault_content: Vault,
+    new_vault_content: VaultView,
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<(), CommandError> {
@@ -525,8 +568,13 @@ async fn update_existing_cloud_vault(
 
     let master_key = derive_and_decrypt_master_key(password, &vault_file)?;
 
-    new_vault_content.updated_at = Utc::now();
-    let vault_json_bytes = serde_json::to_vec(&new_vault_content)?;
+    // Re-attach the passkey secrets that only exist in the stored file, and
+    // keep every passkey this (possibly stale) view does not mention.
+    let disk_vault = decrypt_vault_blob(&master_key, &vault_file)?;
+    let mut merged_vault = merge_vault_view(new_vault_content, &disk_vault)?;
+    merged_vault.updated_at = Utc::now();
+
+    let vault_json_bytes = serde_json::to_vec(&merged_vault)?;
     let vault_nonce = crypto::random::generate_nonce()?;
     let vault_ciphertext =
         crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
@@ -579,6 +627,30 @@ fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> 
 fn create_vault_bytes(vault_file: &VaultFile) -> Result<Vec<u8>, CommandError> {
     let signed_vault = crate::io::signature::sign_vault(vault_file);
     Ok(signed_vault.into_bytes())
+}
+
+/// Decrypts the vault blob of `vault_file` with `master_key` into the disk
+/// [`Vault`] (the shape that still holds passkey private keys).
+///
+/// Mirrors the decrypt chain of [`read_cloud_vault`], stopping before the view
+/// conversion.
+fn decrypt_vault_blob(
+    master_key: &[u8; KEY_LENGTH],
+    vault_file: &VaultFile,
+) -> Result<Vault, CommandError> {
+    let vault_nonce = URL_SAFE_NO_PAD
+        .decode(&vault_file.vault.nonce)
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault nonce".to_string()))?;
+
+    let vault_ciphertext = URL_SAFE_NO_PAD
+        .decode(&vault_file.vault.ciphertext)
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault ciphertext".to_string()))?;
+
+    let vault_json_bytes =
+        crypto::chacha::decrypt_xchacha20poly1305(master_key, &vault_nonce, &vault_ciphertext)?;
+
+    serde_json::from_slice(&vault_json_bytes)
+        .map_err(|_e| CommandError::Crypto("Failed to deserialize existing vault".to_string()))
 }
 
 fn derive_and_decrypt_master_key(

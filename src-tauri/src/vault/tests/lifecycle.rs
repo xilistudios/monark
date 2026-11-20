@@ -56,6 +56,61 @@ mod tests {
         URL_SAFE_NO_PAD.encode(TEST_PKCS8_DER)
     }
 
+    /// Writes `vault` (passkey key material included) straight to disk, the way
+    /// a backend-side `passkey_create` would.
+    ///
+    /// The command write path cannot do this: it only receives sanitized views,
+    /// so a passkey in a payload fails closed. The test therefore builds the
+    /// encrypted file itself (fresh master key + KDF key, same layout as
+    /// `lifecycle::create_new_vault`).
+    fn seed_disk_vault(file_path: &str, password: &str, vault: &Vault) -> Result<(), CommandError> {
+        use crate::crypto;
+        use crate::models::{Argon2Params, EncryptedData, VaultFile};
+
+        let master_key: [u8; 32] = crypto::random::generate_key()?
+            .try_into()
+            .map_err(|_| CommandError::Crypto("Invalid generated master key length".to_string()))?;
+        let salt = crypto::random::generate_salt()?;
+        let argon2_params = Argon2Params {
+            salt: URL_SAFE_NO_PAD.encode(&salt),
+            memory_cost_kib: 65536,
+            iterations: 3,
+            parallelism: 4,
+        };
+        let kdf_key = crypto::argon2::derive_key_argon2id(
+            password.as_bytes(),
+            &salt,
+            argon2_params.memory_cost_kib,
+            argon2_params.iterations,
+            argon2_params.parallelism,
+            32,
+        )?;
+
+        let mk_nonce = crypto::random::generate_nonce()?;
+        let mk_ciphertext =
+            crypto::chacha::encrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &master_key)?;
+
+        let vault_json = serde_json::to_vec(vault)?;
+        let vault_nonce = crypto::random::generate_nonce()?;
+        let vault_ciphertext =
+            crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json)?;
+
+        let vault_file = VaultFile {
+            version: "1.0".to_string(),
+            argon2_params,
+            credentials: EncryptedData {
+                nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
+                ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
+            },
+            vault: EncryptedData {
+                nonce: URL_SAFE_NO_PAD.encode(vault_nonce),
+                ciphertext: URL_SAFE_NO_PAD.encode(vault_ciphertext),
+            },
+        };
+
+        crate::io::vault::write_vault(file_path.to_string(), &vault_file)
+    }
+
     /// Acceptance criterion 2: `read_vault` returns a sanitized view end-to-end.
     #[test]
     fn read_vault_returns_sanitized_view() -> Result<(), CommandError> {
@@ -68,7 +123,10 @@ mod tests {
             .to_string();
         let password = "test_password".to_string();
 
-        lifecycle::write_vault(file_path.clone(), password.clone(), vault_with_passkey())?;
+        // A passkey cannot be created through the write path (there is no key
+        // material to restore, so it fails closed). Seed the file with the disk
+        // vault directly, then exercise the read path.
+        seed_disk_vault(&file_path, &password, &vault_with_passkey())?;
 
         let view: VaultView = lifecycle::read_vault(file_path.clone(), password.clone())?;
         let json = serde_json::to_string(&view).expect("view serializes");
@@ -83,12 +141,12 @@ mod tests {
         );
         assert!(json.contains(r#""entry_type":"passkey""#));
         assert_eq!(view.hmac, "hmac-value");
-        // `write_vault` stamps `updated_at` with `Utc::now()`; the view must
-        // carry that stamp through unchanged.
-        assert!(
-            view.updated_at > fixed_time(),
-            "the view must carry the write timestamp, got {}",
-            view.updated_at
+        // The seeded file carries the fixed timestamp; the read path must hand
+        // it through unchanged (the write path is what stamps `Utc::now()`).
+        assert_eq!(
+            view.updated_at,
+            fixed_time(),
+            "the view must carry the stored vault timestamp"
         );
 
         let EntryView::Group { children, .. } = &view.entries[0] else {
@@ -147,7 +205,7 @@ mod tests {
         let expected_entries_json =
             serde_json::to_string(&vault.entries).expect("entries serialize");
 
-        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault))?;
         let view = lifecycle::read_vault(file_path, password)?;
 
         assert_eq!(
@@ -228,7 +286,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        let _ = lifecycle::write_vault(file_path.clone(), password, vault);
+        let _ = lifecycle::write_vault(file_path.clone(), password, VaultView::from(&vault));
 
         assert!(std::path::Path::new(&file_path).exists());
 
@@ -262,7 +320,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password, vault)?;
+        lifecycle::write_vault(file_path.clone(), password, VaultView::from(&vault))?;
 
         assert!(subdir.exists());
         assert!(std::path::Path::new(&file_path).exists());
@@ -291,7 +349,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        let result = lifecycle::write_vault(file_path.clone(), password, vault);
+        let result = lifecycle::write_vault(file_path.clone(), password, VaultView::from(&vault));
 
         match result {
             Err(CommandError::Io(msg)) => assert_eq!(msg, "Invalid vault file signature"),
@@ -318,7 +376,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault))?;
 
         assert!(std::path::Path::new(&file_path).exists());
 
@@ -350,7 +408,7 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password, vault)?;
+        lifecycle::write_vault(file_path.clone(), password, VaultView::from(&vault))?;
 
         // Attempt to open with wrong password
         let result = lifecycle::read_vault(file_path, wrong_password);
@@ -408,14 +466,14 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault))?;
 
-        // T04 interim: writes still take a `Vault` (T05 switches them to views),
-        // and a view cannot be converted back to a `Vault` for passkeys. These
-        // tests only use Data entries, so the mutation is applied to the
-        // original `Vault` and the read result (a `VaultView`) is asserted on.
+        // The write path now takes the sanitized view: build the edit as a view
+        // (exactly what the frontend would send back after `read_vault`).
+        let prev_updated_at =
+            lifecycle::read_vault(file_path.clone(), password.clone())?.updated_at;
         let vault = Vault {
-            updated_at: lifecycle::read_vault(file_path.clone(), password.clone())?.updated_at,
+            updated_at: prev_updated_at,
             hmac: "test_hmac".to_string(),
             entries: vec![Entry::Data {
                 id: Uuid::new_v4(),
@@ -428,9 +486,7 @@ mod tests {
             }],
         };
 
-        let prev_updated_at = vault.updated_at;
-
-        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault))?;
 
         let updated_vault = lifecycle::read_vault(file_path, password)?;
         assert_eq!(updated_vault.hmac, "test_hmac");
@@ -458,16 +514,16 @@ mod tests {
             entries: Vec::new(),
         };
 
-        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
-        // T04 interim: the read returns a sanitized view; the write path still
-        // takes a `Vault`, so the re-write uses a fresh `Vault` value.
+        lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault))?;
+        // The re-write carries the view the frontend holds (empty here) and the
+        // wrong password: the master key cannot be unwrapped, so the write fails.
         let vault = Vault {
             updated_at: Utc::now(),
             hmac: "new_hmac".to_string(),
             entries: Vec::new(),
         };
 
-        let result = lifecycle::write_vault(file_path, wrong_password, vault);
+        let result = lifecycle::write_vault(file_path, wrong_password, VaultView::from(&vault));
         match result {
             Err(CommandError::Crypto(_)) => Ok(()),
             _ => panic!("Expected cryptographic error for wrong password"),
@@ -491,7 +547,8 @@ mod tests {
         };
 
         // Should succeed and create the file
-        let result = lifecycle::write_vault(file_path.clone(), password.clone(), vault);
+        let result =
+            lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault));
         assert!(result.is_ok(), "Expected Ok(()), got {:?}", result);
         assert!(
             std::path::Path::new(&file_path).exists(),
@@ -594,7 +651,8 @@ mod tests {
             entries: Vec::new(),
         };
 
-        let write_result = lifecycle::write_vault(file_path.clone(), password.clone(), vault);
+        let write_result =
+            lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault));
 
         // 2. Check file existence
         let file_exists = std::path::Path::new(&file_path).exists();
@@ -641,5 +699,251 @@ mod tests {
         // 8. Assert file was created and has content
         assert!(file_exists, "Vault file was not created");
         assert!(file_len.unwrap_or(0) > 0, "Vault file is empty");
+    }
+
+    // -----------------------------------------------------------------
+    // T05 — write path merge, end to end through the commands
+    // -----------------------------------------------------------------
+
+    /// Criterion 1 (end to end): a view round-trip through `write_vault`
+    /// re-attaches the passkey key from disk, byte for byte.
+    #[test]
+    fn write_vault_roundtrip_restores_passkey_key() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("roundtrip.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        let disk = vault_with_passkey();
+        seed_disk_vault(&file_path, &password, &disk)?;
+
+        // Exactly what the frontend does: read the view, write it back.
+        let view = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), view)?;
+
+        let stored = decrypt_disk_vault(&file_path, &password)?;
+        assert_eq!(
+            stored.entries, disk.entries,
+            "the passkey (key material included) must survive the round-trip"
+        );
+
+        Ok(())
+    }
+
+    /// Criterion 2 (end to end): metadata edits apply, the immutable core and
+    /// the key material come from disk.
+    #[test]
+    fn write_vault_applies_metadata_edits_only() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("metadata_edit.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        seed_disk_vault(&file_path, &password, &vault_with_passkey())?;
+
+        let mut view = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        let EntryView::Group { children, .. } = &mut view.entries[0] else {
+            panic!("expected a group view at the root");
+        };
+        let EntryView::Passkey(passkey) = &mut children[0] else {
+            panic!("expected a passkey view inside the group");
+        };
+        passkey.name = "GitHub (renamed)".to_string();
+        passkey.user_name = "octocat2".to_string();
+        passkey.rp_id = "evil.example".to_string();
+        passkey.credential_id = vec![0x00, 0x01];
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), view)?;
+
+        let stored = decrypt_disk_vault(&file_path, &password)?;
+        let Entry::Group { children, .. } = &stored.entries[0] else {
+            panic!("expected the group on disk");
+        };
+        let Entry::Passkey {
+            name,
+            user_name,
+            rp_id,
+            credential_id,
+            private_key,
+            ..
+        } = &children[0]
+        else {
+            panic!("expected the passkey on disk");
+        };
+        assert_eq!(name, "GitHub (renamed)");
+        assert_eq!(user_name, "octocat2");
+        assert_eq!(rp_id, "github.com", "rp_id must come from disk");
+        assert_eq!(credential_id, &vec![0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(private_key.to_pkcs8_der()?, TEST_PKCS8_DER.to_vec());
+
+        Ok(())
+    }
+
+    /// Criterion 3 (end to end): a stale view that never saw the passkey must
+    /// not delete it.
+    #[test]
+    fn write_vault_stale_view_preserves_passkey() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("stale_write.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        seed_disk_vault(&file_path, &password, &vault_with_passkey())?;
+
+        // A view captured before the passkey existed: the group is there, the
+        // passkey is not.
+        let stale_view = VaultView {
+            updated_at: fixed_time(),
+            hmac: String::new(),
+            entries: vec![EntryView::Group {
+                id: Uuid::from_bytes([0x33; 16]),
+                name: "Root".to_string(),
+                data_type: "group".to_string(),
+                children: Vec::new(),
+            }],
+        };
+        lifecycle::write_vault(file_path.clone(), password.clone(), stale_view)?;
+
+        let stored = decrypt_disk_vault(&file_path, &password)?;
+        assert_eq!(
+            stored.entries,
+            vault_with_passkey().entries,
+            "the stale write must leave the passkey exactly as it was"
+        );
+
+        Ok(())
+    }
+
+    /// Criterion 4 (end to end): an unknown passkey id is rejected and the file
+    /// on disk is left untouched.
+    #[test]
+    fn write_vault_unknown_passkey_id_fails_closed_and_writes_nothing() -> Result<(), CommandError>
+    {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("unknown_passkey.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        seed_disk_vault(&file_path, &password, &vault_with_passkey())?;
+        let before = std::fs::read(&file_path).expect("vault file is readable");
+
+        let mut view = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        let EntryView::Group { children, .. } = &mut view.entries[0] else {
+            panic!("expected a group view at the root");
+        };
+        let EntryView::Passkey(passkey) = &mut children[0] else {
+            panic!("expected a passkey view inside the group");
+        };
+        passkey.id = Uuid::from_bytes([0x77; 16]);
+
+        match lifecycle::write_vault(file_path.clone(), password, view) {
+            Err(CommandError::Validation(msg)) => {
+                assert!(msg.contains("no stored key material"), "unexpected: {msg}");
+            }
+            other => panic!("expected CommandError::Validation, got {other:?}"),
+        }
+
+        let after = std::fs::read(&file_path).expect("vault file is readable");
+        assert_eq!(before, after, "a rejected write must not touch the file");
+
+        Ok(())
+    }
+
+    /// Criterion 6 (end to end): data entries keep round-tripping exactly as
+    /// before the view-based write path.
+    #[test]
+    fn write_vault_data_entries_roundtrip_unchanged() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("data_roundtrip.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        let vault = Vault {
+            updated_at: fixed_time(),
+            hmac: String::new(),
+            entries: vec![Entry::Data {
+                id: Uuid::from_bytes([0x22; 16]),
+                name: "Mail".to_string(),
+                data_type: "login".to_string(),
+                created_at: fixed_time(),
+                updated_at: fixed_time(),
+                fields: vec![crate::models::Field {
+                    title: "Password".to_string(),
+                    property: "password".to_string(),
+                    value: "s3cr3t".to_string(),
+                    secret: true,
+                }],
+                tags: vec!["personal".to_string()],
+            }],
+        };
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), VaultView::from(&vault))?;
+        let view = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        lifecycle::write_vault(file_path.clone(), password.clone(), view)?;
+
+        let stored = decrypt_disk_vault(&file_path, &password)?;
+        assert_eq!(stored.entries, vault.entries);
+
+        Ok(())
+    }
+
+    /// Criterion 7: a creation payload cannot smuggle in a passkey, and an
+    /// empty payload still creates a vault.
+    #[test]
+    fn create_vault_with_passkey_fails_closed() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("create_with_passkey.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        let view = VaultView::from(&vault_with_passkey());
+        match lifecycle::write_vault(file_path.clone(), password.clone(), view) {
+            Err(CommandError::Validation(msg)) => {
+                assert!(msg.contains("no stored key material"), "unexpected: {msg}");
+            }
+            other => panic!("expected CommandError::Validation, got {other:?}"),
+        }
+        assert!(
+            !std::path::Path::new(&file_path).exists(),
+            "a rejected creation must not create the file"
+        );
+
+        // The empty payload the UI actually sends still works.
+        lifecycle::write_vault(
+            file_path.clone(),
+            password.clone(),
+            VaultView {
+                updated_at: Utc::now(),
+                hmac: String::new(),
+                entries: Vec::new(),
+            },
+        )?;
+        assert!(std::path::Path::new(&file_path).exists());
+
+        Ok(())
     }
 }

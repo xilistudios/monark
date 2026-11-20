@@ -2,6 +2,7 @@ use crate::commands::errors::CommandError;
 use crate::crypto;
 use crate::io;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile, VaultView};
+use crate::vault::merge::merge_vault_view;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::path::{Path, PathBuf};
@@ -52,11 +53,16 @@ fn validate_vault_path(file_path: &str) -> Result<PathBuf, CommandError> {
     }
 }
 
+/// Writes a vault from the sanitized IPC view.
+///
+/// The payload is what `read_vault` handed the frontend, so passkey private
+/// keys are absent by construction: [`update_existing_vault`] re-attaches them
+/// from the decrypted on-disk vault (see [`crate::vault::merge`]).
 #[tauri::command(async)]
 pub fn write_vault(
     file_path: String,
     password: String,
-    vault_content: Vault,
+    vault_content: VaultView,
 ) -> Result<(), CommandError> {
     let canonical_path = validate_vault_path(&file_path)?;
     let canonical_str = canonical_path.to_string_lossy().to_string();
@@ -207,8 +213,16 @@ pub fn change_vault_password(
 fn create_new_vault(
     file_path: &str,
     password: &str,
-    mut initial_vault_content: Vault,
+    initial_vault_content: VaultView,
 ) -> Result<(), CommandError> {
+    // A brand-new vault has no stored key material, so any passkey in the
+    // creation payload fails closed here (see `merge_vault_view`).
+    let empty_disk_vault = Vault {
+        updated_at: Utc::now(),
+        hmac: String::new(),
+        entries: Vec::new(),
+    };
+    let mut initial_vault_content = merge_vault_view(initial_vault_content, &empty_disk_vault)?;
     let master_key_vec = crypto::random::generate_key()?;
     let master_key: [u8; KEY_LENGTH] = master_key_vec
         .try_into()
@@ -264,7 +278,7 @@ fn create_new_vault(
 fn update_existing_vault(
     file_path: &str,
     password: &str,
-    mut new_vault_content: Vault,
+    new_vault_content: VaultView,
 ) -> Result<(), CommandError> {
     crate::vault::rate_limit::check_attempts(file_path)?;
     let mut vault_file = io::vault::read_vault(file_path.to_string())?;
@@ -280,8 +294,13 @@ fn update_existing_vault(
         }
     };
 
-    new_vault_content.updated_at = Utc::now();
-    let vault_json_bytes = serde_json::to_vec(&new_vault_content)?;
+    // Re-attach the passkey secrets that only exist on disk, and keep every
+    // passkey this (possibly stale) view does not mention.
+    let disk_vault = decrypt_vault_blob(&master_key, &vault_file)?;
+    let mut merged_vault = merge_vault_view(new_vault_content, &disk_vault)?;
+    merged_vault.updated_at = Utc::now();
+
+    let vault_json_bytes = serde_json::to_vec(&merged_vault)?;
     let vault_nonce = crypto::random::generate_nonce()?;
     let vault_ciphertext =
         crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
@@ -290,6 +309,30 @@ fn update_existing_vault(
     vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
 
     io::vault::write_vault(file_path.to_string(), &vault_file)
+}
+
+/// Decrypts the vault blob of `vault_file` with `master_key` into the disk
+/// [`Vault`] (the shape that still holds passkey private keys).
+///
+/// Mirrors the decrypt chain of [`read_vault`], stopping before the view
+/// conversion.
+fn decrypt_vault_blob(
+    master_key: &[u8; KEY_LENGTH],
+    vault_file: &VaultFile,
+) -> Result<Vault, CommandError> {
+    let vault_nonce = URL_SAFE_NO_PAD
+        .decode(&vault_file.vault.nonce)
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault nonce".to_string()))?;
+
+    let vault_ciphertext = URL_SAFE_NO_PAD
+        .decode(&vault_file.vault.ciphertext)
+        .map_err(|_e| CommandError::Crypto("Failed to decode vault ciphertext".to_string()))?;
+
+    let vault_json_bytes =
+        crypto::chacha::decrypt_xchacha20poly1305(master_key, &vault_nonce, &vault_ciphertext)?;
+
+    serde_json::from_slice(&vault_json_bytes)
+        .map_err(|_e| CommandError::Crypto("Failed to deserialize existing vault".to_string()))
 }
 
 fn validate_argon2_params(params: &Argon2Params) -> Result<(), CommandError> {

@@ -406,9 +406,12 @@ export class VaultInstance {
 				vaultId: cloudFileId,
 				vaultName: vault.name,
 				password: password,
-				vaultContent: vaultContent, // Already in snake_case format
+				// Already in the backend's snake_case `VaultView` shape. Passkey
+				// secrets are absent by design: the backend re-attaches them from
+				// the stored vault by entry id.
+				vaultContent: vaultContent,
 				providerName: vault.providerId,
-			} as any);
+			});
 
 			// Update sync timestamp
 			this.dispatch(syncCloudVault(this.id));
