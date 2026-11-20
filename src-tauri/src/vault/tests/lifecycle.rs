@@ -1,11 +1,213 @@
 #[cfg(test)]
 mod tests {
     use crate::commands::errors::CommandError;
-    use crate::models::{Entry, Vault};
+    use crate::models::{Entry, EntryView, SecretPkcs8, Vault, VaultView};
     use crate::vault::lifecycle;
-    use chrono::Utc;
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    use chrono::{DateTime, Utc};
     use tempfile::tempdir;
     use uuid::Uuid;
+
+    /// Published-example grade PKCS#8 DER blob (test-only, NOT a real credential).
+    const TEST_PKCS8_DER: [u8; 16] = [
+        0x30, 0x0e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x02, 0x03,
+        0x04,
+    ];
+
+    fn fixed_time() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .expect("fixed timestamp parses")
+            .with_timezone(&Utc)
+    }
+
+    /// A disk vault holding one passkey (with key material) inside a group.
+    fn vault_with_passkey() -> Vault {
+        Vault {
+            updated_at: fixed_time(),
+            hmac: "hmac-value".to_string(),
+            entries: vec![Entry::Group {
+                id: Uuid::from_bytes([0x33; 16]),
+                name: "Root".to_string(),
+                data_type: "group".to_string(),
+                children: vec![Entry::Passkey {
+                    id: Uuid::from_bytes([0x11; 16]),
+                    name: "GitHub".to_string(),
+                    created_at: fixed_time(),
+                    updated_at: fixed_time(),
+                    tags: vec!["work".to_string()],
+                    rp_id: "github.com".to_string(),
+                    rp_name: "GitHub".to_string(),
+                    credential_id: vec![0xde, 0xad, 0xbe, 0xef],
+                    user_handle: vec![0x01, 0x02, 0x03, 0x04],
+                    user_name: "octocat".to_string(),
+                    user_display_name: "The Octocat".to_string(),
+                    private_key: SecretPkcs8::from_pkcs8_der(&TEST_PKCS8_DER),
+                    algorithm: -7,
+                    sign_count: 0,
+                    discoverable: true,
+                    transports: vec!["internal".to_string()],
+                    aaguid: Uuid::nil(),
+                }],
+            }],
+        }
+    }
+
+    fn key_b64() -> String {
+        URL_SAFE_NO_PAD.encode(TEST_PKCS8_DER)
+    }
+
+    /// Acceptance criterion 2: `read_vault` returns a sanitized view end-to-end.
+    #[test]
+    fn read_vault_returns_sanitized_view() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("passkey_vault.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), vault_with_passkey())?;
+
+        let view: VaultView = lifecycle::read_vault(file_path.clone(), password.clone())?;
+        let json = serde_json::to_string(&view).expect("view serializes");
+
+        assert!(
+            !json.contains("private_key"),
+            "read_vault must never return a private_key field: {json}"
+        );
+        assert!(
+            !json.contains(&key_b64()),
+            "read_vault must never return the key material: {json}"
+        );
+        assert!(json.contains(r#""entry_type":"passkey""#));
+        assert_eq!(view.hmac, "hmac-value");
+        // `write_vault` stamps `updated_at` with `Utc::now()`; the view must
+        // carry that stamp through unchanged.
+        assert!(
+            view.updated_at > fixed_time(),
+            "the view must carry the write timestamp, got {}",
+            view.updated_at
+        );
+
+        let EntryView::Group { children, .. } = &view.entries[0] else {
+            panic!("expected a group view at the root");
+        };
+        let EntryView::Passkey(passkey) = &children[0] else {
+            panic!("expected a passkey view inside the group");
+        };
+        assert_eq!(passkey.rp_id, "github.com");
+        assert_eq!(passkey.credential_id, vec![0xde, 0xad, 0xbe, 0xef]);
+
+        // Negative control: the *disk* blob still carries the key (it is
+        // encrypted, but present), so the assertions above are meaningful.
+        let disk_bytes = std::fs::read(&file_path).expect("vault file is readable");
+        let disk_str = String::from_utf8(disk_bytes).expect("vault file is utf-8");
+        assert!(
+            !disk_str.contains(&key_b64()),
+            "the key is encrypted at rest, never plaintext on disk"
+        );
+        let disk_vault = decrypt_disk_vault(&file_path, &password)?;
+        let disk_json = serde_json::to_string(&disk_vault).expect("disk vault serializes");
+        assert!(
+            disk_json.contains("private_key") && disk_json.contains(&key_b64()),
+            "negative control: the decrypted disk vault does contain the key"
+        );
+
+        Ok(())
+    }
+
+    /// Acceptance criterion 2 (parity): a vault without passkeys reads back
+    /// with the same Data/Group JSON the frontend already knows.
+    #[test]
+    fn read_vault_view_data_entries_unchanged() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("data_vault.monark")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let password = "test_password".to_string();
+
+        let vault = Vault {
+            updated_at: fixed_time(),
+            hmac: String::new(),
+            entries: vec![Entry::Data {
+                id: Uuid::from_bytes([0x22; 16]),
+                name: "Mail".to_string(),
+                data_type: "login".to_string(),
+                created_at: fixed_time(),
+                updated_at: fixed_time(),
+                fields: Vec::new(),
+                tags: vec!["personal".to_string()],
+            }],
+        };
+        let expected_entries_json =
+            serde_json::to_string(&vault.entries).expect("entries serialize");
+
+        lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
+        let view = lifecycle::read_vault(file_path, password)?;
+
+        assert_eq!(
+            serde_json::to_string(&view.entries).expect("view entries serialize"),
+            expected_entries_json,
+            "EntryView::Data must serialize byte-identically to Entry::Data"
+        );
+
+        Ok(())
+    }
+
+    /// Re-reads the on-disk (encrypted) vault as the raw `Vault` struct, used
+    /// only as a negative control for the sanitization assertions.
+    ///
+    /// Mirrors the decrypt chain of `lifecycle::read_vault` (KDF → master key →
+    /// vault blob), stopping before the view conversion.
+    fn decrypt_disk_vault(file_path: &str, password: &str) -> Result<Vault, CommandError> {
+        use crate::crypto;
+        use zeroize::Zeroize;
+
+        let vault_file = crate::io::vault::read_vault(file_path.to_string())?;
+
+        let salt = URL_SAFE_NO_PAD
+            .decode(&vault_file.argon2_params.salt)
+            .map_err(|_e| CommandError::Crypto("Failed to decode salt".to_string()))?;
+        let mut kdf_key = crypto::argon2::derive_key_argon2id(
+            password.as_bytes(),
+            &salt,
+            vault_file.argon2_params.memory_cost_kib,
+            vault_file.argon2_params.iterations,
+            vault_file.argon2_params.parallelism,
+            32,
+        )?;
+        let mk_nonce = URL_SAFE_NO_PAD
+            .decode(&vault_file.credentials.nonce)
+            .map_err(|_e| CommandError::Crypto("Failed to decode master key nonce".to_string()))?;
+        let mk_ciphertext = URL_SAFE_NO_PAD
+            .decode(&vault_file.credentials.ciphertext)
+            .map_err(|_e| {
+                CommandError::Crypto("Failed to decode master key ciphertext".to_string())
+            })?;
+        let master_key =
+            crypto::chacha::decrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &mk_ciphertext)?;
+        kdf_key.zeroize();
+
+        let vault_nonce = URL_SAFE_NO_PAD
+            .decode(&vault_file.vault.nonce)
+            .map_err(|_e| CommandError::Crypto("Failed to decode vault nonce".to_string()))?;
+        let vault_ciphertext = URL_SAFE_NO_PAD
+            .decode(&vault_file.vault.ciphertext)
+            .map_err(|_e| CommandError::Crypto("Failed to decode vault ciphertext".to_string()))?;
+        let vault_json = crypto::chacha::decrypt_xchacha20poly1305(
+            &master_key,
+            &vault_nonce,
+            &vault_ciphertext,
+        )?;
+
+        serde_json::from_slice(&vault_json)
+            .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))
+    }
 
     #[test]
     fn test_create_vault_success() -> Result<(), CommandError> {
@@ -208,17 +410,23 @@ mod tests {
 
         lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
 
-        let mut vault = lifecycle::read_vault(file_path.clone(), password.clone())?;
-        vault.hmac = "test_hmac".to_string();
-        vault.entries.push(Entry::Data {
-            id: Uuid::new_v4(),
-            name: "Test Entry".to_string(),
-            data_type: "note".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            fields: Vec::new(),
-            tags: Vec::new(),
-        });
+        // T04 interim: writes still take a `Vault` (T05 switches them to views),
+        // and a view cannot be converted back to a `Vault` for passkeys. These
+        // tests only use Data entries, so the mutation is applied to the
+        // original `Vault` and the read result (a `VaultView`) is asserted on.
+        let vault = Vault {
+            updated_at: lifecycle::read_vault(file_path.clone(), password.clone())?.updated_at,
+            hmac: "test_hmac".to_string(),
+            entries: vec![Entry::Data {
+                id: Uuid::new_v4(),
+                name: "Test Entry".to_string(),
+                data_type: "note".to_string(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                fields: Vec::new(),
+                tags: Vec::new(),
+            }],
+        };
 
         let prev_updated_at = vault.updated_at;
 
@@ -251,8 +459,13 @@ mod tests {
         };
 
         lifecycle::write_vault(file_path.clone(), password.clone(), vault)?;
-        let mut vault = lifecycle::read_vault(file_path.clone(), password.clone())?;
-        vault.hmac = "new_hmac".to_string();
+        // T04 interim: the read returns a sanitized view; the write path still
+        // takes a `Vault`, so the re-write uses a fresh `Vault` value.
+        let vault = Vault {
+            updated_at: Utc::now(),
+            hmac: "new_hmac".to_string(),
+            entries: Vec::new(),
+        };
 
         let result = lifecycle::write_vault(file_path, wrong_password, vault);
         match result {

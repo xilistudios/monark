@@ -1,7 +1,14 @@
 // src/components/Vault/UnlockedVaultView.tsx
 
 import { useState, useEffect, useContext, useRef } from 'react';
-import { Entry, DataEntry, GroupEntry, findEntryByPath } from '../../interfaces/vault.interface';
+import {
+  Entry,
+  DataEntry,
+  GroupEntry,
+  findEntryByPath,
+  isDataEntry,
+  isGroupEntry,
+} from '../../interfaces/vault.interface';
 import { findPathById } from '../../utils/vaultNavigation';
 import type { Vault } from '../../redux/actions/vault';
 
@@ -64,6 +71,14 @@ function UnlockedVaultView({
   t,
 }: UnlockedVaultViewProps) {
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+  // The details sidebar only renders data entries and groups; a passkey leaf
+  // has no details view yet (passkey UI lands in a later task).
+  const sidebarEntry: DataEntry | GroupEntry | null =
+    selectedEntry === null ||
+    isGroupEntry(selectedEntry) ||
+    isDataEntry(selectedEntry)
+      ? selectedEntry
+      : null;
   const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -247,7 +262,7 @@ function UnlockedVaultView({
         {/* Desktop Sidebar */}
         <div className="hidden md:block w-full md:w-[60%] h-full">
           <EntryDetailsSidebar
-            entry={selectedEntry}
+            entry={sidebarEntry}
             mode={sidebarMode}
             onEdit={() => setSidebarMode('edit')}
             onSave={handleSaveEntry}
@@ -307,7 +322,7 @@ function UnlockedVaultView({
               {/* Sidebar Content */}
               <div className="h-full overflow-hidden">
                 <EntryDetailsSidebar
-                  entry={selectedEntry}
+                  entry={sidebarEntry}
                   mode={sidebarMode}
                   onEdit={() => setSidebarMode('edit')}
                   onSave={handleSaveEntry}

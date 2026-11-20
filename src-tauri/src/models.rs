@@ -211,6 +211,170 @@ pub struct Field {
     pub secret: bool,     // Indicates if the field is considered secret (e.g., password)
 }
 
+// Section 5.5: IPC view types (sanitized, secret-free)
+
+// The `*View` family is the ONLY vault shape that crosses the IPC boundary.
+// It mirrors `Vault`/`Entry` field-for-field except for the passkey secret:
+// `Entry::Passkey.private_key` has no counterpart here, so a private key is
+// structurally unrepresentable on the wire (not merely filtered out).
+
+/// Frontend-facing passkey entry: exactly [`Entry::Passkey`] minus `private_key`.
+///
+/// The remaining fields are non-secret by construction (`credential_id` and
+/// `user_handle` are public WebAuthn identifiers, serialized as base64url).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "snake_case")]
+pub struct PasskeyView {
+    #[zeroize(skip)]
+    pub id: Uuid,
+    pub name: String,
+    #[zeroize(skip)]
+    pub created_at: DateTime<Utc>,
+    #[zeroize(skip)]
+    pub updated_at: DateTime<Utc>,
+    pub tags: Vec<String>,
+    pub rp_id: String,
+    pub rp_name: String,
+    #[serde(with = "b64url_serde")]
+    pub credential_id: Vec<u8>,
+    #[serde(with = "b64url_serde")]
+    pub user_handle: Vec<u8>,
+    pub user_name: String,
+    pub user_display_name: String,
+    pub algorithm: i32,
+    pub sign_count: u32,
+    pub discoverable: bool,
+    pub transports: Vec<String>,
+    #[zeroize(skip)]
+    pub aaguid: Uuid,
+    // NO private_key. Intentionally absent: see `Entry::Passkey`.
+}
+
+/// Frontend-facing entry tree node.
+///
+/// Serializes byte-identically to [`Entry`] for the `group`/`entry` variants
+/// (same tag, same field names), so existing frontend data entries are
+/// unaffected. The only new JSON shape is `"entry_type":"passkey"`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
+#[serde(tag = "entry_type", rename_all = "snake_case")]
+pub enum EntryView {
+    Group {
+        #[zeroize(skip)]
+        id: Uuid,
+        name: String,
+        data_type: String,
+        children: Vec<EntryView>,
+    },
+    #[serde(rename = "entry")]
+    Data {
+        #[zeroize(skip)]
+        id: Uuid,
+        name: String,
+        data_type: String,
+        #[zeroize(skip)]
+        created_at: DateTime<Utc>,
+        #[zeroize(skip)]
+        updated_at: DateTime<Utc>,
+        fields: Vec<Field>,
+        tags: Vec<String>,
+    },
+    /// Internally-tagged newtype variant: flattens into
+    /// `{"entry_type":"passkey", …PasskeyView fields…}`.
+    Passkey(PasskeyView),
+}
+
+/// Frontend-facing vault content (what `read_vault`/`read_cloud_vault` return).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "snake_case")]
+pub struct VaultView {
+    #[zeroize(skip)]
+    pub updated_at: DateTime<Utc>,
+    pub hmac: String,
+    pub entries: Vec<EntryView>,
+}
+
+impl From<&Entry> for EntryView {
+    fn from(entry: &Entry) -> Self {
+        match entry {
+            Entry::Group {
+                id,
+                name,
+                data_type,
+                children,
+            } => EntryView::Group {
+                id: *id,
+                name: name.clone(),
+                data_type: data_type.clone(),
+                children: children.iter().map(EntryView::from).collect(),
+            },
+            Entry::Data {
+                id,
+                name,
+                data_type,
+                created_at,
+                updated_at,
+                fields,
+                tags,
+            } => EntryView::Data {
+                id: *id,
+                name: name.clone(),
+                data_type: data_type.clone(),
+                created_at: *created_at,
+                updated_at: *updated_at,
+                fields: fields.clone(),
+                tags: tags.clone(),
+            },
+            // `private_key` is deliberately not copied: it cannot be represented.
+            Entry::Passkey {
+                id,
+                name,
+                created_at,
+                updated_at,
+                tags,
+                rp_id,
+                rp_name,
+                credential_id,
+                user_handle,
+                user_name,
+                user_display_name,
+                algorithm,
+                sign_count,
+                discoverable,
+                transports,
+                aaguid,
+                ..
+            } => EntryView::Passkey(PasskeyView {
+                id: *id,
+                name: name.clone(),
+                created_at: *created_at,
+                updated_at: *updated_at,
+                tags: tags.clone(),
+                rp_id: rp_id.clone(),
+                rp_name: rp_name.clone(),
+                credential_id: credential_id.clone(),
+                user_handle: user_handle.clone(),
+                user_name: user_name.clone(),
+                user_display_name: user_display_name.clone(),
+                algorithm: *algorithm,
+                sign_count: *sign_count,
+                discoverable: *discoverable,
+                transports: transports.clone(),
+                aaguid: *aaguid,
+            }),
+        }
+    }
+}
+
+impl From<&Vault> for VaultView {
+    fn from(vault: &Vault) -> Self {
+        VaultView {
+            updated_at: vault.updated_at,
+            hmac: vault.hmac.clone(),
+            entries: vault.entries.iter().map(EntryView::from).collect(),
+        }
+    }
+}
+
 // Section 6: Command Interface Types for TypeScript Integration
 
 /// EncryptedVault represents the encrypted vault data as expected by Tauri commands.
@@ -564,7 +728,140 @@ mod tests {
         }
     }
 
-    // --- Negative control for the b64url adapter: bad base64 in a byte field ---
+    // --- T04: IPC view types (sanitized reads) ---
+
+    /// Acceptance criterion 1: the view never carries the private key.
+    ///
+    /// Negative control in the same test: the DISK serialization of the very
+    /// same vault *does* contain both the `private_key` key and the key's
+    /// base64 value, so the assertions below can actually fail.
+    #[test]
+    fn view_strips_private_key() {
+        let vault = sample_vault(vec![sample_group(vec![sample_passkey()])]);
+
+        // Negative control: the disk shape leaks (by design, it is encrypted).
+        let disk_json = serde_json::to_string(&vault).expect("disk vault serializes");
+        assert!(
+            disk_json.contains("private_key"),
+            "negative control: the disk JSON must contain the private_key field"
+        );
+        assert!(
+            disk_json.contains(&key_b64()),
+            "negative control: the disk JSON must contain the key material"
+        );
+
+        let view = VaultView::from(&vault);
+        let view_json = serde_json::to_string(&view).expect("view serializes");
+
+        assert!(
+            !view_json.contains("private_key"),
+            "the IPC view must not contain a private_key key: {view_json}"
+        );
+        assert!(
+            !view_json.contains(&key_b64()),
+            "the IPC view must not contain the key material: {view_json}"
+        );
+        assert!(
+            !format!("{view:?}").contains(&key_b64()),
+            "the view Debug output must not contain the key material"
+        );
+
+        // Non-secret identifiers survive.
+        assert!(view_json.contains(&URL_SAFE_NO_PAD.encode(TEST_CREDENTIAL_ID)));
+        assert!(view_json.contains(&URL_SAFE_NO_PAD.encode(TEST_USER_HANDLE)));
+        assert!(view_json.contains("\"entry_type\":\"passkey\""));
+    }
+
+    /// Acceptance criterion 3: Data/Group views are byte-identical to the disk
+    /// entries, so existing frontend data entries are unaffected.
+    #[test]
+    fn view_data_shape_unchanged() {
+        let data = sample_data_entry();
+        let group = sample_group(vec![sample_data_entry()]);
+
+        assert_eq!(
+            serde_json::to_string(&EntryView::from(&data)).expect("view serializes"),
+            serde_json::to_string(&data).expect("entry serializes"),
+            "EntryView::Data must serialize byte-identically to Entry::Data"
+        );
+        assert_eq!(
+            serde_json::to_string(&EntryView::from(&group)).expect("view serializes"),
+            serde_json::to_string(&group).expect("entry serializes"),
+            "EntryView::Group must serialize byte-identically to Entry::Group"
+        );
+    }
+
+    /// Acceptance criterion 3 (recursion): nested groups convert recursively and
+    /// keep their order.
+    #[test]
+    fn view_group_recursion() {
+        let inner = sample_group(vec![sample_passkey()]);
+        let vault = sample_vault(vec![sample_group(vec![sample_data_entry(), inner])]);
+
+        let view = VaultView::from(&vault);
+        assert_eq!(view.entries.len(), 1);
+        let EntryView::Group { children, .. } = &view.entries[0] else {
+            panic!("expected a group view at the root");
+        };
+        assert_eq!(children.len(), 2);
+        assert!(matches!(children[0], EntryView::Data { .. }));
+        let EntryView::Group {
+            children: inner_children,
+            ..
+        } = &children[1]
+        else {
+            panic!("expected a nested group view");
+        };
+        assert_eq!(inner_children.len(), 1);
+        assert!(matches!(inner_children[0], EntryView::Passkey(_)));
+
+        // The view round-trips through serde unchanged.
+        let json = serde_json::to_string(&view).expect("view serializes");
+        let back: VaultView = serde_json::from_str(&json).expect("view deserializes");
+        assert_eq!(back, view);
+    }
+
+    /// The internally-tagged newtype variant flattens into the entry map.
+    #[test]
+    fn passkey_view_serde_tag_flattening() {
+        let view = EntryView::from(&sample_passkey());
+        let value: Value = serde_json::to_value(&view).expect("view serializes");
+
+        let expected = json!({
+            "entry_type": "passkey",
+            "id": fixed_uuid(0x11).to_string(),
+            "name": "GitHub",
+            "created_at": "2026-01-02T03:04:05Z",
+            "updated_at": "2026-01-02T03:04:05Z",
+            "tags": ["work"],
+            "rp_id": "github.com",
+            "rp_name": "GitHub",
+            "credential_id": URL_SAFE_NO_PAD.encode(TEST_CREDENTIAL_ID),
+            "user_handle": URL_SAFE_NO_PAD.encode(TEST_USER_HANDLE),
+            "user_name": "octocat",
+            "user_display_name": "The Octocat",
+            "algorithm": -7,
+            "sign_count": 0,
+            "discoverable": true,
+            "transports": ["internal"],
+            "aaguid": Uuid::nil().to_string(),
+        });
+
+        assert_eq!(
+            value, expected,
+            "the passkey view JSON shape is pinned (no private_key)"
+        );
+        assert!(
+            value.get("private_key").is_none(),
+            "no private_key field may exist in the view"
+        );
+
+        // And it deserializes back into the same view.
+        let back: EntryView = serde_json::from_value(value).expect("view deserializes");
+        assert_eq!(back, view);
+    }
+
+    /// Negative control for the b64url adapter: bad base64 in a byte field ---
 
     #[test]
     fn passkey_bad_b64url_field_rejected() {

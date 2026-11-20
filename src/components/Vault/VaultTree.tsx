@@ -1,6 +1,10 @@
 import { useState, useCallback, useContext, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type Entry, isGroupEntry } from '../../interfaces/vault.interface';
+import {
+  type Entry,
+  isDataEntry,
+  isGroupEntry,
+} from '../../interfaces/vault.interface';
 import { VaultManager } from '../../services/vault';
 import { VaultModalContext } from './VaultContext';
 import { Modal } from '../UI/Modal';
@@ -91,7 +95,9 @@ const TreeNode = ({
       onNavigate(vaultId, currentPath);
     } else if (onEntrySelect) {
       onEntrySelect(entry);
-    } else {
+    } else if (isDataEntry(entry)) {
+      // The details modal only renders data entries; passkey leaves have no
+      // details view yet (passkey UI lands in a later task).
       openEntryDetails(entry);
     }
   }, [
@@ -236,9 +242,11 @@ const TreeNode = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      isGroupEntry(entry)
-                        ? openEditGroup(entry)
-                        : openEditEntry(entry);
+                      if (isGroupEntry(entry)) {
+                        openEditGroup(entry);
+                      } else if (isDataEntry(entry)) {
+                        openEditEntry(entry);
+                      }
                     }}
                   >
                     {t('vault.tree.edit')}

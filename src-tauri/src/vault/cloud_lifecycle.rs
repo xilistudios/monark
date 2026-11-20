@@ -1,7 +1,7 @@
 use crate::commands::errors::CommandError;
 use crate::commands::storage::StorageState;
 use crate::crypto;
-use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
+use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile, VaultView};
 use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
 use crate::storage::StorageManager;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -200,13 +200,18 @@ pub async fn write_cloud_vault(
     }
 }
 
+/// Reads and decrypts a cloud vault, returning the **sanitized** IPC view.
+///
+/// Same rule as `lifecycle::read_vault`: the decrypted [`Vault`] (which holds
+/// passkey private keys) is converted to [`VaultView`] and dropped (zeroized)
+/// before returning.
 #[tauri::command(async)]
 pub async fn read_cloud_vault(
     vault_id: String,
     password: String,
     provider_name: Option<String>,
     state: tauri::State<'_, StorageState>,
-) -> Result<Vault, CommandError> {
+) -> Result<VaultView, CommandError> {
     let storage_manager = &state.manager;
     let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
 
@@ -279,8 +284,10 @@ pub async fn read_cloud_vault(
     let vault_json_bytes =
         crypto::chacha::decrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_ciphertext)?;
 
-    serde_json::from_slice(&vault_json_bytes)
-        .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))
+    let vault: Vault = serde_json::from_slice(&vault_json_bytes)
+        .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))?;
+
+    Ok(VaultView::from(&vault))
 }
 
 #[tauri::command(async)]

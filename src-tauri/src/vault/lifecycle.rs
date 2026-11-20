@@ -1,7 +1,7 @@
 use crate::commands::errors::CommandError;
 use crate::crypto;
 use crate::io;
-use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
+use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile, VaultView};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::path::{Path, PathBuf};
@@ -73,8 +73,13 @@ pub fn write_vault(
     }
 }
 
+/// Reads and decrypts a vault, returning the **sanitized** IPC view.
+///
+/// The decrypted [`Vault`] (which does hold passkey private keys) never leaves
+/// this function: it is converted to [`VaultView`] and dropped (zeroized) at the
+/// end of the scope.
 #[tauri::command(async)]
-pub fn read_vault(file_path: String, password: String) -> Result<Vault, CommandError> {
+pub fn read_vault(file_path: String, password: String) -> Result<VaultView, CommandError> {
     let canonical_path = validate_vault_path(&file_path)?;
     let canonical_str = canonical_path.to_string_lossy().to_string();
     crate::vault::rate_limit::check_attempts(&canonical_str)?;
@@ -102,8 +107,10 @@ pub fn read_vault(file_path: String, password: String) -> Result<Vault, CommandE
     let vault_json_bytes =
         crypto::chacha::decrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_ciphertext)?;
 
-    serde_json::from_slice(&vault_json_bytes)
-        .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))
+    let vault: Vault = serde_json::from_slice(&vault_json_bytes)
+        .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))?;
+
+    Ok(VaultView::from(&vault))
 }
 
 #[tauri::command(async)]
