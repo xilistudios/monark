@@ -33,7 +33,8 @@ Monark operates on a strict zero-knowledge security model. All cryptographic pro
 ## 🚀 Key Features
 
 *   **Offline-First & Local-First:** Complete data ownership. Your vault is stored locally and encrypted at rest.
-*   **Cross-Platform Architecture:** Built on Tauri v2 to support Windows, macOS, Linux, Android, and iOS natively from a single codebase.
+*   **Passkeys (F0):** Store and exchange passkeys (CXF); system/browser autofill integration planned. Monark acts as a software WebAuthn authenticator — ES256 discoverable credentials, created and used inside the app, with the private keys sealed in the vault like any other secret. See [Passkeys](docs/passkeys.md) for the exact scope and its documented limitations.
+*   **Cross-Platform Architecture:** Built on Tauri v2 to support Windows, macOS, Linux, and Android natively from a single codebase. **iOS: not yet available** (there is no `src-tauri/gen/apple` target yet).
 *   **Modern Frontend Stack:** Powered by React, TypeScript, TanStack Router for type-safe routing, and Tailwind CSS v4 / DaisyUI for highly responsive styling.
 *   **Rigorous Verification:** Robust type safety across the Rust-TypeScript boundary, combined with comprehensive test coverage.
 
@@ -44,10 +45,10 @@ Monark operates on a strict zero-knowledge security model. All cryptographic pro
 Detailed specifications and architectural guides are available in the `docs` directory:
 
 *   [Cryptographic Architecture](docs/crypto-architecture.md) — Mathematical parameters, key derivation, and cipher implementations.
-*   [Vault Storage Format](docs/vault-format.md) — Disk serialization formats, HMAC verification, and Rust-to-TypeScript type mappings.
+*   [Vault Storage Format](docs/vault-format.md) — Disk serialization formats, format versions, and Rust-to-TypeScript type mappings.
+*   [Passkeys](docs/passkeys.md) — WebAuthn ceremony model, disk vs IPC types, user-verification limits, sync semantics, and the F0 threat model.
 *   [Cloud Storage & Sync](docs/cloud-storage-architecture.md) — Design documents for remote backup and synchronization.
 *   [Testing & Quality Assurance](docs/testing-cloud-storage.md) — Integration testing strategies for the storage layer.
-*   [Security Audit Results](docs/security-audit.md) — Vulnerability checklist and verification of crypto implementations.
 *   [State Management & Store](docs/redux-state.md) — Redux Toolkit slice structure and application state flow.
 *   [Internationalization (i18n)](docs/i18n-system.md) — Localization framework and translation setup.
 *   [Accessibility Guide](docs/accessibility-guide.md) — WCAG compliance guidelines and focus management patterns.
