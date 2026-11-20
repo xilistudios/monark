@@ -581,6 +581,13 @@
         "deleteVault": "Eliminar Vault",
         "deleteVaultDescription": "Eliminar permanentemente este vault y opcionalmente su archivo del disco. Esta acción no se puede deshacer."
       }
+    },
+    "passkey": {
+      "uvPrompt": "Verifica tu identidad para usar una passkey",
+      "uvPromptTitle": "Passkey",
+      "uvPromptSubtitle": "Confirma que eres tú para usar una passkey en {{vaultName}}",
+      "uvPromptCancel": "Cancelar",
+      "uvFailed": "La verificación de usuario falló. Inténtalo de nuevo."
     }
   }
 }

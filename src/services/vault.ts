@@ -683,6 +683,24 @@ export class VaultManager {
 	}
 
 	/**
+	 * Reads the current Redux state through the manager's store binding.
+	 *
+	 * The single accessor for services that need vault records but are not a
+	 * `VaultInstance` (e.g. `services/passkeyCeremony.ts`, which resolves the
+	 * session credential for a passkey command). It throws the same error
+	 * `getInstance` throws when the manager was never initialized, so callers
+	 * have one failure mode to handle.
+	 *
+	 * @throws Error if the manager has not been initialized.
+	 */
+	getState(): RootState {
+		if (!this._getState) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
+		return this._getState();
+	}
+
+	/**
 	 * Gets a VaultInstance for the specified vault ID
 	 * Creates a new instance if one doesn't exist
 	 * @param vaultId - ID of the vault to get instance for

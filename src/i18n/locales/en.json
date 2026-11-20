@@ -582,6 +582,13 @@
         "deleteVault": "Delete Vault",
         "deleteVaultDescription": "Permanently delete this vault and optionally its file from disk. This action cannot be undone."
       }
+    },
+    "passkey": {
+      "uvPrompt": "Verify your identity to use a passkey",
+      "uvPromptTitle": "Passkey",
+      "uvPromptSubtitle": "Confirm it is you to use a passkey in {{vaultName}}",
+      "uvPromptCancel": "Cancel",
+      "uvFailed": "User verification failed. Please try again."
     }
   }
 }
