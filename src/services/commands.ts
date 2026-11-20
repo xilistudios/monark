@@ -51,6 +51,29 @@ export default class VaultCommands {
     return await invoke('delete_vault', { filePath });
   }
 
+  /**
+   * Changes a local vault's password by re-wrapping its master key.
+   *
+   * The backend unwraps the master key with `oldPassword`, derives a new KDF key
+   * from `newPassword` (fresh salt + default Argon2id parameters) and re-encrypts
+   * the unchanged master key. The encrypted vault blob is not rewritten, so all
+   * entries are preserved.
+   * @param filePath - Path to the vault file
+   * @param oldPassword - Current password (used to unwrap the master key)
+   * @param newPassword - New password (used to re-wrap the master key)
+   */
+  static async changePassword(
+    filePath: string,
+    oldPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    return await invoke('change_vault_password', {
+      filePath,
+      oldPassword,
+      newPassword,
+    });
+  }
+
   // Cloud vault operations
 
   /**

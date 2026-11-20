@@ -503,16 +503,8 @@ export class VaultInstance {
 		}
 
 		const oldPassword = vault.volatile.credential;
-		const entries = vault.volatile.entries ?? [];
 
 		try {
-			// Create the vault content with current entries
-			const vaultContent = {
-				updated_at: new Date().toISOString(),
-				hmac: "",
-				entries: entries,
-			};
-
 			if (vault.storageType === "cloud") {
 				if (!vault.providerId) {
 					throw new Error(
@@ -533,8 +525,16 @@ export class VaultInstance {
 				// Update sync timestamp
 				this.dispatch(syncCloudVault(this.id));
 			} else {
-				// For local vaults, use the regular write command with new password
-				await VaultCommands.write(vault.path, newPassword, vaultContent);
+				// For local vaults, re-wrap the master key under the new password.
+				// `write_vault` cannot do this: it derives the master key from the
+				// supplied password, which fails against the old-password-wrapped
+				// credentials (and would silently create a fresh vault if the file
+				// were missing).
+				await VaultCommands.changePassword(
+					vault.path,
+					oldPassword,
+					newPassword,
+				);
 			}
 
 			// Update the stored credential with the new password

@@ -70,6 +70,39 @@ describe('VaultCommands', () => {
 
 			expect(mockInvoke).toHaveBeenCalledWith('delete_vault', { filePath });
 		});
+
+		it('should change local vault password through the dedicated command', async () => {
+			mockInvoke.mockResolvedValue(undefined);
+
+			await VaultCommands.changePassword(
+				'/path/to/vault.monark',
+				'old-password',
+				'new-password'
+			);
+
+			expect(mockInvoke).toHaveBeenCalledWith('change_vault_password', {
+				filePath: '/path/to/vault.monark',
+				oldPassword: 'old-password',
+				newPassword: 'new-password'
+			});
+			// The legacy write path must not be involved in a password change.
+			expect(mockInvoke).not.toHaveBeenCalledWith(
+				'write_vault',
+				expect.anything()
+			);
+		});
+
+		it('should propagate a rejected password change', async () => {
+			mockInvoke.mockRejectedValue({ Crypto: 'Invalid Password or Corrupted Vault' });
+
+			await expect(
+				VaultCommands.changePassword(
+					'/path/to/vault.monark',
+					'wrong-old',
+					'new-password'
+				)
+			).rejects.toEqual({ Crypto: 'Invalid Password or Corrupted Vault' });
+		});
 	});
 
 	describe('Cloud Vault Operations', () => {
