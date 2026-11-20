@@ -816,6 +816,50 @@ export class VaultDetector {
 }
 ```
 
+### 8.3 Sync Semantics (union merge)
+
+`VaultInstance.syncWithCloud()` is no longer pull-only last-write-wins. It runs:
+
+```typescript
+// src/services/vault.ts (syncWithCloud)
+const vaultContent = await CloudStorageCommands.readCloudVault({ ... });
+const merged = mergeVaultEntries(vault.volatile.entries ?? [], vaultContent.entries ?? []);
+dispatch(setVaultEntries({ vaultId: this.id, entries: merged })); // merged view in Redux
+await this._saveVault();                                          // push merged view + sync timestamp
+```
+
+`_saveVault()` dispatches `syncCloudVault` itself, so `syncWithCloud` does not
+dispatch the sync timestamp a second time.
+
+`mergeVaultEntries` (`src/services/vaultMerge.ts`) is a **pure** function:
+
+- Recursive **union by entry id** over the tree: groups are matched by id and
+  their `children` are merged recursively.
+- Same id on both sides → the entry with the **newest `updated_at` wins
+  wholesale** (no field-level merge). Groups follow the same rule for their own
+  metadata while their children are still merged recursively.
+- An id present on only one side is kept as-is.
+- **Deterministic order:** cloud entries first (in cloud order, a conflict winner
+  keeps the cloud position), then local-only entries in local order.
+- Inputs are never mutated; every emitted entry is a fresh object.
+- Passkey views (`entry_type: "passkey"`) merge like any other entry. They carry
+  no secret material: the backend write-merge re-attaches the private key from
+  the stored cloud vault by entry id.
+
+If the write-back fails, the error propagates out of `syncWithCloud` (wrapped as
+`Failed to sync with cloud: …`). Redux keeps the merged entries, so the next
+sync retries the push; the sync timestamp is **not** updated.
+
+**Deletion limitation (accepted, deliberate).** Union merge combined with
+preserve-on-write means a deletion does not propagate by itself: an entry (in
+particular a passkey) deleted on device A can be **resurrected** by a sync from
+device B that still holds it. Deletions propagate reliably only when every device
+syncs after the delete. This is the conservative trade — resurrection is
+recoverable (delete again), whereas silently dropping a passkey is a lockout at
+the relying party. Tombstones would fix it but would redesign sync, so they are
+out of scope. Explicit passkey deletion goes through the dedicated
+`passkey_delete` command instead of a sync diff.
+
 ## 9. Error Handling and Loading States
 
 ### 9.1 Async Operation Management
