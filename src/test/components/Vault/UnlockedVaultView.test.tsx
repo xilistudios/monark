@@ -257,8 +257,6 @@ describe('UnlockedVaultView', () => {
       name: 'Group',
       data_type: 'group',
       children: [nestedEntry],
-      created_at: '2025-01-01T00:00:00Z',
-      updated_at: '2025-01-01T00:00:00Z',
     };
 
     const vaultWithNestedEntries = {

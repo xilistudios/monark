@@ -33,9 +33,16 @@ function dataEntry(
 	};
 }
 
+/**
+ * Builds a group entry in the shape the backend actually emits.
+ *
+ * Deliberately takes **no** timestamp: `Entry::Group` in Rust has no
+ * `created_at`/`updated_at`, so a fixture that stamps them would be testing data
+ * no client can ever receive (review core MAJOR-1). If you find yourself wanting
+ * to pass a timestamp here, the merge rule you are testing is the wrong one.
+ */
 function groupEntry(
 	id: string,
-	updatedAt: string,
 	children: Entry[] = [],
 	overrides: Partial<GroupEntry> = {},
 ): GroupEntry {
@@ -44,8 +51,6 @@ function groupEntry(
 		entry_type: "group",
 		name: `Group ${id}`,
 		data_type: "group",
-		created_at: "2026-01-01T00:00:00Z",
-		updated_at: updatedAt,
 		children,
 		...overrides,
 	};
@@ -203,14 +208,10 @@ describe("mergeVaultEntries — same-id conflict", () => {
 describe("mergeVaultEntries — nested groups", () => {
 	it("merges the children of a group present on both sides", () => {
 		const local = [
-			groupEntry("group", "2026-01-02T00:00:00Z", [
-				dataEntry("local-child", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("group", [dataEntry("local-child", "2026-01-02T00:00:00Z")]),
 		];
 		const cloud = [
-			groupEntry("group", "2026-01-02T00:00:00Z", [
-				dataEntry("cloud-child", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("group", [dataEntry("cloud-child", "2026-01-02T00:00:00Z")]),
 		];
 
 		const merged = mergeVaultEntries(local, cloud);
@@ -225,10 +226,10 @@ describe("mergeVaultEntries — nested groups", () => {
 	});
 
 	it("keeps a group that exists only on one side, whole", () => {
-		const localOnly = groupEntry("local-group", "2026-01-02T00:00:00Z", [
+		const localOnly = groupEntry("local-group", [
 			dataEntry("nested", "2026-01-02T00:00:00Z"),
 		]);
-		const cloudOnly = groupEntry("cloud-group", "2026-01-02T00:00:00Z", [
+		const cloudOnly = groupEntry("cloud-group", [
 			dataEntry("nested-cloud", "2026-01-02T00:00:00Z"),
 		]);
 
@@ -248,17 +249,13 @@ describe("mergeVaultEntries — nested groups", () => {
 
 	it("recurses through several levels", () => {
 		const local = [
-			groupEntry("outer", "2026-01-02T00:00:00Z", [
-				groupEntry("inner", "2026-01-02T00:00:00Z", [
-					dataEntry("local-leaf", "2026-01-02T00:00:00Z"),
-				]),
+			groupEntry("outer", [
+				groupEntry("inner", [dataEntry("local-leaf", "2026-01-02T00:00:00Z")]),
 			]),
 		];
 		const cloud = [
-			groupEntry("outer", "2026-01-02T00:00:00Z", [
-				groupEntry("inner", "2026-01-02T00:00:00Z", [
-					dataEntry("cloud-leaf", "2026-01-02T00:00:00Z"),
-				]),
+			groupEntry("outer", [
+				groupEntry("inner", [dataEntry("cloud-leaf", "2026-01-02T00:00:00Z")]),
 			]),
 		];
 
@@ -272,23 +269,18 @@ describe("mergeVaultEntries — nested groups", () => {
 	});
 
 	it("keeps the losing group's children when the group metadata conflicts", () => {
-		// The group was renamed in the cloud (newer), but the local copy holds an
-		// entry the cloud does not know about. Renaming must not drop it.
+		// The group was renamed in the cloud, but the local copy holds an entry
+		// the cloud does not know about. Taking the cloud metadata must not drop
+		// it.
 		const local = [
-			groupEntry(
-				"group",
-				"2026-01-02T00:00:00Z",
-				[dataEntry("local-child", "2026-01-02T00:00:00Z")],
-				{ name: "old name" },
-			),
+			groupEntry("group", [dataEntry("local-child", "2026-01-02T00:00:00Z")], {
+				name: "old name",
+			}),
 		];
 		const cloud = [
-			groupEntry(
-				"group",
-				"2026-01-03T00:00:00Z",
-				[dataEntry("cloud-child", "2026-01-02T00:00:00Z")],
-				{ name: "new name" },
-			),
+			groupEntry("group", [dataEntry("cloud-child", "2026-01-02T00:00:00Z")], {
+				name: "new name",
+			}),
 		];
 
 		const merged = mergeVaultEntries(local, cloud);
@@ -301,14 +293,72 @@ describe("mergeVaultEntries — nested groups", () => {
 		]);
 	});
 
+	// Group metadata is cloud-authoritative: `Entry::Group` has no timestamps on
+	// the wire, so there is nothing to order two copies of a group by. These two
+	// tests pin the real rule in both directions — the local group is "newer" in
+	// every sense a fixture could express (its children carry later timestamps)
+	// and its metadata still loses. A test asserting the opposite could only pass
+	// on data the backend cannot produce (review core MAJOR-1).
+	it("takes the cloud group metadata even when the local children are newer", () => {
+		const local = [
+			groupEntry(
+				"group",
+				[dataEntry("child", "2026-06-01T00:00:00Z", { name: "local" })],
+				{ name: "local name", data_type: "local-type" },
+			),
+		];
+		const cloud = [
+			groupEntry(
+				"group",
+				[dataEntry("child", "2026-01-01T00:00:00Z", { name: "cloud" })],
+				{ name: "cloud name", data_type: "cloud-type" },
+			),
+		];
+
+		const merged = mergeVaultEntries(local, cloud);
+		const group = merged[0] as GroupEntry;
+
+		expect(group.name).toBe("cloud name");
+		expect(group.data_type).toBe("cloud-type");
+		// The children still resolve by their own timestamps: local wins there.
+		expect(group.children[0].name).toBe("local");
+	});
+
+	it("takes the cloud group metadata when only the local group was renamed", () => {
+		const local = [groupEntry("group", [], { name: "renamed locally" })];
+		const cloud = [groupEntry("group", [], { name: "cloud name" })];
+
+		const merged = mergeVaultEntries(local, cloud);
+
+		expect((merged[0] as GroupEntry).name).toBe("cloud name");
+	});
+
+	it("emits group metadata with exactly the wire fields", () => {
+		// Pins the shape the merge emits against the Rust `EntryView::Group`
+		// member set. If a timestamp ever appears here, the type and the backend
+		// have diverged again.
+		const local = [groupEntry("group", [], { name: "local name" })];
+		const cloud = [groupEntry("group", [], { name: "cloud name" })];
+
+		const merged = mergeVaultEntries(local, cloud);
+
+		expect(Object.keys(merged[0]).sort()).toEqual([
+			"children",
+			"data_type",
+			"entry_type",
+			"id",
+			"name",
+		]);
+	});
+
 	it("resolves a same-id child conflict inside a group", () => {
 		const local = [
-			groupEntry("group", "2026-01-02T00:00:00Z", [
+			groupEntry("group", [
 				dataEntry("child", "2026-01-05T00:00:00Z", { name: "local" }),
 			]),
 		];
 		const cloud = [
-			groupEntry("group", "2026-01-02T00:00:00Z", [
+			groupEntry("group", [
 				dataEntry("child", "2026-01-03T00:00:00Z", { name: "cloud" }),
 			]),
 		];
@@ -364,12 +414,12 @@ describe("mergeVaultEntries — passkey views", () => {
 
 	it("merges a passkey nested in a group like any other entry", () => {
 		const local = [
-			groupEntry("group", "2026-01-02T00:00:00Z", [
+			groupEntry("group", [
 				passkeyEntry("pk", "2026-01-05T00:00:00Z", { name: "local name" }),
 			]),
 		];
 		const cloud = [
-			groupEntry("group", "2026-01-02T00:00:00Z", [
+			groupEntry("group", [
 				passkeyEntry("pk", "2026-01-03T00:00:00Z", { name: "cloud name" }),
 			]),
 		];
@@ -386,9 +436,7 @@ describe("mergeVaultEntries — idempotence", () => {
 	it("mergeVaultEntries(x, x) deep-equals x", () => {
 		const x: Entry[] = [
 			dataEntry("a", "2026-01-02T00:00:00Z"),
-			groupEntry("g", "2026-01-02T00:00:00Z", [
-				passkeyEntry("pk", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("g", [passkeyEntry("pk", "2026-01-02T00:00:00Z")]),
 		];
 
 		expect(mergeVaultEntries(x, x)).toEqual(x);
@@ -398,16 +446,12 @@ describe("mergeVaultEntries — idempotence", () => {
 		const a: Entry[] = [
 			dataEntry("local-only", "2026-01-02T00:00:00Z"),
 			dataEntry("shared", "2026-01-06T00:00:00Z", { name: "local wins" }),
-			groupEntry("g", "2026-01-02T00:00:00Z", [
-				dataEntry("a-child", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("g", [dataEntry("a-child", "2026-01-02T00:00:00Z")]),
 		];
 		const b: Entry[] = [
 			dataEntry("cloud-only", "2026-01-02T00:00:00Z"),
 			dataEntry("shared", "2026-01-03T00:00:00Z", { name: "cloud loses" }),
-			groupEntry("g", "2026-01-02T00:00:00Z", [
-				dataEntry("b-child", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("g", [dataEntry("b-child", "2026-01-02T00:00:00Z")]),
 		];
 
 		const once = mergeVaultEntries(a, b);
@@ -422,7 +466,7 @@ describe("mergeVaultEntries — no mutation", () => {
 		const local: Entry[] = [
 			dataEntry("local-only", "2026-01-02T00:00:00Z"),
 			dataEntry("shared", "2026-01-06T00:00:00Z", { name: "local wins" }),
-			groupEntry("g", "2026-01-02T00:00:00Z", [
+			groupEntry("g", [
 				dataEntry("a-child", "2026-01-02T00:00:00Z"),
 				passkeyEntry("pk", "2026-01-04T00:00:00Z"),
 			]),
@@ -430,9 +474,7 @@ describe("mergeVaultEntries — no mutation", () => {
 		const cloud: Entry[] = [
 			dataEntry("cloud-only", "2026-01-02T00:00:00Z"),
 			dataEntry("shared", "2026-01-03T00:00:00Z", { name: "cloud loses" }),
-			groupEntry("g", "2026-01-05T00:00:00Z", [
-				dataEntry("b-child", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("g", [dataEntry("b-child", "2026-01-02T00:00:00Z")]),
 		];
 		const localSnapshot = structuredClone(local);
 		const cloudSnapshot = structuredClone(cloud);
@@ -458,11 +500,9 @@ describe("mergeVaultEntries — no mutation", () => {
 
 	it("does not alias group children into the output", () => {
 		const local = [
-			groupEntry("g", "2026-01-02T00:00:00Z", [
-				dataEntry("child", "2026-01-02T00:00:00Z"),
-			]),
+			groupEntry("g", [dataEntry("child", "2026-01-02T00:00:00Z")]),
 		];
-		const cloud = [groupEntry("g", "2026-01-02T00:00:00Z", [])];
+		const cloud = [groupEntry("g", [])];
 
 		const merged = mergeVaultEntries(local, cloud);
 		const group = merged[0] as GroupEntry;
@@ -470,14 +510,109 @@ describe("mergeVaultEntries — no mutation", () => {
 		expect(group.children[0]).not.toBe(local[0].children[0]);
 	});
 
+	// MENOR-4 / E13a: `cloneEntry` used to be `{...entry}`, so a data entry's
+	// `fields` and `tags` arrays (and the field objects inside them) were shared
+	// with the input. The module claims "no aliasing"; these tests make the claim
+	// true and keep it true.
+	it("does not alias fields/tags of a cloud-only data entry", () => {
+		const cloud = [
+			dataEntry("cloud-only", "2026-01-02T00:00:00Z", {
+				tags: ["cloud-tag"],
+				fields: [
+					{ title: "user", property: "text", value: "octocat", secret: false },
+				],
+			}),
+		];
+		const cloudSnapshot = structuredClone(cloud);
+
+		const merged = mergeVaultEntries([], cloud);
+		const entry = merged[0] as DataEntry;
+
+		expect(entry.fields).not.toBe(cloud[0].fields);
+		expect(entry.fields[0]).not.toBe(cloud[0].fields[0]);
+		expect(entry.tags).not.toBe(cloud[0].tags);
+
+		entry.fields[0].value = "mutated";
+		entry.tags.push("mutated");
+
+		expect(cloud).toEqual(cloudSnapshot);
+	});
+
+	it("does not alias fields/tags of a local-only data entry", () => {
+		const local = [
+			dataEntry("local-only", "2026-01-02T00:00:00Z", {
+				tags: ["local-tag"],
+				fields: [
+					{ title: "user", property: "text", value: "octocat", secret: false },
+				],
+			}),
+		];
+		const localSnapshot = structuredClone(local);
+
+		const merged = mergeVaultEntries(local, []);
+		const entry = merged[0] as DataEntry;
+
+		entry.fields[0].value = "mutated";
+		entry.tags.push("mutated");
+
+		expect(local).toEqual(localSnapshot);
+	});
+
+	it("does not alias fields/tags of the winning side of a conflict", () => {
+		const local = [
+			dataEntry("shared", "2026-01-06T00:00:00Z", {
+				tags: ["local-tag"],
+				fields: [
+					{ title: "user", property: "text", value: "local", secret: false },
+				],
+			}),
+		];
+		const cloud = [
+			dataEntry("shared", "2026-01-02T00:00:00Z", {
+				tags: ["cloud-tag"],
+				fields: [
+					{ title: "user", property: "text", value: "cloud", secret: false },
+				],
+			}),
+		];
+		const localSnapshot = structuredClone(local);
+
+		const merged = mergeVaultEntries(local, cloud);
+		const entry = merged[0] as DataEntry;
+
+		expect(entry.name).toBe("Entry shared");
+		entry.fields[0].value = "mutated";
+		entry.tags.push("mutated");
+
+		expect(local).toEqual(localSnapshot);
+	});
+
+	it("does not alias tags/transports of a passkey view", () => {
+		const cloud = [
+			passkeyEntry("pk", "2026-01-02T00:00:00Z", {
+				tags: ["cloud-tag"],
+				transports: ["internal"],
+			}),
+		];
+		const cloudSnapshot = structuredClone(cloud);
+
+		const merged = mergeVaultEntries([], cloud);
+		const entry = merged[0] as PasskeyEntry;
+
+		entry.tags.push("mutated");
+		entry.transports.push("mutated");
+
+		expect(cloud).toEqual(cloudSnapshot);
+	});
+
 	it("does not alias nested children of a group that exists on one side only", () => {
 		// Negative control for the shallow-copy path: a group kept "whole" must
 		// still have its children copied, or a later mutation of the merged tree
 		// would write through into the input.
-		const nested = groupEntry("inner", "2026-01-02T00:00:00Z", [
+		const nested = groupEntry("inner", [
 			dataEntry("leaf", "2026-01-02T00:00:00Z"),
 		]);
-		const local = [groupEntry("outer", "2026-01-02T00:00:00Z", [nested])];
+		const local = [groupEntry("outer", [nested])];
 		const localSnapshot = structuredClone(local);
 
 		const merged = mergeVaultEntries(local, []);

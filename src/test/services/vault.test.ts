@@ -239,6 +239,85 @@ describe("VaultInstance", () => {
 	});
 
 	describe("updateEntry", () => {
+		it("stamps updated_at on a data entry", async () => {
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "entry-1",
+							entry_type: "entry",
+							name: "Original",
+							data_type: "note",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							fields: [],
+							tags: [],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.updateEntry(["entry-1"], { name: "Updated" });
+
+			// The action creators are stubbed (`vi.fn()`), so read the payload the
+			// `setVaultEntries` stub was called with instead of the dispatched value.
+			const entry = mockVaultActions.setVaultEntries.mock.calls[0][0].entries[0];
+
+			expect(entry.name).toBe("Updated");
+			expect(entry.updated_at).not.toBe("2025-01-01T00:00:00Z");
+		});
+
+		it("does not stamp updated_at on a group", async () => {
+			// A group has no timestamp in the vault format (Rust `Entry::Group`).
+			// Stamping one here would put a field into the persisted file that the
+			// type does not have and the backend drops on the next read.
+			const vault: Vault = {
+				id: "test-vault",
+				name: "Test",
+				path: "test",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "group-1",
+							entry_type: "group",
+							name: "Original group",
+							data_type: "group",
+							children: [],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.updateEntry(["group-1"], { name: "Renamed group" });
+
+			const group = mockVaultActions.setVaultEntries.mock.calls[0][0].entries[0];
+
+			expect(group.name).toBe("Renamed group");
+			expect(group).not.toHaveProperty("updated_at");
+			expect(group).not.toHaveProperty("created_at");
+		});
+
 		it("should update a root-level entry successfully", async () => {
 			const vault: Vault = {
 				id: "test-vault",
@@ -296,12 +375,11 @@ describe("VaultInstance", () => {
 				volatile: {
 					entries: [
 						{
+							// Groups carry no timestamps on the wire (EntryView::Group).
 							id: "group-1",
 							entry_type: "group",
 							name: "Group",
 							data_type: "",
-							created_at: "2025-01-01T00:00:00Z",
-							updated_at: "2025-01-01T00:00:00Z",
 							children: [
 								{
 									id: "nested-entry-1",
@@ -344,12 +422,11 @@ describe("VaultInstance", () => {
 				volatile: {
 					entries: [
 						{
+							// Groups carry no timestamps on the wire (EntryView::Group).
 							id: "group-1",
 							entry_type: "group",
 							name: "Group",
 							data_type: "",
-							created_at: "2025-01-01T00:00:00Z",
-							updated_at: "2025-01-01T00:00:00Z",
 							children: [
 								{
 									id: "nested-entry-1",

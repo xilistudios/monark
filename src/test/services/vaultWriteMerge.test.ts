@@ -41,8 +41,6 @@ const groupWithPasskey: Entry = {
 	entry_type: "group",
 	name: "Root",
 	data_type: "group",
-	created_at: "2026-01-02T03:04:05Z",
-	updated_at: "2026-01-02T03:04:05Z",
 	children: [passkeyEntry],
 };
 

@@ -490,6 +490,7 @@
         "dataType": "Data Type",
         "createdAt": "Created At",
         "updatedAt": "Updated At",
+        "notTracked": "Not tracked for groups",
         "tags": "Tags",
         "noTags": "No Tags",
         "fields": "Fields",

@@ -146,13 +146,12 @@ describe("PasskeyEntry IPC contract", () => {
 
 	it("flattens passkey leaves and keeps the tree helpers working", () => {
 		const passkey = parsePasskey();
+		// No timestamps: `EntryView::Group` has none (wire shape).
 		const group: Entry = {
 			entry_type: "group",
 			id: "33333333-3333-3333-3333-333333333333",
 			name: "Root",
 			data_type: "group",
-			created_at: "2026-01-02T03:04:05Z",
-			updated_at: "2026-01-02T03:04:05Z",
 			children: [passkey, JSON.parse(DATA_VIEW_JSON) as Entry],
 		};
 		const entries: Entry[] = [group, parsePasskey()];
@@ -178,8 +177,6 @@ describe("PasskeyEntry IPC contract", () => {
 					id: "33333333-3333-3333-3333-333333333333",
 					name: "Root",
 					data_type: "group",
-					created_at: "2026-01-02T03:04:05Z",
-					updated_at: "2026-01-02T03:04:05Z",
 					children: [parsePasskey()],
 				},
 			],

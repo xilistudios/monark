@@ -13,9 +13,21 @@ export interface BaseEntry {
 	updated_at: string; // ISO 8601 string
 }
 
-// Group entry interface with nested children
-export interface GroupEntry extends BaseEntry {
+// Group entry interface with nested children.
+//
+// Mirrors the Rust `EntryView::Group` (and `Entry::Group` on disk) field-for-field:
+// a group carries **no** `created_at`/`updated_at`. It therefore does NOT extend
+// `BaseEntry`. This is deliberate and load-bearing for sync: the merge rule for
+// groups cannot be "newest `updated_at` wins" because the wire never carries a
+// group timestamp — see `services/vaultMerge.ts` (group metadata is
+// cloud-authoritative). Do not add the timestamps here without also adding them
+// to the Rust model; a type that promises them makes an inert comparison
+// type-check.
+export interface GroupEntry {
+	id: string; // UUID v4 string from Rust
 	entry_type: "group";
+	name: string;
+	data_type: string;
 	children: Entry[]; // Nested entry structure
 }
 
