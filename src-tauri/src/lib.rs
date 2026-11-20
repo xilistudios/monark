@@ -256,6 +256,7 @@ fn build_app() {
             vault::lifecycle::write_vault,
             vault::lifecycle::read_vault,
             vault::lifecycle::delete_vault,
+            vault::lifecycle::change_vault_password,
             vault::cloud_lifecycle::write_cloud_vault,
             vault::cloud_lifecycle::read_cloud_vault,
             vault::cloud_lifecycle::delete_cloud_vault,

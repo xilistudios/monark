@@ -120,6 +120,83 @@ pub fn delete_vault(file_path: String) -> Result<(), CommandError> {
         .map_err(|_e| CommandError::Io("Failed to delete vault file".to_string()))
 }
 
+/// Re-wraps the vault master key under a new password (cloud parity).
+///
+/// Mirrors `change_cloud_vault_password` (`cloud_lifecycle.rs`): the master key
+/// is unwrapped with `old_password`, a fresh salt + default Argon2id parameters
+/// are generated, and the *unchanged* master key is re-encrypted under the new
+/// KDF key. Only `argon2_params` and `credentials` are replaced; the encrypted
+/// vault blob (`vault_file.vault`) is left byte-identical, so every entry
+/// (including future passkeys) survives untouched.
+#[tauri::command(async)]
+pub fn change_vault_password(
+    file_path: String,
+    old_password: String,
+    new_password: String,
+) -> Result<(), CommandError> {
+    let canonical_path = validate_vault_path(&file_path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
+
+    if !canonical_path.exists() {
+        return Err(CommandError::NotFound(
+            "Vault file does not exist".to_string(),
+        ));
+    }
+
+    crate::vault::rate_limit::check_attempts(&canonical_str)?;
+    let mut vault_file = io::vault::read_vault(canonical_str.clone())?;
+
+    let master_key = match derive_and_decrypt_master_key(&old_password, &vault_file) {
+        Ok(key) => {
+            crate::vault::rate_limit::reset_attempts(&canonical_str);
+            key
+        }
+        Err(err) => {
+            crate::vault::rate_limit::record_failure(&canonical_str);
+            return Err(err);
+        }
+    };
+
+    if new_password.is_empty() {
+        return Err(CommandError::Validation(
+            "New password is required".to_string(),
+        ));
+    }
+
+    // Fresh salt + the same Argon2id defaults used when creating a vault.
+    let user_salt = crypto::random::generate_salt()?;
+    let argon2_params = Argon2Params {
+        salt: URL_SAFE_NO_PAD.encode(&user_salt),
+        memory_cost_kib: ARGON2_MEMORY_COST_KIB,
+        iterations: ARGON2_ITERATIONS,
+        parallelism: ARGON2_PARALLELISM,
+    };
+
+    let mut new_kdf_key = crypto::argon2::derive_key_argon2id(
+        new_password.as_bytes(),
+        &user_salt,
+        argon2_params.memory_cost_kib,
+        argon2_params.iterations,
+        argon2_params.parallelism,
+        KEY_LENGTH as u32,
+    )?;
+
+    // Re-wrap the SAME master key under the new password.
+    let mk_nonce = crypto::random::generate_nonce()?;
+    let mk_ciphertext =
+        crypto::chacha::encrypt_xchacha20poly1305(&new_kdf_key, &mk_nonce, &master_key)?;
+    new_kdf_key.zeroize(); // Clear intermediate key material from memory
+
+    vault_file.argon2_params = argon2_params;
+    vault_file.credentials = EncryptedData {
+        nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
+        ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
+    };
+    // `vault_file.vault` is deliberately NOT touched: the blob stays byte-identical.
+
+    io::vault::write_vault(canonical_str, &vault_file)
+}
+
 fn create_new_vault(
     file_path: &str,
     password: &str,
