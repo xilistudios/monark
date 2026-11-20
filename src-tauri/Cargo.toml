@@ -51,6 +51,11 @@ url = "2.5"
 dirs = "5.0"
 urlencoding = "2.1"
 quick-xml = { version = "0.36", features = ["serialize"] }
+# WebAuthn passkey core (T02): ES256 signing/verification + CBOR (COSE_Key,
+# attestationObject). `ecdsa` enables the signing/verifying traits on P-256;
+# `rand_core 0.6` is already in the lockfile via `rand 0.8`, so no version split.
+p256 = { version = "0.13", features = ["ecdsa"] }
+ciborium = "0.2"
 
 [dev-dependencies]
 mockito = "1"

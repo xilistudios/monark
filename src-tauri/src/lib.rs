@@ -11,6 +11,7 @@ pub mod commands;
 pub mod crypto;
 pub mod io;
 pub mod models;
+pub mod passkey;
 pub mod state;
 pub mod storage;
 #[cfg(desktop)]
