@@ -60,6 +60,23 @@ vi.mock("../../services/commands", () => ({
 vi.mock("../../services/cloudStorage", () => ({
 	CloudStorageCommands: mockCloudStorageCommands,
 }));
+// T13: `deleteEntry` routes passkeys through `passkey_delete`. The module is
+// mocked with the real `vaultRefFor` so the assertions can check the exact
+// wire ref the delete is addressed to.
+const mockPasskeyCommands = vi.hoisted(() => ({
+	create: vi.fn(),
+	assert: vi.fn(),
+	listForRp: vi.fn(),
+	delete: vi.fn(),
+}));
+vi.mock("../../services/passkey", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../../services/passkey")>();
+	return {
+		default: mockPasskeyCommands,
+		vaultRefFor: actual.vaultRefFor,
+	};
+});
 vi.mock("../../redux/actions/vault", () => ({
 	// Every name vault.ts imports must be present here: vitest replaces a name
 	// missing from the factory result with a stub that THROWS when called
@@ -613,6 +630,251 @@ describe("VaultInstance", () => {
 			await expect(
 				vaultInstance.addEntry(["nonexistent-group"], newEntry),
 			).rejects.toThrow("Parent group not found at path: nonexistent-group");
+		});
+	});
+
+	describe("deleteEntry", () => {
+		/** A vault with one data entry, one group (with a nested passkey) and a root passkey. */
+		function vaultWithPasskeys(): Vault {
+			return {
+				id: "test-vault",
+				name: "Test",
+				path: "/home/user/personal.monark",
+				storageType: "local",
+				isLocked: false,
+				volatile: {
+					entries: [
+						{
+							id: "entry-1",
+							entry_type: "entry",
+							name: "Mail",
+							data_type: "login",
+							created_at: "2025-01-01T00:00:00Z",
+							updated_at: "2025-01-01T00:00:00Z",
+							fields: [],
+							tags: [],
+						},
+						{
+							id: "passkey-root",
+							entry_type: "passkey",
+							name: "GitHub",
+							created_at: "2026-01-02T03:04:05Z",
+							updated_at: "2026-01-02T03:04:05Z",
+							tags: [],
+							rp_id: "github.com",
+							rp_name: "GitHub",
+							credential_id: "3q2-7wABC",
+							user_handle: "AQIDBA",
+							user_name: "octocat",
+							user_display_name: "The Octocat",
+							algorithm: -7,
+							sign_count: 0,
+							discoverable: true,
+							transports: ["internal"],
+							aaguid: "00000000-0000-0000-0000-000000000000",
+						},
+						{
+							id: "group-1",
+							entry_type: "group",
+							name: "Work",
+							data_type: "",
+							children: [
+								{
+									id: "passkey-nested",
+									entry_type: "passkey",
+									name: "GitLab",
+									created_at: "2026-01-02T03:04:05Z",
+									updated_at: "2026-01-02T03:04:05Z",
+									tags: [],
+									rp_id: "gitlab.com",
+									rp_name: "GitLab",
+									credential_id: "AAAAAA",
+									user_handle: "AQIDBA",
+									user_name: "octocat",
+									user_display_name: "",
+									algorithm: -7,
+									sign_count: 0,
+									discoverable: true,
+									transports: [],
+									aaguid: "00000000-0000-0000-0000-000000000000",
+								},
+							],
+						},
+					],
+					credential: "test-password",
+					navigationPath: "/",
+					encryptedData: undefined,
+				},
+			};
+		}
+
+		it("deletes a root passkey through passkey_delete and skips the generic write", async () => {
+			const vault = vaultWithPasskeys();
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			mockPasskeyCommands.delete.mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.deleteEntry(["passkey-root"]);
+
+			// The explicit command is the only path that removes a passkey: the
+			// backend write-merge preserves passkeys found on disk.
+			expect(mockPasskeyCommands.delete).toHaveBeenCalledTimes(1);
+			expect(mockPasskeyCommands.delete).toHaveBeenCalledWith(
+				{ kind: "local", file_path: "/home/user/personal.monark" },
+				"test-password",
+				"passkey-root",
+			);
+
+			// NEGATIVE CONTROL: the generic full-vault write must NOT run for a
+			// passkey delete. A regression to `_saveVault()` (which is what the
+			// data/group path does) makes this assertion fail.
+			expect(VaultCommands.write).not.toHaveBeenCalled();
+
+			// The in-memory view follows the disk: the entry is gone, the rest stays.
+			const dispatched = mockVaultActions.setVaultEntries.mock.calls[0][0];
+			expect(
+				dispatched.entries.map((entry: Entry) => entry.id),
+			).toEqual(["entry-1", "group-1"]);
+		});
+
+		it("deletes a nested passkey through passkey_delete and skips the generic write", async () => {
+			const vault = vaultWithPasskeys();
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			mockPasskeyCommands.delete.mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.deleteEntry(["group-1", "passkey-nested"]);
+
+			expect(mockPasskeyCommands.delete).toHaveBeenCalledWith(
+				{ kind: "local", file_path: "/home/user/personal.monark" },
+				"test-password",
+				"passkey-nested",
+			);
+			expect(VaultCommands.write).not.toHaveBeenCalled();
+
+			const dispatched = mockVaultActions.setVaultEntries.mock.calls[0][0];
+			const group = dispatched.entries.find(
+				(entry: Entry) => entry.id === "group-1",
+			);
+			expect(group?.children).toEqual([]);
+		});
+
+		it("addresses a cloud vault passkey by provider file id", async () => {
+			const vault: Vault = {
+				...vaultWithPasskeys(),
+				storageType: "cloud",
+				providerId: "google_drive",
+				path: "/Monark/personal.monark",
+				cloudMetadata: {
+					fileId: "file-123",
+					provider: "google_drive",
+					lastSync: "2026-01-02T03:04:05Z",
+				},
+			};
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			mockPasskeyCommands.delete.mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.deleteEntry(["passkey-root"]);
+
+			expect(mockPasskeyCommands.delete).toHaveBeenCalledWith(
+				{
+					kind: "cloud",
+					vault_id: "file-123",
+					provider_name: "google_drive",
+				},
+				"test-password",
+				"passkey-root",
+			);
+			// Neither the local write nor the cloud write runs.
+			expect(VaultCommands.write).not.toHaveBeenCalled();
+			expect(CloudStorageCommands.writeCloudVault).not.toHaveBeenCalled();
+		});
+
+		it("propagates a passkey_delete failure and keeps the entry in the view", async () => {
+			const vault = vaultWithPasskeys();
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			mockPasskeyCommands.delete.mockRejectedValue(
+				new Error("passkey_delete failed"),
+			);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+
+			await expect(instance.deleteEntry(["passkey-root"])).rejects.toThrow(
+				"passkey_delete failed",
+			);
+			// Nothing was dispatched, so the entry is still visible.
+			expect(mockVaultActions.setVaultEntries).not.toHaveBeenCalled();
+			expect(VaultCommands.write).not.toHaveBeenCalled();
+		});
+
+		it("throws when the vault has no credential (locked vault)", async () => {
+			const vault = vaultWithPasskeys();
+			vault.volatile = { ...vault.volatile, credential: undefined };
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+
+			await expect(instance.deleteEntry(["passkey-root"])).rejects.toThrow(
+				"No credential available for vault",
+			);
+			expect(mockPasskeyCommands.delete).not.toHaveBeenCalled();
+		});
+
+		it("still deletes a data entry with the generic write (regression)", async () => {
+			const vault = vaultWithPasskeys();
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.deleteEntry(["entry-1"]);
+
+			// The data path is unchanged: no passkey command, one full write.
+			expect(mockPasskeyCommands.delete).not.toHaveBeenCalled();
+			expect(VaultCommands.write).toHaveBeenCalledTimes(1);
+			const dispatched = mockVaultActions.setVaultEntries.mock.calls[0][0];
+			expect(
+				dispatched.entries.map((entry: Entry) => entry.id),
+			).toEqual(["passkey-root", "group-1"]);
+		});
+
+		it("write-after-delete succeeds: the refreshed view is writable", async () => {
+			// T10 review INFO-6: the backend write-merge fails hard on a stale view
+			// (a passkey present in the payload but absent on disk). After a passkey
+			// delete the view must therefore be refreshed, and a subsequent write
+			// must carry the remaining entries only.
+			const vault = vaultWithPasskeys();
+			mockState.vault.vaults = [vault];
+			mockGetState.mockReturnValue(mockState);
+			mockPasskeyCommands.delete.mockResolvedValue(undefined);
+			vi.mocked(VaultCommands.write).mockResolvedValue(undefined);
+
+			const instance = new VaultInstance(vault, mockDispatch, mockGetState);
+			await instance.deleteEntry(["passkey-root"]);
+
+			// Simulate the reducer applying the dispatched entries, then write.
+			const dispatched = mockVaultActions.setVaultEntries.mock.calls[0][0];
+			const refreshed: Vault = {
+				...vault,
+				volatile: { ...vault.volatile, entries: dispatched.entries },
+			};
+			mockState.vault.vaults = [refreshed];
+			mockGetState.mockReturnValue(mockState);
+
+			await instance.updateEntryById("entry-1", { name: "Mail renamed" });
+
+			expect(VaultCommands.write).toHaveBeenCalledTimes(1);
+			const [, , payload] = vi.mocked(VaultCommands.write).mock.calls[0];
+			const ids = payload.entries.map((entry: Entry) => entry.id);
+			expect(ids).not.toContain("passkey-root");
+			expect(ids).toContain("entry-1");
+			expect(ids).toContain("group-1");
 		});
 	});
 

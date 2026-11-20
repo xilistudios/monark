@@ -2,17 +2,23 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import type { DataEntry, Field, FieldType } from '../../../interfaces/vault.interface';
+import { isPasskeyEntry } from '../../../interfaces/vault.interface';
 import type { RootState } from '../../../redux/store';
 import { VaultManager } from '../../../services/vault';
 import { Modal } from '../../UI/Modal';
 import { PasswordFieldInput } from '../PasswordFieldInput';
 import { useContext } from 'react';
 import { VaultModalContext } from '../VaultContext';
+import { EditPasskeyForm } from './EditPasskeyForm';
 
 /**
- * Modal component for editing an existing vault data entry.
- * Allows modification of title, data type, fields, and tags.
- * Implements error checking and validation.
+ * Modal component for editing an existing vault entry.
+ *
+ * Two shapes share the modal shell:
+ * - a **data entry** keeps the original form (title, data type, fields, tags);
+ * - a **passkey** renders {@link EditPasskeyForm}: only the four mutable
+ *   members (name, tags, user_name, user_display_name) are editable, because
+ *   the credential core is immutable and the backend write-merge preserves it.
  */
 
 /**
@@ -26,11 +32,37 @@ interface FormField {
 }
 
 /**
+ * Modal shell: picks the form for the selected entry kind.
+ *
+ * The two forms are separate components so each one owns its hooks
+ * unconditionally (a conditional early return between hooks would break the
+ * rules of hooks).
+ */
+export const EditEntryModal: React.FC = () => {
+  const context = useContext(VaultModalContext);
+  if (!context)
+    throw new Error(
+      'VaultModalContext must be used within a VaultModalProvider'
+    );
+  const { isEditEntryModalOpen, selectedEntry, closeAllModals } = context;
+
+  if (selectedEntry && isPasskeyEntry(selectedEntry)) {
+    return (
+      <Modal isOpen={isEditEntryModalOpen} onClose={closeAllModals}>
+        <EditPasskeyForm entry={selectedEntry} onClose={closeAllModals} />
+      </Modal>
+    );
+  }
+
+  return <EditDataEntryForm />;
+};
+
+/**
  * Modal component for editing an existing vault data entry.
  * Allows modification of title, data type, fields, and tags.
  * Implements error checking and validation.
  */
-export const EditEntryModal: React.FC = () => {
+const EditDataEntryForm: React.FC = () => {
   const { t } = useTranslation('home');
   const currentVaultId = useSelector(
     (state: RootState) => state.vault.currentVaultId

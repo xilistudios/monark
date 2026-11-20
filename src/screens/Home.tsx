@@ -15,7 +15,7 @@ import { DeleteVaultModal } from '../components/Vault/Modals/DeleteVaultModal';
 import { AddProviderModal } from '../components/Vault/Modals/AddProviderModal';
 import { deleteVault, type Vault, isCloudVault } from '../redux/actions/vault';
 import { isVaultLocked } from '../services/vaultState';
-import { isDataEntry, isGroupEntry } from '../interfaces/vault.interface';
+import { isGroupEntry } from '../interfaces/vault.interface';
 import {
   lockVault,
   setNavigationPath,
@@ -368,8 +368,11 @@ function HomeScreen() {
       <AddEntryModal />
       <AddGroupModal />
       <ImportCsvModal />
-      {selectedEntry && isDataEntry(selectedEntry) && <EntryDetailsModal />}
-      {selectedEntry && isDataEntry(selectedEntry) && <EditEntryModal />}
+      {/* The details modal handles every entry kind: data entries and groups
+          render the generic view, a passkey renders PasskeyDetailsSection. */}
+      {selectedEntry && <EntryDetailsModal />}
+      {/* EditEntryModal renders the restricted passkey form for a passkey. */}
+      {selectedEntry && !isGroupEntry(selectedEntry) && <EditEntryModal />}
       {selectedEntry && isGroupEntry(selectedEntry) && <EditGroupModal />}
       <AddVaultModal
         isOpen={isAddVaultModalOpen}

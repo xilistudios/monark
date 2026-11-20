@@ -260,7 +260,9 @@
       "authRefreshFailed": "No se pudo renovar la sesión en la nube. Comprueba tu conexión e inténtalo de nuevo.",
       "authenticationExpired": "La autenticación ha expirado. Por favor vuelva a autenticarse en Configuración.",
       "insufficientPermissions": "Permisos insuficientes. Por favor verifique los permisos de su almacenamiento en la nube.",
-      "storageQuotaExceeded": "Cuota de almacenamiento excedida. Por favor libere espacio."
+      "storageQuotaExceeded": "Cuota de almacenamiento excedida. Por favor libere espacio.",
+      "syncError": "No se pudo sincronizar la bóveda con el almacenamiento en la nube. Tu copia local no ha cambiado; inténtalo de nuevo.",
+      "dismiss": "Descartar"
     },
     "addVault": {
       "title": "Crear Nueva Bóveda",
@@ -587,7 +589,49 @@
       "uvPromptTitle": "Passkey",
       "uvPromptSubtitle": "Confirma que eres tú para usar una passkey en {{vaultName}}",
       "uvPromptCancel": "Cancelar",
-      "uvFailed": "La verificación de usuario falló. Inténtalo de nuevo."
+      "uvFailed": "La verificación de usuario falló. Inténtalo de nuevo.",
+      "badge": "PASSKEY",
+      "details": {
+        "title": "Passkey",
+        "relyingParty": "Parte confiable",
+        "userName": "Nombre de usuario",
+        "userDisplayName": "Nombre visible",
+        "credentialId": "ID de credencial",
+        "algorithm": "Algoritmo",
+        "signCount": "Contador de firmas",
+        "discoverable": "Descubrible",
+        "discoverableYes": "Sí",
+        "discoverableNo": "No",
+        "transports": "Transportes",
+        "noTransports": "Ninguno informado",
+        "copied": "ID de credencial copiado",
+        "copyFailed": "No se pudo copiar el ID de credencial",
+        "delete": "Eliminar passkey",
+        "deleteConfirmTitle": "Eliminar passkey",
+        "deleteConfirm": "¿Eliminar la passkey de «{{name}}»? No se puede deshacer; la parte confiable dejará de aceptarla.",
+        "deleteCancel": "Cancelar",
+        "deleteConfirmAction": "Eliminar",
+        "deleting": "Eliminando...",
+        "deleteFailed": "No se pudo eliminar la passkey"
+      },
+      "edit": {
+        "title": "Editar passkey",
+        "name": "Nombre",
+        "userName": "Nombre de usuario",
+        "userDisplayName": "Nombre visible",
+        "tags": "Etiquetas",
+        "tagPlaceholder": "Introduce una etiqueta",
+        "addTag": "Añadir etiqueta",
+        "removeTag": "Quitar etiqueta {{tag}}",
+        "immutableNotice": "La credencial en sí (parte confiable, ID de credencial, clave) no se puede cambiar. Solo los campos de arriba son editables.",
+        "save": "Guardar",
+        "saving": "Guardando...",
+        "cancel": "Cancelar",
+        "errors": {
+          "validationFailed": "Revisa los campos de arriba",
+          "saveFailed": "No se pudo actualizar la passkey"
+        }
+      }
     }
   }
 }

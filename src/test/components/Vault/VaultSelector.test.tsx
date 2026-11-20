@@ -303,6 +303,76 @@ describe('VaultSelector', () => {
     expect(migrateToCloudOption.closest('button')).toBeDisabled();
   });
 
+  it('surfaces a failed sync instead of swallowing it (E13c)', async () => {
+    const mockVaultSync = vi
+      .fn()
+      .mockRejectedValue(new Error('Failed to sync with cloud: quota exceeded'));
+    mockVaultManagerInstance.getInstance.mockReturnValue({
+      syncWithCloud: mockVaultSync,
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
+    });
+
+    // Open the vault dropdown and trigger the sync action.
+    const vaultDropdownButton = screen.getAllByRole('button')[1];
+    fireEvent.click(vaultDropdownButton);
+    fireEvent.click(screen.getByText('vaultSelector.syncNow'));
+
+    await waitFor(() => {
+      expect(mockVaultSync).toHaveBeenCalled();
+    });
+
+    // The failure is visible to the user. This file mocks `useTranslation`
+    // with `t: (key, fallback) => fallback || key`, so the rendered text is the
+    // English fallback passed at the call site.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /Failed to sync the vault with cloud storage/,
+      );
+    });
+    // ...and sanitized: the underlying error text never reaches the UI or logs.
+    expect(screen.getByRole('alert')).not.toHaveTextContent('quota exceeded');
+    for (const call of consoleError.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('quota exceeded');
+    }
+    consoleError.mockRestore();
+  });
+
+  it('clears the sync error when dismissed', async () => {
+    const mockVaultSync = vi.fn().mockRejectedValue(new Error('boom'));
+    mockVaultManagerInstance.getInstance.mockReturnValue({
+      syncWithCloud: mockVaultSync,
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
+    });
+
+    const vaultDropdownButton = screen.getAllByRole('button')[1];
+    fireEvent.click(vaultDropdownButton);
+    fireEvent.click(screen.getByText('vaultSelector.syncNow'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Dismiss'));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows error message when refresh fails', async () => {
     mockVaultManagerInstance.refreshCloudVaults.mockRejectedValue(new Error('Network error'));
 

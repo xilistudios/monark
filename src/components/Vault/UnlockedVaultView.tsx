@@ -6,8 +6,6 @@ import {
   DataEntry,
   GroupEntry,
   findEntryByPath,
-  isDataEntry,
-  isGroupEntry,
 } from '../../interfaces/vault.interface';
 import { findPathById } from '../../utils/vaultNavigation';
 import type { Vault } from '../../redux/actions/vault';
@@ -71,14 +69,9 @@ function UnlockedVaultView({
   t,
 }: UnlockedVaultViewProps) {
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
-  // The details sidebar only renders data entries and groups; a passkey leaf
-  // has no details view yet (passkey UI lands in a later task).
-  const sidebarEntry: DataEntry | GroupEntry | null =
-    selectedEntry === null ||
-    isGroupEntry(selectedEntry) ||
-    isDataEntry(selectedEntry)
-      ? selectedEntry
-      : null;
+  // Every entry kind has a details view: data entries and groups use the
+  // generic panel, a passkey renders the read-only PasskeyDetailsSection.
+  const sidebarEntry: Entry | null = selectedEntry;
   const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);

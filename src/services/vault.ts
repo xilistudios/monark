@@ -4,7 +4,11 @@ import type {
 } from "../interfaces/cloud-storage.interface";
 import { StorageProviderType } from "../interfaces/cloud-storage.interface";
 import type { Entry, VaultContent } from "../interfaces/vault.interface";
-import { findEntryByPath, isGroupEntry } from "../interfaces/vault.interface";
+import {
+	findEntryByPath,
+	isGroupEntry,
+	isPasskeyEntry,
+} from "../interfaces/vault.interface";
 import { findPathById } from "../utils/vaultNavigation";
 import type { Vault } from "../redux/actions/vault";
 import {
@@ -32,6 +36,7 @@ import {
 } from "./providerAuth";
 import { storeVaultPassword, deleteVaultPassword } from "./biometric";
 import VaultCommands from "./commands";
+import PasskeyCommands, { vaultRefFor } from "./passkey";
 import { mergeVaultEntries } from "./vaultMerge";
 
 export class VaultInstance {
@@ -314,9 +319,20 @@ export class VaultInstance {
 	}
 
 	/**
-	 * Deletes an entry at the specified path
+	 * Deletes an entry at the specified path.
+	 *
+	 * Two deletion paths, chosen by the entry kind:
+	 *
+	 * - **passkey** → `passkey_delete` (T13). The backend write-merge preserves
+	 *   every passkey it finds on disk, so a generic full-vault write that omits
+	 *   one does NOT remove it: the explicit command is the only way to delete a
+	 *   passkey. The disk is already updated when the command returns, so this
+	 *   path deliberately returns **without** `_saveVault()`.
+	 * - **data entry / group** → edit the in-memory tree and persist it with
+	 *   `_saveVault()` (unchanged behaviour).
+	 *
 	 * @param path - Array representing the path to the entry to delete
-	 * @throws Error if entry not found or save fails
+	 * @throws Error if entry not found, the vault is locked, or the delete fails
 	 */
 	async deleteEntry(path: string[]): Promise<void> {
 		// Get the current entries from the Redux store using getState()
@@ -333,6 +349,45 @@ export class VaultInstance {
 
 		const entryId = path[path.length - 1];
 		const parentPath = path.slice(0, -1);
+
+		// Passkey branch: resolve the target first, because the deletion has to go
+		// through `passkey_delete` instead of a full-vault write.
+		const target = findEntryByPath(newEntries, path);
+		if (target && isPasskeyEntry(target)) {
+			const credential = vault?.volatile?.credential;
+			if (!vault || !credential) {
+				throw new Error("No credential available for vault");
+			}
+			await PasskeyCommands.delete(vaultRefFor(vault), credential, entryId);
+
+			// The vault file is already updated by the backend; only the in-memory
+			// view has to follow. Returning here (instead of falling through to
+			// `_saveVault`) is what keeps the delete from being a no-op: the
+			// write-merge would re-attach the passkey we just removed.
+			if (parentPath.length === 0) {
+				this.dispatch(
+					setVaultEntries({
+						vaultId: this.id,
+						entries: newEntries.filter((entry) => entry.id !== entryId),
+					}),
+				);
+			} else {
+				const parentEntry = findEntryByPath(newEntries, parentPath);
+				if (parentEntry && isGroupEntry(parentEntry)) {
+					parentEntry.children = parentEntry.children.filter(
+						(child) => child.id !== entryId,
+					);
+					this.dispatch(
+						setVaultEntries({ vaultId: this.id, entries: newEntries }),
+					);
+				} else {
+					throw new Error(
+						`Parent group not found at path: ${parentPath.join("/")}`,
+					);
+				}
+			}
+			return;
+		}
 
 		if (parentPath.length === 0) {
 			// Delete from root level
