@@ -21,7 +21,7 @@ const VAULT_EXTENSION: &str = "monark";
 /// to prevent path traversal attacks (e.g., via `..` components).
 /// For new files, the parent directory must exist or will be created first.
 /// Returns the canonicalized path if valid.
-fn validate_vault_path(file_path: &str) -> Result<PathBuf, CommandError> {
+pub(crate) fn validate_vault_path(file_path: &str) -> Result<PathBuf, CommandError> {
     let path = Path::new(file_path);
 
     // Must have .monark extension
@@ -212,6 +212,11 @@ fn update_existing_vault(
 ) -> Result<(), CommandError> {
     crate::vault::rate_limit::check_attempts(file_path)?;
     let mut vault_file = io::vault::read_vault(file_path.to_string())?;
+    // Refuse to re-encrypt a format this build cannot read: without this gate the
+    // update path would decrypt (and fail) or, worse, rewrite a future format
+    // with today's serializer (review finding E14b). The check runs before the
+    // rate-limit accounting of the password, exactly like the read paths.
+    version::check_version(&vault_file.version)?;
 
     let master_key = match keys::derive_and_decrypt_master_key(password, &vault_file) {
         Ok(key) => {

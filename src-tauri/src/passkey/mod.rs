@@ -18,6 +18,8 @@
 //!   (camelCase, WebAuthn JSON member names).
 //! * [`cxf`] — the Credential Exchange Format subset (F1): envelope parsing,
 //!   strict per-credential validation and export building. Pure parsing, no IO.
+//! * [`store`] — the persistence seam (T08): load/save a vault by [`VaultRef`]
+//!   (local file or cloud provider) with rate limiting and version policy.
 //!
 //! Invariants enforced here (see `docs/passkeys.md`):
 //!
@@ -32,6 +34,7 @@
 pub mod cose;
 pub mod cxf;
 pub mod es256;
+pub mod store;
 pub mod types;
 pub mod webauthn;
 

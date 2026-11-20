@@ -366,4 +366,116 @@ mod tests {
 
         Ok(())
     }
+
+    /// Review finding E14c: `change_cloud_vault_password` must reject an empty
+    /// new password, exactly like the local command does (the guard now lives in
+    /// `keys::rewrap_master_key`, the single home both commands share).
+    #[tokio::test]
+    async fn change_cloud_vault_password_rejects_empty_new() -> Result<(), CommandError> {
+        let temp = TempDir::new().expect("temp dir");
+        isolate_cloud_cache(&temp);
+        let manager = local_manager(&temp).await;
+        let file_id = seed_cloud_vault(&manager, &disk_vault()).await?;
+
+        let before = manager
+            .read_file(file_id.clone(), None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+
+        // The command wrapper needs a `tauri::State`, so the shared helper is
+        // exercised directly through the same entry point the command uses.
+        let vault_data = manager
+            .read_file(file_id.clone(), None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read existing vault".to_string()))?;
+        let mut vault_file = crate::vault::cloud_lifecycle::parse_vault_from_bytes(&vault_data)?;
+        let result = crate::vault::keys::rewrap_master_key(PASSWORD, "", &mut vault_file);
+        match result {
+            Err(CommandError::Validation(msg)) => {
+                assert!(msg.contains("New password is required"), "got: {msg}");
+            }
+            other => panic!("expected Validation, got {other:?}"),
+        }
+
+        let after = manager
+            .read_file(file_id, None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+        assert_eq!(
+            before, after,
+            "a rejected password change must not rewrite the stored file"
+        );
+
+        Ok(())
+    }
+
+    /// Review finding E14b (cloud parity): the cloud update path must not
+    /// re-encrypt a format this build cannot read. The stored file is left
+    /// byte-identical.
+    #[tokio::test]
+    async fn update_cloud_vault_rejects_unsupported_version_without_writing(
+    ) -> Result<(), CommandError> {
+        let temp = TempDir::new().expect("temp dir");
+        isolate_cloud_cache(&temp);
+        let manager = local_manager(&temp).await;
+        let file_id = seed_cloud_vault(&manager, &disk_vault()).await?;
+
+        // Rewrite the stored envelope with a future version, crypto untouched.
+        let bytes = manager
+            .read_file(file_id.clone(), None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+        let text = String::from_utf8(bytes)
+            .map_err(|_e| CommandError::Io("Failed to convert vault data".to_string()))?;
+        let parsed = crate::io::signature::parse_content(&text);
+        let decoded = URL_SAFE_NO_PAD
+            .decode(&parsed.content)
+            .map_err(|_e| CommandError::Crypto("Failed to decode vault content".to_string()))?;
+        let mut vault_file: VaultFile = serde_json::from_slice(&decoded)
+            .map_err(|_e| CommandError::Io("Failed to deserialize vault file".to_string()))?;
+        vault_file.version = "9.9".to_string();
+        let future_bytes = crate::io::signature::sign_vault(&vault_file).into_bytes();
+        manager
+            .update_file(
+                crate::storage::providers::UpdateFileRequest {
+                    id: file_id.clone(),
+                    content: future_bytes.clone(),
+                    metadata: None,
+                },
+                None,
+            )
+            .await
+            .map_err(|_e| CommandError::Io("Failed to update vault file".to_string()))?;
+
+        let result = write_cloud_vault_with(
+            "cloud".to_string(),
+            PASSWORD.to_string(),
+            VaultView {
+                updated_at: fixed_time(),
+                hmac: String::new(),
+                entries: Vec::new(),
+            },
+            None,
+            None,
+            Some(file_id.clone()),
+            &manager,
+        )
+        .await;
+
+        match result {
+            Err(CommandError::UnsupportedVersion(version)) => assert_eq!(version, "9.9"),
+            other => panic!("expected UnsupportedVersion, got {other:?}"),
+        }
+
+        let after = manager
+            .read_file(file_id, None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+        assert_eq!(
+            after, future_bytes,
+            "a rejected cloud update must not rewrite the stored file (negative control)"
+        );
+
+        Ok(())
+    }
 }

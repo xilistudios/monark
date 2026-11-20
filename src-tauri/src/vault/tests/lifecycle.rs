@@ -946,4 +946,62 @@ mod tests {
 
         Ok(())
     }
+
+    /// Review finding E14b: the write path must not re-encrypt a format this
+    /// build cannot read. A vault claiming version "9.9" is refused with the
+    /// same `UnsupportedVersion` the read path raises, and the file is left
+    /// byte-identical (nothing written).
+    #[test]
+    fn update_rejects_unsupported_version_without_writing() -> Result<(), CommandError> {
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let file_path = temp_dir
+            .path()
+            .join("future_version.monark")
+            .to_str()
+            .ok_or_else(|| CommandError::Validation("Invalid temp path".to_string()))?
+            .to_string();
+        let password = "test_password".to_string();
+
+        // Seed through the command create path (empty payload: a passkey cannot
+        // be created through it, see `create_vault_with_passkey_fails_closed`).
+        lifecycle::write_vault(
+            file_path.clone(),
+            password.clone(),
+            VaultView {
+                updated_at: Utc::now(),
+                hmac: String::new(),
+                entries: Vec::new(),
+            },
+        )?;
+
+        // Rewrite the envelope with a future version, keeping the crypto intact.
+        let mut vault_file = crate::io::vault::read_vault(file_path.clone())?;
+        vault_file.version = "9.9".to_string();
+        crate::io::vault::write_vault(file_path.clone(), &vault_file)?;
+        let before = std::fs::read(&file_path)
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+
+        let result = lifecycle::write_vault(
+            file_path.clone(),
+            password,
+            VaultView {
+                updated_at: Utc::now(),
+                hmac: String::new(),
+                entries: Vec::new(),
+            },
+        );
+        match result {
+            Err(CommandError::UnsupportedVersion(version)) => assert_eq!(version, "9.9"),
+            other => panic!("expected UnsupportedVersion, got {other:?}"),
+        }
+
+        let after = std::fs::read(&file_path)
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+        assert_eq!(
+            before, after,
+            "a rejected update must not rewrite the file (negative control)"
+        );
+
+        Ok(())
+    }
 }

@@ -61,7 +61,11 @@ fn cloud_cache_file_path(provider: &str, vault_id: &str) -> PathBuf {
         .join(format!("{}.monark", sanitize_path_component(vault_id)))
 }
 
-fn cache_vault_bytes(provider: &str, vault_id: &str, data: &[u8]) -> Result<(), CommandError> {
+pub(crate) fn cache_vault_bytes(
+    provider: &str,
+    vault_id: &str,
+    data: &[u8],
+) -> Result<(), CommandError> {
     let path = cloud_cache_file_path(provider, vault_id);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -92,7 +96,7 @@ fn map_provider_name_for_cache(provider_name: &str) -> String {
     }
 }
 
-async fn resolve_provider_name(
+pub(crate) async fn resolve_provider_name(
     storage_manager: &Arc<StorageManager>,
     provider_name: &Option<String>,
 ) -> Result<String, CommandError> {
@@ -495,6 +499,10 @@ async fn update_existing_cloud_vault(
         .map_err(|_e| CommandError::Io("Failed to read existing vault".to_string()))?;
 
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
+    // Refuse to re-encrypt a format this build cannot read (review finding
+    // E14b): a future format must not be silently rewritten by today's
+    // serializer. Same error and same position as the read paths.
+    version::check_version(&vault_file.version)?;
 
     let master_key = Zeroizing::new(keys::derive_and_decrypt_master_key(password, &vault_file)?);
 
@@ -533,7 +541,7 @@ async fn update_existing_cloud_vault(
     Ok(())
 }
 
-fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> {
+pub(crate) fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> {
     // Convert bytes to string
     let vault_data_str = String::from_utf8(vault_data.to_vec())
         .map_err(|_e| CommandError::Io("Failed to convert vault data".to_string()))?;
@@ -551,7 +559,7 @@ fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> 
         .map_err(|_e| CommandError::Io("Failed to deserialize vault file".to_string()))
 }
 
-fn create_vault_bytes(vault_file: &VaultFile) -> Result<Vec<u8>, CommandError> {
+pub(crate) fn create_vault_bytes(vault_file: &VaultFile) -> Result<Vec<u8>, CommandError> {
     let signed_vault = crate::io::signature::sign_vault(vault_file);
     Ok(signed_vault.into_bytes())
 }

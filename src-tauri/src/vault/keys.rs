@@ -185,8 +185,14 @@ pub(crate) fn decrypt_vault_content(
         .decode(&vault_file.vault.ciphertext)
         .map_err(|_e| CommandError::Crypto("Failed to decode vault ciphertext".to_string()))?;
 
-    let vault_json_bytes =
-        crypto::chacha::decrypt_xchacha20poly1305(master_key, &vault_nonce, &vault_ciphertext)?;
+    // The plaintext JSON holds every secret in the vault (passkey private keys
+    // included), so it is scrubbed on drop exactly like the encrypt side does
+    // (review finding E14a).
+    let vault_json_bytes = Zeroizing::new(crypto::chacha::decrypt_xchacha20poly1305(
+        master_key,
+        &vault_nonce,
+        &vault_ciphertext,
+    )?);
 
     serde_json::from_slice(&vault_json_bytes)
         .map_err(|_e| CommandError::Crypto("Failed to deserialize existing vault".to_string()))
@@ -250,6 +256,16 @@ pub(crate) fn rewrap_master_key(
     new_password: &str,
     vault_file: &mut VaultFile,
 ) -> Result<(), CommandError> {
+    // Both password-change commands (local and cloud) go through here, so the
+    // guard lives here too: an empty new password would otherwise re-wrap the
+    // master key under an empty KDF input on the cloud path, which never had
+    // the local check (review finding E14c).
+    if new_password.is_empty() {
+        return Err(CommandError::Validation(
+            "New password is required".to_string(),
+        ));
+    }
+
     // The master key is the most sensitive value in the process: scrub it as
     // soon as it has been re-wrapped (review finding T01-2).
     let master_key = Zeroizing::new(derive_and_decrypt_master_key(old_password, vault_file)?);
@@ -529,6 +545,45 @@ mod tests {
         assert!(
             derive_and_decrypt_master_key("old-password", &vault_file).is_err(),
             "the old password must stop working"
+        );
+        Ok(())
+    }
+
+    /// Review finding E14c: an empty new password is rejected by the shared
+    /// re-wrap helper, so both password-change commands (local and cloud) get
+    /// the same guard from one place. Nothing is written: the old password keeps
+    /// working and the stored credentials are untouched.
+    #[test]
+    fn rewrap_master_key_rejects_empty_new_password() -> Result<(), CommandError> {
+        let (argon2_params, credentials, master_key) = create_key_material("old-password")?;
+        let blob = encrypt_vault_content(&master_key, &empty_vault())?;
+        let mut vault_file = VaultFile {
+            version: "1.1".to_string(),
+            argon2_params,
+            credentials,
+            vault: blob.clone(),
+        };
+        let before = vault_file.clone();
+
+        match rewrap_master_key("old-password", "", &mut vault_file) {
+            Err(CommandError::Validation(msg)) => {
+                assert!(msg.contains("New password is required"), "got: {msg}");
+            }
+            other => panic!("expected Validation, got {other:?}"),
+        }
+
+        assert_eq!(
+            vault_file.argon2_params, before.argon2_params,
+            "a rejected re-wrap must not replace the salt/parameters"
+        );
+        assert_eq!(
+            vault_file.credentials, before.credentials,
+            "a rejected re-wrap must not replace the wrapped master key"
+        );
+        assert_eq!(vault_file.vault, blob);
+        assert!(
+            derive_and_decrypt_master_key("old-password", &vault_file).is_ok(),
+            "the old password must still unlock the vault"
         );
         Ok(())
     }
