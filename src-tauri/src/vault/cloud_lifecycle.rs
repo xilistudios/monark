@@ -5,6 +5,7 @@ use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile, VaultView};
 use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
 use crate::storage::StorageManager;
 use crate::vault::merge::merge_vault_view;
+use crate::vault::version;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::fs;
@@ -19,7 +20,6 @@ pub fn set_cloud_cache_path(path: PathBuf) {
     let _ = CLOUD_CACHE_BASE_DIR.set(path);
 }
 
-const CURRENT_VAULT_VERSION: &str = "1.0";
 const KEY_LENGTH: usize = 32;
 const VAULT_EXTENSION: &str = "monark";
 
@@ -294,6 +294,9 @@ pub(crate) async fn read_cloud_vault_with(
     };
 
     let vault_file = parse_vault_from_bytes(&vault_data)?;
+    // Fail fast on a format this build cannot read, before the rate-limit gate
+    // and the Argon2 derivation (see `vault::version`).
+    version::check_version(&vault_file.version)?;
 
     crate::vault::rate_limit::check_attempts(&vault_id)?;
     let master_key = match derive_and_decrypt_master_key(&password, &vault_file) {
@@ -517,7 +520,7 @@ async fn create_new_cloud_vault(
     };
 
     let vault_file = VaultFile {
-        version: CURRENT_VAULT_VERSION.to_string(),
+        version: version::CURRENT_VAULT_VERSION.to_string(),
         argon2_params,
         credentials,
         vault: vault_encrypted,
@@ -581,6 +584,9 @@ async fn update_existing_cloud_vault(
 
     vault_file.vault.nonce = URL_SAFE_NO_PAD.encode(vault_nonce);
     vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
+    // Keep the stored version unless the merged content now holds a passkey, in
+    // which case the file becomes 1.1 (unreadable by pre-passkey clients).
+    vault_file.version = version::version_for_content(&vault_file.version, &merged_vault);
 
     let vault_bytes = create_vault_bytes(&vault_file)?;
     let cached_bytes = vault_bytes.clone();

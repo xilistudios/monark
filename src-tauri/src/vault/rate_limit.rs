@@ -125,6 +125,24 @@ pub fn reset_attempts(key: &str) {
     limiter.reset(key);
 }
 
+/// Number of failed attempts currently recorded for `key` (0 when untracked).
+///
+/// Test-only observability: the limiter's state is what the gate reads, so a
+/// test can assert that a path which must *not* count as a password attempt
+/// (e.g. an unsupported vault version) leaves the state untouched. Not part of
+/// the runtime API.
+#[cfg(test)]
+pub fn failure_count(key: &str) -> u32 {
+    let limiter = RATE_LIMITER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    limiter
+        .attempts
+        .get(key)
+        .map(|record| record.failures)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

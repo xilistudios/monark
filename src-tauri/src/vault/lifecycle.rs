@@ -3,12 +3,12 @@ use crate::crypto;
 use crate::io;
 use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile, VaultView};
 use crate::vault::merge::merge_vault_view;
+use crate::vault::version;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 use zeroize::Zeroize;
 
-const CURRENT_VAULT_VERSION: &str = "1.0";
 const KEY_LENGTH: usize = 32;
 const VAULT_EXTENSION: &str = "monark";
 
@@ -88,9 +88,13 @@ pub fn write_vault(
 pub fn read_vault(file_path: String, password: String) -> Result<VaultView, CommandError> {
     let canonical_path = validate_vault_path(&file_path)?;
     let canonical_str = canonical_path.to_string_lossy().to_string();
-    crate::vault::rate_limit::check_attempts(&canonical_str)?;
     let vault_file = io::vault::read_vault(canonical_str.clone())?;
+    // Fail fast on a format this build cannot read: a version mismatch is not a
+    // password attempt, so it must not consume a rate-limit slot nor pay for
+    // Argon2 derivation (see `vault::version`).
+    version::check_version(&vault_file.version)?;
 
+    crate::vault::rate_limit::check_attempts(&canonical_str)?;
     let master_key = match derive_and_decrypt_master_key(&password, &vault_file) {
         Ok(key) => {
             crate::vault::rate_limit::reset_attempts(&canonical_str);
@@ -266,7 +270,7 @@ fn create_new_vault(
     };
 
     let vault_file = VaultFile {
-        version: CURRENT_VAULT_VERSION.to_string(),
+        version: version::CURRENT_VAULT_VERSION.to_string(),
         argon2_params,
         credentials,
         vault: vault_encrypted,
@@ -307,6 +311,9 @@ fn update_existing_vault(
 
     vault_file.vault.nonce = URL_SAFE_NO_PAD.encode(vault_nonce);
     vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
+    // Keep the stored version unless the merged content now holds a passkey, in
+    // which case the file becomes 1.1 (unreadable by pre-passkey clients).
+    vault_file.version = version::version_for_content(&vault_file.version, &merged_vault);
 
     io::vault::write_vault(file_path.to_string(), &vault_file)
 }

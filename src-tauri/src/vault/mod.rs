@@ -3,3 +3,4 @@ pub mod lifecycle;
 pub mod merge;
 pub mod rate_limit;
 mod tests;
+pub mod version;
