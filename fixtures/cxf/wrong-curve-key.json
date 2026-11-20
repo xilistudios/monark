@@ -1,0 +1,46 @@
+{
+	"version": { "major": 1, "minor": 0 },
+	"exporterRpId": "example.com",
+	"exporterDisplayName": "Example Exporter",
+	"timestamp": 1705228800,
+	"accounts": [
+		{
+			"id": "d3JvbmctY3VydmUtYWNjb3VudA",
+			"username": "johndoe",
+			"email": "johndoe@example.com",
+			"collections": [],
+			"items": [
+				{
+					"id": "d3JvbmctY3VydmUtaXRlbS1lZDI1NTE5",
+					"title": "Ed25519 key",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "ZWRjcmVkLWNyZWRlbnRpYWwtaWQ",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "ZWRjcmVkLXVzZXItaGFuZGxl",
+							"key": "MC4CAQAwBQYDK2VwBCIEINdamAGCsQq31Uv-08lkBzoO4XLz2qYjJa8CGmj3B1Ea"
+						}
+					]
+				},
+				{
+					"id": "d3JvbmctY3VydmUtaXRlbS1wMzg0",
+					"title": "P-384 key",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "cDM4NC1jcmVkZW50aWFsLWlk",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "cDM4NC11c2VyLWhhbmRsZQ",
+							"key": "MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDDS_nhYHA_nUv4FneHv8BhjymCS9o1MYWbXCWfi1-p6CphJE1DUQ3G_hCcEimyzgwGhZANiAARrgtt4jT-kYgwj8_U1amVPd7PhuSs_OB3-TOwMyDMM6hmagB4HWyzTQtabQIKbVcLS7OsZaPeCs2Ma3Qa2A2Q3I8vFIfxpQTWirK75I9Y4eJuG0lx9gqxBt3XG63achXU"
+						}
+					]
+				}
+			]
+		}
+	]
+}

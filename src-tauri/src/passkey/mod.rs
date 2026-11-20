@@ -16,6 +16,8 @@
 //!   assertion signature input.
 //! * [`types`] — serde request/response shapes shared with the frontend
 //!   (camelCase, WebAuthn JSON member names).
+//! * [`cxf`] — the Credential Exchange Format subset (F1): envelope parsing,
+//!   strict per-credential validation and export building. Pure parsing, no IO.
 //!
 //! Invariants enforced here (see `docs/passkeys.md`):
 //!
@@ -28,6 +30,7 @@
 //!   that could reach a log or an error string.
 
 pub mod cose;
+pub mod cxf;
 pub mod es256;
 pub mod types;
 pub mod webauthn;

@@ -1,0 +1,91 @@
+{
+	"version": { "major": 1, "minor": 0 },
+	"exporterRpId": "example.com",
+	"exporterDisplayName": "Example Exporter",
+	"timestamp": 1705228800,
+	"accounts": [
+		{
+			"id": "YmFkLXJwaWQtYWNjb3VudA",
+			"username": "johndoe",
+			"email": "johndoe@example.com",
+			"collections": [],
+			"items": [
+				{
+					"id": "YmFkLXJwaWQtaXRlbS1lbXB0eQ",
+					"title": "Empty rpId",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "ZW1wdHktcnBpZC1jcmVk",
+							"rpId": "",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "ZW1wdHktcnBpZC11c2Vy",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "YmFkLXJwaWQtaXRlbS1zY2hlbWU",
+					"title": "rpId with scheme",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "c2NoZW1lLXJwaWQtY3JlZA",
+							"rpId": "https://webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "c2NoZW1lLXJwaWQtdXNlcg",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "YmFkLXJwaWQtaXRlbS1wYXRo",
+					"title": "rpId with path",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "cGF0aC1ycGlkLWNyZWQ",
+							"rpId": "webauthn.io/login",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "cGF0aC1ycGlkLXVzZXI",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "YmFkLXJwaWQtaXRlbS1wb3J0",
+					"title": "rpId with port",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "cG9ydC1ycGlkLWNyZWQ",
+							"rpId": "webauthn.io:443",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "cG9ydC1ycGlkLXVzZXI",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "YmFkLXJwaWQtaXRlbS13aGl0ZXNwYWNl",
+					"title": "rpId with whitespace",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "d3MtcnBpZC1jcmVk",
+							"rpId": "webauthn io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "d3MtcnBpZC11c2Vy",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				}
+			]
+		}
+	]
+}
