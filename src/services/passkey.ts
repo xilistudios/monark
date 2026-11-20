@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+	CxfImportReport,
 	PasskeyAssertRequest,
 	PasskeyAssertResponse,
 	PasskeyCreateRequest,
@@ -152,6 +153,34 @@ export default class PasskeyCommands {
 			vault,
 			password,
 			entryId,
+		});
+	}
+
+	/**
+	 * Imports the passkeys of a CXF document (`import_cxf`, T16).
+	 *
+	 * The document is parsed and validated in Rust *before* the vault is opened,
+	 * so a malformed file costs neither a password derivation nor a rate-limit
+	 * attempt. Passkeys already in the vault are deduplicated by
+	 * `(rpId, credentialId)` and counted in `duplicates`; credentials that cannot
+	 * be stored (other types, invalid fields) come back in `skipped` with their
+	 * reason. The vault is written **once**, and only when at least one passkey
+	 * was imported — an all-duplicate import leaves the file untouched.
+	 *
+	 * @param vault - Vault to import into (see {@link vaultRefFor}).
+	 * @param password - Vault password, used to unlock the vault.
+	 * @param content - The CXF document, as text (≤ 10 MiB).
+	 * @returns The import report (`imported` / `duplicates` / `skipped`).
+	 */
+	static async importCxf(
+		vault: VaultRef,
+		password: string,
+		content: string,
+	): Promise<CxfImportReport> {
+		return await invoke<CxfImportReport>("import_cxf", {
+			vault,
+			password,
+			content,
 		});
 	}
 

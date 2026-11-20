@@ -158,15 +158,61 @@ export interface PasskeySummary {
 }
 
 /**
- * Report of a CXF import (`passkey_import_cxf`).
+ * One per-credential outcome of a CXF import that did **not** carry over in
+ * full, with the reason shown to the user.
  *
- * Filled in by T15/T16; declared here because the interface file is the single
- * mirror of the Rust types and T09/T10 must not need to touch it again.
+ * Mirrors `passkey::cxf::CxfSkipped` (`#[serde(rename_all = "camelCase")]`):
+ * `credentialType` is the exact `type` string found in the file (`"totp"`,
+ * `"basic-auth"`, …) or `"(missing)"` when the member was absent.
+ *
+ * **A row here does not always mean the credential failed.** Two kinds of row
+ * share this shape:
+ *
+ * 1. **Rejected** — the credential was *not* imported (unsupported type,
+ *    invalid field, …). `reason` is the rejection reason.
+ * 2. **Imported but lossy** — the credential *was* imported, but something the
+ *    vault cannot represent was dropped. Today the only case is
+ *    `fido2Extensions`, and its `reason` is exactly
+ *    `"extension data ignored (fido2Extensions)"`
+ *    (`passkey::cxf::EXTENSIONS_IGNORED_NOTE`). Render it as a **warning**, not
+ *    as a failure: the passkey is in the vault.
+ *
+ * The `reason` string is the only discriminator (the report has no separate
+ * note channel), so a UI that needs to tell the two apart must compare it
+ * against that constant — or simply show every row as a non-fatal notice.
+ */
+export interface CxfSkipped {
+	/** `item.title` of the item the credential belongs to. */
+	itemTitle: string;
+	/** Exact credential `type` from the file, or `"(missing)"`. */
+	credentialType: string;
+	/** User-facing reason (never contains key material). */
+	reason: string;
+}
+
+/**
+ * Report of a CXF import (`import_cxf`, T16).
+ *
+ * Mirrors `passkey::cxf::CxfImportReport` (`camelCase`):
+ *
+ * - `imported` — passkeys written to the vault;
+ * - `duplicates` — credentials already present (dedup by `(rpId, credentialId)`,
+ *   ruling Q8), counted, not listed;
+ * - `skipped` — per-credential outcomes that did not carry over in full: both
+ *   **rejected** credentials (not imported) and **imported** credentials whose
+ *   `fido2Extensions` were dropped (see {@link CxfSkipped}).
+ *
+ * ⚠️ `imported + duplicates + skipped` is **not** a strict partition of the
+ * document's credentials. A credential that is imported *and* carries
+ * `fido2Extensions` counts once in `imported` **and** once in `skipped`, so
+ * `skipped.length` can be non-zero on a fully successful import. Never render
+ * `skipped.length` as "N failed" — see {@link CxfSkipped} for the two kinds of
+ * row and the `reason` string that tells them apart.
+ *
+ * A report with `imported === 0` means the vault file was not written at all.
  */
 export interface CxfImportReport {
 	imported: number;
-	skipped: number;
-	failed: number;
-	/** Human-readable reasons for the skipped/failed credentials. */
-	messages: string[];
+	duplicates: number;
+	skipped: CxfSkipped[];
 }

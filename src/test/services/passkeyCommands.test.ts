@@ -20,6 +20,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+	CxfImportReport,
 	PasskeyAssertRequest,
 	PasskeyAssertResponse,
 	PasskeyCreateRequest,
@@ -561,5 +562,121 @@ describe("PasskeyCommands.exportCxf (T17)", () => {
 		await expect(
 			PasskeyCommands.exportCxf(LOCAL_REF, "vault-password", false),
 		).rejects.toBe("Validation Error: Export requires explicit user consent");
+	});
+});
+/**
+ * `import_cxf` (T16).
+ *
+ * The report fixture below is the serde output of
+ * `passkey::cxf::CxfImportReport` (`camelCase`, pinned on the Rust side by
+ * `import_report_serde_shape_is_camel_case`): a `snake_case` or renamed member
+ * would type-check here and arrive `undefined` at runtime, so the assertions
+ * look at the payload and at the report keys.
+ */
+const IMPORT_REPORT: CxfImportReport = {
+	imported: 1,
+	duplicates: 0,
+	skipped: [
+		{
+			itemTitle: "Example login",
+			credentialType: "basic-auth",
+			reason: "unsupported credential type: basic-auth",
+		},
+	],
+};
+
+describe("PasskeyCommands.importCxf (T16)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("invokes import_cxf with { vault, password, content }", async () => {
+		mockInvoke.mockResolvedValue(IMPORT_REPORT);
+		const content = '{"version":{"major":1,"minor":0},"accounts":[]}';
+
+		const result = await PasskeyCommands.importCxf(
+			LOCAL_REF,
+			"vault-password",
+			content,
+		);
+
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(mockInvoke).toHaveBeenCalledWith("import_cxf", {
+			vault: LOCAL_REF,
+			password: "vault-password",
+			content,
+		});
+		expect(result).toEqual(IMPORT_REPORT);
+	});
+
+	it("forwards the document verbatim (no parsing or reshaping on this side)", async () => {
+		mockInvoke.mockResolvedValue(IMPORT_REPORT);
+		const content = '{"version":{"major":1,"minor":0},"accounts":[]}';
+
+		await PasskeyCommands.importCxf(LOCAL_REF, "vault-password", content);
+
+		const [, args] = mockInvoke.mock.calls[0] as [
+			string,
+			Record<string, unknown>,
+		];
+		// The backend parses the JSON: a pre-parsed object here would be a
+		// different wire type and fail to deserialize into `String`.
+		expect(typeof args.content).toBe("string");
+		expect(args.content).toBe(content);
+		// The password travels as its own argument, never inside the document.
+		expect(args.password).toBe("vault-password");
+		expect(args.content).not.toContain("vault-password");
+	});
+
+	it("sends a cloud vault by reference (snake_case members)", async () => {
+		mockInvoke.mockResolvedValue(IMPORT_REPORT);
+
+		await PasskeyCommands.importCxf(CLOUD_REF, "vault-password", "{}");
+
+		const [, args] = mockInvoke.mock.calls[0] as [
+			string,
+			Record<string, unknown>,
+		];
+		expect(JSON.parse(JSON.stringify(args.vault))).toEqual({
+			kind: "cloud",
+			vault_id: "file-123",
+			provider_name: "google_drive",
+		});
+	});
+
+	it("returns the camelCase report unchanged", async () => {
+		mockInvoke.mockResolvedValue(IMPORT_REPORT);
+
+		const result = await PasskeyCommands.importCxf(LOCAL_REF, "pw", "{}");
+
+		// NOTE: these key assertions are tautological — `invoke` is mocked with
+		// IMPORT_REPORT, so `result` *is* the fixture and this compares the
+		// fixture with itself. It cannot fail if the Rust serde shape changes.
+		// The real pins are (a) the typed `CxfImportReport` literal above,
+		// checked by `tsc` (a snake_case interface would not compile), and
+		// (b) `import_report_serde_shape_is_camel_case` in
+		// `src-tauri/src/commands/passkey_import_tests.rs`. Do not rely on this
+		// block for the wire shape; it only documents the expected keys.
+		expect(Object.keys(result).sort()).toEqual([
+			"duplicates",
+			"imported",
+			"skipped",
+		]);
+		expect(Object.keys(result.skipped[0]).sort()).toEqual([
+			"credentialType",
+			"itemTitle",
+			"reason",
+		]);
+		expect(result.skipped[0].credentialType).toBe("basic-auth");
+	});
+
+	it("propagates a backend rejection", async () => {
+		mockInvoke.mockRejectedValue(
+			"Validation Error: Unsupported CXF major version",
+		);
+
+		await expect(
+			PasskeyCommands.importCxf(LOCAL_REF, "vault-password", "{}"),
+		).rejects.toBe("Validation Error: Unsupported CXF major version");
 	});
 });
