@@ -168,6 +168,17 @@ impl SecretPkcs8 {
             .decode(&self.0)
             .map_err(|_| CommandError::Validation("Invalid passkey private key encoding".into()))
     }
+
+    /// The stored URL_SAFE_NO_PAD base64 string, borrowed.
+    ///
+    /// This is the exact representation a CXF export carries in its `key`
+    /// member, so the export path can copy it without a decode/re-encode round
+    /// trip (and therefore without a second secret buffer to zeroize). Callers
+    /// must treat the returned `&str` as secret material: it may only be written
+    /// into a user-consented export, never logged or formatted into an error.
+    pub fn as_b64url(&self) -> &str {
+        &self.0
+    }
 }
 
 /// Serde adapter for `Vec<u8>` fields stored as URL_SAFE_NO_PAD base64 strings.

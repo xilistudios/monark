@@ -1,0 +1,34 @@
+{
+	"version": { "major": 1, "minor": 0 },
+	"exporterRpId": "example.com",
+	"exporterDisplayName": "Example Exporter",
+	"timestamp": 1705228800,
+	"accounts": [
+		{
+			"id": "dmFsaWQtc2luZ2xlLWFjY291bnQ",
+			"username": "johndoe",
+			"email": "johndoe@example.com",
+			"collections": [],
+			"items": [
+				{
+					"id": "dmFsaWQtc2luZ2xlLWl0ZW0",
+					"creationAt": 1705142400,
+					"modifiedAt": 1705228800,
+					"title": "WebAuthn.io",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "Y3JlZGVudGlhbElkRXhhbXBsZQ",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "cnEzaNHWcYK3coWZjvoaV1Hj9gnI12mKe2dL2HZVFlY",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					],
+					"tags": ["work"]
+				}
+			]
+		}
+	]
+}
