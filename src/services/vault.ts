@@ -32,6 +32,7 @@ import {
 } from "./providerAuth";
 import { storeVaultPassword, deleteVaultPassword } from "./biometric";
 import VaultCommands from "./commands";
+import { mergeVaultEntries } from "./vaultMerge";
 
 export class VaultInstance {
 	public readonly id: string;
@@ -456,13 +457,25 @@ export class VaultInstance {
 				providerName: vault.providerId,
 			});
 
-			// Update local entries with cloud version
-			this.dispatch(
-				setVaultEntries({ vaultId: this.id, entries: vaultContent.entries }),
+			// Union merge instead of pull-only last-write-wins: entries created
+			// locally since the last push survive the sync, same-id conflicts go
+			// to the newest `updated_at`. See `services/vaultMerge.ts` for the
+			// rules and the documented deletion limitation.
+			const merged = mergeVaultEntries(
+				vault.volatile.entries ?? [],
+				vaultContent.entries ?? [],
 			);
+			this.dispatch(setVaultEntries({ vaultId: this.id, entries: merged }));
 
-			// Update sync timestamp
-			this.dispatch(syncCloudVault(this.id));
+			// Push the merged view back so the cloud file converges with this
+			// device. The backend write-merge re-attaches passkey secrets from the
+			// stored cloud vault by entry id; the view carries no key material.
+			// If this fails the error propagates: Redux keeps the merged entries
+			// and the next sync retries the push.
+			//
+			// `_saveVault` also dispatches `syncCloudVault` (the sync timestamp),
+			// so it must not be dispatched again here.
+			await this._saveVault();
 		} catch (error) {
 			const errorMessage =
 				(error as any)?.message ||

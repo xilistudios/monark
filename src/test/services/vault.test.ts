@@ -540,7 +540,11 @@ describe("VaultInstance", () => {
 	});
 
 	describe("syncWithCloud", () => {
-		it("should sync cloud vault successfully", async () => {
+		/**
+		 * Builds an unlocked cloud vault whose Redux entries are `localEntries`
+		 * and wires the mocks `syncWithCloud` needs. Returns the instance.
+		 */
+		function setupCloudSync(localEntries: Entry[]) {
 			const cloudVault = {
 				...mockVault,
 				storageType: "cloud" as const,
@@ -557,27 +561,51 @@ describe("VaultInstance", () => {
 				mockGetState,
 			);
 
-			const mockVaultContent = {
-				entries: [{ id: "entry1", type: "note", title: "Synced Entry" }],
-			};
-			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue(
-				mockVaultContent,
-			);
-			vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
-				authenticated: true,
-				token_expires_at: null,
-			});
-
 			const unlockedCloudVault = {
 				...cloudVault,
 				isLocked: false,
 				volatile: {
 					...cloudVault.volatile,
+					entries: localEntries,
 					credential: "test-password",
 				},
 			};
 			mockState.vault.vaults = [unlockedCloudVault];
 			mockGetState.mockReturnValue(mockState);
+
+			vi.mocked(CloudStorageCommands.getProviderAuthInfo).mockResolvedValue({
+				authenticated: true,
+				token_expires_at: null,
+			});
+			vi.mocked(CloudStorageCommands.writeCloudVault).mockResolvedValue(
+				"cloud-file-id",
+			);
+
+			return { cloudVaultInstance, unlockedCloudVault };
+		}
+
+		it("should sync cloud vault successfully", async () => {
+			const { cloudVaultInstance } = setupCloudSync([]);
+
+			const mockVaultContent = {
+				updated_at: "2026-01-02T00:00:00Z",
+				hmac: "",
+				entries: [
+					{
+						id: "entry1",
+						entry_type: "entry" as const,
+						name: "Synced Entry",
+						data_type: "password",
+						created_at: "2026-01-01T00:00:00Z",
+						updated_at: "2026-01-02T00:00:00Z",
+						fields: [],
+						tags: [],
+					},
+				],
+			};
+			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue(
+				mockVaultContent,
+			);
 
 			await cloudVaultInstance.syncWithCloud();
 
@@ -592,9 +620,171 @@ describe("VaultInstance", () => {
 					entries: mockVaultContent.entries,
 				}),
 			);
+			// `_saveVault` dispatches the sync timestamp; `syncWithCloud` must not
+			// dispatch it a second time.
+			expect(vaultActions.syncCloudVault).toHaveBeenCalledTimes(1);
 			expect(mockDispatch).toHaveBeenCalledWith(
 				vaultActions.syncCloudVault("test-vault-id"),
 			);
+		});
+
+		it("merges local and cloud entries instead of overwriting (T12)", async () => {
+			const localEntry: Entry = {
+				id: "local-only",
+				entry_type: "entry",
+				name: "Created offline",
+				data_type: "password",
+				created_at: "2026-01-01T00:00:00Z",
+				updated_at: "2026-01-05T00:00:00Z",
+				fields: [],
+				tags: [],
+			};
+			const cloudEntry: Entry = {
+				id: "cloud-only",
+				entry_type: "entry",
+				name: "From another device",
+				data_type: "password",
+				created_at: "2026-01-01T00:00:00Z",
+				updated_at: "2026-01-04T00:00:00Z",
+				fields: [],
+				tags: [],
+			};
+			const { cloudVaultInstance } = setupCloudSync([localEntry]);
+
+			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+				updated_at: "2026-01-04T00:00:00Z",
+				hmac: "",
+				entries: [cloudEntry],
+			});
+
+			await cloudVaultInstance.syncWithCloud();
+
+			// The OLD behaviour (cloud replaces local wholesale) would have
+			// dispatched only `cloudEntry`; the merge contract keeps both, cloud
+			// order first.
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultEntries({
+					vaultId: "test-vault-id",
+					entries: [cloudEntry, localEntry],
+				}),
+			);
+		});
+
+		it("pushes the merged view back to the cloud (write-back)", async () => {
+			const localEntry: Entry = {
+				id: "local-only",
+				entry_type: "entry",
+				name: "Created offline",
+				data_type: "password",
+				created_at: "2026-01-01T00:00:00Z",
+				updated_at: "2026-01-05T00:00:00Z",
+				fields: [],
+				tags: [],
+			};
+			const cloudEntry: Entry = {
+				id: "cloud-only",
+				entry_type: "entry",
+				name: "From another device",
+				data_type: "password",
+				created_at: "2026-01-01T00:00:00Z",
+				updated_at: "2026-01-04T00:00:00Z",
+				fields: [],
+				tags: [],
+			};
+			const { cloudVaultInstance } = setupCloudSync([localEntry]);
+
+			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+				updated_at: "2026-01-04T00:00:00Z",
+				hmac: "",
+				entries: [cloudEntry],
+			});
+
+			await cloudVaultInstance.syncWithCloud();
+
+			expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+			// The payload is the store view at write time. The action creators are
+			// mocked, so no reducer ran and the store still holds the pre-sync
+			// entries: this asserts the push happens, not what it contains (the
+			// merged view is asserted above and in `vaultMerge.test.ts`).
+			const written = vi.mocked(CloudStorageCommands.writeCloudVault).mock
+				.calls[0][0] as {
+				vaultId: string;
+				password: string;
+				providerName: string;
+				vaultContent: { entries: Entry[] };
+			};
+			expect(written.vaultId).toBe("cloud-file-id");
+			expect(written.password).toBe("test-password");
+			expect(written.providerName).toBe("google-drive");
+			expect(written.vaultContent.entries).toEqual([localEntry]);
+		});
+
+		it("writes back on every sync, even when the merge is a no-op", async () => {
+			const shared: Entry = {
+				id: "shared",
+				entry_type: "entry",
+				name: "Shared",
+				data_type: "password",
+				created_at: "2026-01-01T00:00:00Z",
+				updated_at: "2026-01-04T00:00:00Z",
+				fields: [],
+				tags: [],
+			};
+			const { cloudVaultInstance } = setupCloudSync([shared]);
+
+			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+				updated_at: "2026-01-04T00:00:00Z",
+				hmac: "",
+				entries: [shared],
+			});
+
+			await cloudVaultInstance.syncWithCloud();
+
+			expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+			expect(vaultActions.syncCloudVault).toHaveBeenCalledTimes(1);
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.syncCloudVault("test-vault-id"),
+			);
+		});
+
+		it("propagates a write-back failure and skips the sync timestamp", async () => {
+			const localEntry: Entry = {
+				id: "local-only",
+				entry_type: "entry",
+				name: "Created offline",
+				data_type: "password",
+				created_at: "2026-01-01T00:00:00Z",
+				updated_at: "2026-01-05T00:00:00Z",
+				fields: [],
+				tags: [],
+			};
+			const { cloudVaultInstance } = setupCloudSync([localEntry]);
+
+			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+				updated_at: "2026-01-04T00:00:00Z",
+				hmac: "",
+				entries: [],
+			});
+			vi.mocked(CloudStorageCommands.writeCloudVault).mockRejectedValue(
+				new Error("quota exceeded"),
+			);
+
+			await expect(cloudVaultInstance.syncWithCloud()).rejects.toThrow(
+				"Failed to sync with cloud: quota exceeded",
+			);
+
+			// The merged entries stay in Redux so the next sync retries the push.
+			// (Cloud is empty here, so the merge is exactly the local entries.)
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultEntries({
+					vaultId: "test-vault-id",
+					entries: [localEntry],
+				}),
+			);
+			// The mocked action creators all return `undefined`, so a negative
+			// `toHaveBeenCalledWith` cannot tell them apart. Count the calls to
+			// the creator instead: the sync timestamp was never requested.
+			expect(vaultActions.syncCloudVault).not.toHaveBeenCalled();
 		});
 
 		it("should prompt reauth when cloud sync fails due to expired token", async () => {
