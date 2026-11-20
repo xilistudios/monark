@@ -61,8 +61,13 @@
 //!
 //! * The `UV` flag is always set: Monark is the authenticator and the user has
 //!   just proven possession of the vault password (ruling Q14).
-//! * Nothing binds the `origin` host to `rp.id` — the relying party enforces
-//!   that binding when it verifies the ceremony (review note T02/T09).
+//! * `userVerification` is validated against the WebAuthn enum
+//!   (`required`/`preferred`/`discouraged`) so a typo surfaces at the boundary,
+//!   but its value never gates the `UV` flag (ruling Q14).
+//! * `rpId` is canonicalized to ASCII lowercase at every entry point, and
+//!   `rpId` must be the origin's effective domain or a domain suffix of it
+//!   ([`validate_rp_id_binding`], WebAuthn L2 §5.1.4). The suffix check has no
+//!   public-suffix-list lookup (F0 limitation, tracked for T14).
 //! * `signCount` stays `0` forever (ruling Q15).
 
 use crate::commands::errors::CommandError;
@@ -82,8 +87,9 @@ use crate::passkey::types::{
 };
 use crate::passkey::webauthn::{
     assertion_signature_input, build_authenticator_data, build_client_data_json, validate_origin,
-    validate_rp_id, AAGUID_ZERO, CLIENT_DATA_TYPE_CREATE, CLIENT_DATA_TYPE_GET, FLAG_AT, FLAG_UP,
-    FLAG_UV, MAX_CHALLENGE_LEN, MIN_CHALLENGE_LEN, SIGN_COUNT,
+    validate_rp_id, validate_rp_id_binding, AAGUID_ZERO, CLIENT_DATA_TYPE_CREATE,
+    CLIENT_DATA_TYPE_GET, FLAG_AT, FLAG_UP, FLAG_UV, MAX_CHALLENGE_LEN, MIN_CHALLENGE_LEN,
+    SIGN_COUNT,
 };
 use chrono::Utc;
 use uuid::Uuid;
@@ -114,6 +120,24 @@ pub const TRANSPORT_INTERNAL: &str = "internal";
 
 fn validation(message: &str) -> CommandError {
     CommandError::Validation(message.to_string())
+}
+
+/// The `UserVerificationRequirement` values of WebAuthn L2 §5.8.6.
+const USER_VERIFICATION_VALUES: [&str; 3] = ["required", "preferred", "discouraged"];
+
+/// Rejects a `userVerification` value that is not a WebAuthn enum member.
+///
+/// The value is **not** used to gate the `UV` flag (ruling Q14: Monark always
+/// sets it), but accepting arbitrary strings means a typo — `"requiered"` —
+/// silently means nothing. Checking the enum at the boundary keeps the
+/// deviation honest without changing the behaviour for valid requests.
+fn validate_user_verification(value: Option<&str>) -> Result<(), CommandError> {
+    match value {
+        Some(value) if !USER_VERIFICATION_VALUES.contains(&value) => {
+            Err(validation("Unsupported user verification requirement"))
+        }
+        Some(_) | None => Ok(()),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -277,8 +301,15 @@ impl std::fmt::Debug for ValidatedCreateRequest {
 /// * `user.id` must decode to 1..=64 bytes, `user.name`/`displayName` must be
 ///   non-empty and at most [`MAX_USER_NAME_CHARS`] characters;
 /// * `challenge` must decode to 16..=1024 bytes;
-/// * `origin` must be a valid WebAuthn origin ([`validate_origin`]);
+/// * `origin` must be a valid WebAuthn origin ([`validate_origin`]) and `rp.id`
+///   must be its effective domain or a domain suffix of it
+///   ([`validate_rp_id_binding`]);
+/// * `authenticatorSelection.userVerification`, when present, must be one of
+///   `required`/`preferred`/`discouraged` ([`validate_user_verification`]);
 /// * every `excludeCredentials` entry must be `{type: "public-key", id: b64url}`.
+///
+/// The returned `rp_id` is the **canonical** (ASCII-lowercased) RP ID: that is
+/// what gets hashed into `rpIdHash` and stored in the vault.
 pub fn validate_create_request(
     request: &PasskeyCreateRequest,
 ) -> Result<ValidatedCreateRequest, CommandError> {
@@ -302,6 +333,7 @@ pub fn validate_create_request(
         // discoverable credential: refuse instead of guessing.
         Some(_) | None => return Err(validation("Discoverable credential required")),
     }
+    validate_user_verification(selection.user_verification.as_deref())?;
 
     // --- Attestation: none. ---
     if let Some(attestation) = request.attestation.as_deref() {
@@ -311,7 +343,7 @@ pub fn validate_create_request(
     }
 
     // --- Relying party. ---
-    validate_rp_id(&request.rp.id)?;
+    let rp_id = validate_rp_id(&request.rp.id)?;
     if request.rp.name.chars().count() > MAX_RP_NAME_CHARS {
         return Err(validation("RP name is too long"));
     }
@@ -336,8 +368,9 @@ pub fn validate_create_request(
         return Err(validation("Challenge length is out of range"));
     }
 
-    // --- Origin. ---
+    // --- Origin, bound to the RP ID (WebAuthn L2 §5.1.4). ---
     validate_origin(&request.origin)?;
+    validate_rp_id_binding(&rp_id, &request.origin)?;
 
     // --- excludeCredentials. ---
     let mut excluded_ids = Vec::new();
@@ -357,7 +390,7 @@ pub fn validate_create_request(
     };
 
     Ok(ValidatedCreateRequest {
-        rp_id: request.rp.id.clone(),
+        rp_id,
         rp_name: request.rp.name.clone(),
         user_name: request.user.name.clone(),
         user_display_name: request.user.display_name.clone(),
@@ -531,17 +564,24 @@ impl std::fmt::Debug for ValidatedAssertRequest {
 ///
 /// * `rpId` must be a bare host name ([`validate_rp_id`]);
 /// * `challenge` must decode to 16..=1024 bytes;
-/// * `origin` must be a valid WebAuthn origin ([`validate_origin`]);
+/// * `origin` must be a valid WebAuthn origin ([`validate_origin`]) and `rpId`
+///   must be its effective domain or a domain suffix of it
+///   ([`validate_rp_id_binding`]);
+/// * `userVerification`, when present, must be one of
+///   `required`/`preferred`/`discouraged` ([`validate_user_verification`]);
 /// * every `allowCredentials` entry must be `{type: "public-key", id: b64url}`;
 /// * `credentialId`, when present, must be valid base64url.
 ///
-/// `userVerification` is accepted but **not** used to gate the `UV` flag: Monark
-/// always sets `UV` because the vault password (or the biometric prompt that
-/// guards it, T11) has just been verified. See the module docs.
+/// The returned `rp_id` is the **canonical** (ASCII-lowercased) RP ID, which is
+/// what gets hashed into `rpIdHash` and compared against the stored value.
+///
+/// `userVerification` is validated but **not** used to gate the `UV` flag:
+/// Monark always sets `UV` because the vault password (or the biometric prompt
+/// that guards it, T11) has just been verified. See the module docs.
 pub fn validate_assert_request(
     request: &PasskeyAssertRequest,
 ) -> Result<ValidatedAssertRequest, CommandError> {
-    validate_rp_id(&request.rp_id)?;
+    let rp_id = validate_rp_id(&request.rp_id)?;
 
     let challenge = decode_base64_urlsafe(&request.challenge)
         .map_err(|_| validation("Challenge is not valid base64url"))?;
@@ -550,6 +590,8 @@ pub fn validate_assert_request(
     }
 
     validate_origin(&request.origin)?;
+    validate_rp_id_binding(&rp_id, &request.origin)?;
+    validate_user_verification(request.user_verification.as_deref())?;
 
     // `allowCredentials: []` and an absent member mean the same thing in
     // WebAuthn — "no restriction" — so an empty list is not an error.
@@ -578,7 +620,7 @@ pub fn validate_assert_request(
     };
 
     Ok(ValidatedAssertRequest {
-        rp_id: request.rp_id.clone(),
+        rp_id,
         challenge_b64: request.challenge.clone(),
         origin: request.origin.clone(),
         allowed_ids,
@@ -653,8 +695,11 @@ pub fn select_assertion_candidate<'a>(
             1 => Ok(candidates.remove(0)),
             // Two entries sharing one credential id would be a corrupted vault
             // (ruling Q8 dedups on `(rp_id, credential_id)`); refuse rather than
-            // pick one arbitrarily.
-            _ => Err(validation("Multiple passkeys match; specify credential_id")),
+            // pick one arbitrarily. The caller already named the credential, so
+            // "specify credential_id" would be advice it cannot follow.
+            _ => Err(validation(
+                "Vault contains duplicate credentials for this id",
+            )),
         };
     }
 
@@ -717,6 +762,12 @@ fn collect_rp_passkeys<'a>(
 /// The result holds no secret material (no private key, no user handle): a
 /// [`PasskeySummary`] is exactly what a picker needs to render a choice and to
 /// pass back as `credentialId`. An empty list is a valid answer.
+///
+/// `rp_id` is canonicalized ([`validate_rp_id`]) before the exact-match walk, so
+/// a mixed-case query finds a credential stored under the lowercase form. This
+/// command has no origin to bind to, so the `rpId`↔origin check
+/// ([`validate_rp_id_binding`]) does not apply here; a lexical-only value simply
+/// matches nothing (fail closed: an empty list).
 #[tauri::command(async)]
 pub async fn passkey_list_for_rp(
     vault: VaultRef,
@@ -736,18 +787,18 @@ pub async fn passkey_list_for_rp_with(
 ) -> Result<Vec<PasskeySummary>, CommandError> {
     // The RP id is validated like everywhere else: a query for a malformed
     // relying party is a caller bug, not an empty result.
-    validate_rp_id(rp_id)?;
+    let rp_id = validate_rp_id(rp_id)?;
 
     let loaded = store::load_vault(vault, password, manager).await?;
     let mut candidates = Vec::new();
-    collect_rp_passkeys(&loaded.vault.entries, rp_id, &mut candidates);
+    collect_rp_passkeys(&loaded.vault.entries, &rp_id, &mut candidates);
 
     Ok(candidates
         .into_iter()
         .map(|candidate| PasskeySummary {
             entry_id: candidate.entry_id.to_string(),
             credential_id: encode_base64_urlsafe(candidate.credential_id),
-            rp_id: rp_id.to_string(),
+            rp_id: rp_id.clone(),
             user_name: candidate.user_name.to_string(),
             user_display_name: candidate.user_display_name.to_string(),
             created_at: candidate.created_at.to_rfc3339(),
@@ -802,7 +853,14 @@ pub async fn passkey_delete_with(
     }
 
     let removed = remove_entry(&mut loaded.vault.entries, id);
-    debug_assert!(removed, "the entry was found a moment ago");
+    // `find_entry` and `remove_entry` traverse the tree identically, so this is
+    // structural — but a release build would silently save a vault that still
+    // holds the "deleted" passkey, so the invariant is checked, not asserted.
+    if !removed {
+        return Err(CommandError::Internal(
+            "Passkey entry could not be removed".to_string(),
+        ));
+    }
     store::save_vault(vault, &mut loaded, manager).await
 }
 

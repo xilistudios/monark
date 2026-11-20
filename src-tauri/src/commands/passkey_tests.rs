@@ -74,6 +74,15 @@ fn create_request() -> PasskeyCreateRequest {
     }
 }
 
+/// A valid registration request with an explicit `rp.id` and `origin` (the
+/// binding tests need the two to disagree).
+fn create_request_for_origin(rp_id: &str, origin: &str) -> PasskeyCreateRequest {
+    let mut request = create_request();
+    request.rp.id = rp_id.to_string();
+    request.origin = origin.to_string();
+    request
+}
+
 fn data_entry(name: &str) -> Entry {
     Entry::Data {
         id: Uuid::new_v4(),
@@ -383,6 +392,101 @@ async fn create_rejects_bad_origin() {
     let mut request = create_request();
     request.origin = "ftp://example.com".to_string();
     assert_rejected(request, "Origin must use http or https").await;
+}
+
+/// MENOR-1: the registration ceremony binds `rp.id` to the origin host too.
+#[tokio::test]
+async fn create_rejects_rp_id_that_does_not_bind_to_the_origin() {
+    let mut request = create_request();
+    request.rp.id = "victim.example".to_string();
+    request.origin = "https://evil.example".to_string();
+    assert_rejected(request, "RP ID is not a domain suffix of the origin's host").await;
+
+    let mut request = create_request();
+    request.origin = "https://notexample.com".to_string();
+    assert_rejected(request, "RP ID is not a domain suffix of the origin's host").await;
+}
+
+/// MENOR-1 (positive side): a sub-domain origin binds to its parent RP id.
+#[tokio::test]
+async fn create_accepts_rp_id_that_is_a_domain_suffix_of_the_origin() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+
+    passkey_create_with(
+        &target,
+        PASSWORD,
+        create_request_for_origin("example.com", "https://login.example.com"),
+        &manager,
+    )
+    .await?;
+
+    let loaded = load_vault(&target, PASSWORD, &manager).await?;
+    match only_passkey(&loaded.vault) {
+        Entry::Passkey { rp_id, .. } => assert_eq!(rp_id, RP_ID),
+        other => panic!("expected a passkey, got {other:?}"),
+    }
+    Ok(())
+}
+
+/// MENOR-2: a mixed-case `rp.id` is stored canonicalized (ASCII lowercase).
+#[tokio::test]
+async fn create_stores_the_canonical_rp_id() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+
+    passkey_create_with(
+        &target,
+        PASSWORD,
+        create_request_for_origin("Example.COM", ORIGIN),
+        &manager,
+    )
+    .await?;
+
+    let loaded = load_vault(&target, PASSWORD, &manager).await?;
+    match only_passkey(&loaded.vault) {
+        Entry::Passkey { rp_id, .. } => assert_eq!(rp_id, "example.com"),
+        other => panic!("expected a passkey, got {other:?}"),
+    }
+    Ok(())
+}
+
+/// NIT-3: `authenticatorSelection.userVerification` is validated against the
+/// WebAuthn enum (same rule as the assertion request).
+#[tokio::test]
+async fn create_rejects_unknown_user_verification() {
+    let mut request = create_request();
+    request
+        .authenticator_selection
+        .as_mut()
+        .expect("selection")
+        .user_verification = Some("banana".to_string());
+    assert_rejected(request, "Unsupported user verification requirement").await;
+
+    // Absent is fine (the RP has no preference) and every enum member is fine.
+    let mut request = create_request();
+    request
+        .authenticator_selection
+        .as_mut()
+        .expect("selection")
+        .user_verification = None;
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    passkey_create_with(&local_ref(&path), PASSWORD, request, &manager)
+        .await
+        .expect("an absent userVerification is accepted");
+
+    for value in ["required", "preferred", "discouraged"] {
+        let mut request = create_request();
+        request
+            .authenticator_selection
+            .as_mut()
+            .expect("selection")
+            .user_verification = Some(value.to_string());
+        let (_dir, path, manager) = seeded(Vec::new()).await;
+        passkey_create_with(&local_ref(&path), PASSWORD, request, &manager)
+            .await
+            .unwrap_or_else(|err| panic!("{value} must be accepted, got {err:?}"));
+    }
 }
 
 #[tokio::test]

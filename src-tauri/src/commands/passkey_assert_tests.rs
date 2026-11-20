@@ -28,6 +28,7 @@ use crate::passkey::webauthn::{
 };
 use crate::storage::{StorageConfig, StorageManager};
 use crate::vault::lifecycle;
+use crate::vault::version::CURRENT_VAULT_VERSION;
 use chrono::{DateTime, Utc};
 use p256::ecdsa::VerifyingKey;
 use std::path::{Path, PathBuf};
@@ -44,6 +45,8 @@ const CHALLENGE_B64: &str = "ERERERERERERERERERERERERERERERERERERERERERE";
 const OTHER_CHALLENGE_B64: &str = "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI";
 /// Fixed 4-byte user handle (`AQIDBA` = 0x01 0x02 0x03 0x04).
 const USER_HANDLE_B64: &str = "AQIDBA";
+/// Message of the `rpId`↔origin binding rejection (WebAuthn L2 §5.1.4).
+const RP_ID_BINDING_MESSAGE: &str = "RP ID is not a domain suffix of the origin's host";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -371,7 +374,9 @@ async fn assert_selection_exact_rp_match() -> Result<(), CommandError> {
         other => panic!("a suffix RP must not match in F0, got {other:?}"),
     }
 
-    // A super-domain is not a match either.
+    // A super-domain is not a match either. (It is now rejected earlier, by the
+    // rpId↔origin binding: `example` is not a domain suffix of `example.com`
+    // — the origin host must *end* with `.rpId`.)
     match passkey_assert_with(
         &target,
         PASSWORD,
@@ -380,7 +385,7 @@ async fn assert_selection_exact_rp_match() -> Result<(), CommandError> {
     )
     .await
     {
-        Err(CommandError::NotFound(_)) => {}
+        Err(CommandError::Validation(message)) => assert_eq!(message, RP_ID_BINDING_MESSAGE),
         other => panic!("a super-domain must not match, got {other:?}"),
     }
 
@@ -581,13 +586,25 @@ async fn assert_wrong_password_rate_limited() -> Result<(), CommandError> {
     // never succeed there either. Which failure they report depends on the
     // limiter's clock (the gate's delay may already have elapsed, in which case
     // the attempt reaches the real derivation and fails on the ciphertext), so
-    // the assertion is the invariant that matters: never a success, and never a
-    // *request* validation error (the rate-limit gate is the only acceptable
-    // `Validation`).
+    // the assertion is the invariant that matters: the attempt is *counted*
+    // exactly once (it went through the rate-limit gate) and it is never a
+    // *request* validation error.
+    //
+    // The budget is reset immediately before each call so the gate's delay
+    // cannot mask the record: `failure_count == 1` is what distinguishes "goes
+    // through the seam" from "fails somehow".
+    crate::vault::rate_limit::reset_attempts(&canonical);
     let list_err = passkey_list_for_rp_with(&target, "wrong-password", RP_ID, &manager)
         .await
         .expect_err("a wrong password must never list");
     assert_not_a_request_error(&list_err);
+    assert_eq!(
+        crate::vault::rate_limit::failure_count(&canonical),
+        1,
+        "a wrong password on list_for_rp must be counted exactly once"
+    );
+
+    crate::vault::rate_limit::reset_attempts(&canonical);
     let delete_err = passkey_delete_with(
         &target,
         "wrong-password",
@@ -597,6 +614,11 @@ async fn assert_wrong_password_rate_limited() -> Result<(), CommandError> {
     .await
     .expect_err("a wrong password must never delete");
     assert_not_a_request_error(&delete_err);
+    assert_eq!(
+        crate::vault::rate_limit::failure_count(&canonical),
+        1,
+        "a wrong password on delete must be counted exactly once"
+    );
 
     // The passkey is still there. The budget is reset first: the gate also
     // guards the correct password, and this read is about the vault content.
@@ -673,6 +695,36 @@ async fn list_for_rp_filters() -> Result<(), CommandError> {
     assert!(!json.contains("private_key"), "no key field: {json}");
     assert!(!json.contains("userHandle"), "no user handle: {json}");
     assert!(!json.contains("user_handle"), "no user handle: {json}");
+    // …and no secret *value*, whatever the field is called: the fixture's user
+    // handle (`AQIDBA`) must not appear anywhere in the payload.
+    assert!(
+        !json.contains(USER_HANDLE_B64),
+        "the user handle value must never be serialized: {json}"
+    );
+    // The key set is pinned exactly (the `Object.keys` check the TS side does
+    // for the assertion response): a new field carrying key material cannot slip
+    // in under a name nobody thought to deny.
+    let first = serde_json::to_value(&summaries[0]).expect("summary serializes");
+    let mut keys: Vec<&str> = first
+        .as_object()
+        .expect("a summary is an object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        vec![
+            "createdAt",
+            "credentialId",
+            "entryId",
+            "rpId",
+            "transports",
+            "userDisplayName",
+            "userName",
+        ],
+        "the summary shape is pinned: {first}"
+    );
 
     // An RP nobody registered for yields an empty list, not an error.
     let none = passkey_list_for_rp_with(&target, PASSWORD, "nobody.example", &manager).await?;
@@ -848,6 +900,59 @@ async fn delete_not_found() -> Result<(), CommandError> {
     Ok(())
 }
 
+/// Deleting the same passkey twice: the second call is `NotFound` (the state a
+/// double-click in the UI produces), and the vault is left untouched by it.
+#[tokio::test]
+async fn delete_twice_is_not_found() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+    let created = register(&target, &manager, create_request()).await;
+
+    passkey_delete_with(&target, PASSWORD, &created.entry_id, &manager).await?;
+    let after_first = std::fs::read(&path).expect("vault readable");
+
+    match passkey_delete_with(&target, PASSWORD, &created.entry_id, &manager).await {
+        Err(CommandError::NotFound(message)) => assert_eq!(message, "Passkey not found"),
+        other => panic!("a second delete must be NotFound, got {other:?}"),
+    }
+
+    // The rejected second delete did not rewrite the vault.
+    let after_second = std::fs::read(&path).expect("vault readable");
+    assert_eq!(
+        after_first, after_second,
+        "a NotFound delete must not touch the vault"
+    );
+    Ok(())
+}
+
+/// After deleting the **last** passkey the stored version stays `1.1` (ruling
+/// Q9: bump when the content holds a passkey, keep it otherwise — never
+/// downgrade). Pinned so a future "downgrade when clean" change fails here.
+#[tokio::test]
+async fn delete_last_passkey_keeps_the_version() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+    let path_str = path.to_string_lossy().to_string();
+    let created = register(&target, &manager, create_request()).await;
+
+    // The registration bumped the vault to the passkey format.
+    assert_eq!(
+        crate::io::vault::read_vault(path_str.clone())?.version,
+        CURRENT_VAULT_VERSION
+    );
+
+    passkey_delete_with(&target, PASSWORD, &created.entry_id, &manager).await?;
+
+    let loaded = load_vault(&target, PASSWORD, &manager).await?;
+    assert!(loaded.vault.entries.is_empty(), "the passkey is gone");
+    assert_eq!(
+        crate::io::vault::read_vault(path_str)?.version,
+        CURRENT_VAULT_VERSION,
+        "deleting the last passkey must not downgrade the stored version"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Request validation
 // ---------------------------------------------------------------------------
@@ -930,6 +1035,151 @@ async fn assert_rejects_bad_allow_credentials() {
     assert_rejected(request, "Credential id is not valid base64url").await;
 }
 
+/// MENOR-1: `rpId` must be the origin's effective domain or a domain suffix of
+/// it (WebAuthn L2 §5.1.4). Without the binding a caller could get a signature
+/// over `rpIdHash = SHA-256(victim.example)` carrying `origin = evil.example`.
+#[tokio::test]
+async fn assert_rejects_rp_id_that_does_not_bind_to_the_origin() {
+    // The review's case: a foreign RP id with an attacker-controlled origin.
+    let mut request = assert_request();
+    request.rp_id = "victim.example".to_string();
+    request.origin = "https://evil.example".to_string();
+    assert_rejected(request, RP_ID_BINDING_MESSAGE).await;
+
+    // A lookalike host is not a domain suffix (no label boundary).
+    let mut request = assert_request();
+    request.origin = "https://notexample.com".to_string();
+    assert_rejected(request, RP_ID_BINDING_MESSAGE).await;
+
+    // A super-domain of the host is not a suffix either.
+    let mut request = assert_request();
+    request.rp_id = "example".to_string();
+    assert_rejected(request, RP_ID_BINDING_MESSAGE).await;
+}
+
+/// MENOR-1 (positive side): a sub-domain origin binds to its parent RP id, so
+/// the check is not "rpId must equal the host verbatim".
+#[tokio::test]
+async fn assert_accepts_rp_id_that_is_a_domain_suffix_of_the_origin() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+    register(&target, &manager, create_request()).await;
+
+    // The credential is stored for `example.com`; the ceremony runs from
+    // `sub.example.com`, which is a legitimate WebAuthn pairing.
+    let response = passkey_assert_with(
+        &target,
+        PASSWORD,
+        assert_request_for(RP_ID, "https://sub.example.com"),
+        &manager,
+    )
+    .await?;
+    assert_eq!(
+        parsed_client_data(&response).origin,
+        "https://sub.example.com"
+    );
+    assert_eq!(&raw_auth_data(&response)[..32], &rp_id_hash(RP_ID));
+    Ok(())
+}
+
+/// MENOR-2: `rpId` is canonicalized (ASCII lowercase) at every entry point, so a
+/// credential registered as `Example.COM` is asserted with `example.com` — and
+/// the `rpIdHash` is `SHA-256("example.com")`, not of the raw input.
+#[tokio::test]
+async fn assert_mixed_case_rp_id_roundtrips() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+
+    // Register with a mixed-case RP id…
+    let created = register(
+        &target,
+        &manager,
+        create_request_for("Example.COM", "https://example.com", "alice"),
+    )
+    .await;
+
+    // …it is stored canonicalized.
+    let loaded = load_vault(&target, PASSWORD, &manager).await?;
+    match only_passkey(&loaded.vault) {
+        Entry::Passkey { rp_id, .. } => assert_eq!(rp_id, RP_ID),
+        other => panic!("expected a passkey, got {other:?}"),
+    }
+
+    // …and asserted with the lowercase spelling.
+    let response = passkey_assert_with(&target, PASSWORD, assert_request(), &manager).await?;
+    assert_eq!(response.id, created.id);
+    assert_eq!(
+        &raw_auth_data(&response)[..32],
+        &rp_id_hash(RP_ID),
+        "rpIdHash is SHA-256 of the canonical rpId"
+    );
+
+    // The reverse direction works too: register lowercase, assert mixed case.
+    let (_dir2, path2, manager2) = seeded(Vec::new()).await;
+    let target2 = local_ref(&path2);
+    let created2 = register(&target2, &manager2, create_request()).await;
+    let response = passkey_assert_with(
+        &target2,
+        PASSWORD,
+        assert_request_for("EXAMPLE.com", "https://example.com"),
+        &manager2,
+    )
+    .await?;
+    assert_eq!(response.id, created2.id);
+
+    // The listing canonicalizes as well.
+    let summaries = passkey_list_for_rp_with(&target2, PASSWORD, "Example.Com", &manager2).await?;
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(
+        summaries[0].rp_id, RP_ID,
+        "the summary reports the canonical id"
+    );
+    Ok(())
+}
+
+/// NIT-3: `userVerification` is validated against the WebAuthn enum, so a typo
+/// surfaces at the boundary instead of silently meaning nothing.
+#[tokio::test]
+async fn assert_rejects_unknown_user_verification() {
+    let mut request = assert_request();
+    request.user_verification = Some("banana".to_string());
+    assert_rejected(request, "Unsupported user verification requirement").await;
+
+    let mut request = assert_request();
+    request.user_verification = Some(String::new());
+    assert_rejected(request, "Unsupported user verification requirement").await;
+}
+
+/// NIT-1: two entries sharing one credential id is a corrupted vault; the
+/// message must be honest (the caller already named the credential).
+#[tokio::test]
+async fn assert_duplicate_credential_id_has_an_honest_message() -> Result<(), CommandError> {
+    let (_dir, path, manager) = seeded(Vec::new()).await;
+    let target = local_ref(&path);
+    let created = register(&target, &manager, create_request()).await;
+
+    // Duplicate the stored passkey under a new entry id: same rpId, same
+    // credential id (the corruption ruling Q8 prevents on the write path).
+    let mut loaded = load_vault(&target, PASSWORD, &manager).await?;
+    let mut duplicate = loaded.vault.entries[0].clone();
+    match &mut duplicate {
+        Entry::Passkey { id, .. } => *id = Uuid::new_v4(),
+        other => panic!("expected a passkey, got {other:?}"),
+    }
+    loaded.vault.entries.push(duplicate);
+    store::save_vault(&target, &mut loaded, &manager).await?;
+
+    let mut request = assert_request();
+    request.credential_id = Some(created.id.clone());
+    match passkey_assert_with(&target, PASSWORD, request, &manager).await {
+        Err(CommandError::Validation(message)) => {
+            assert_eq!(message, "Vault contains duplicate credentials for this id")
+        }
+        other => panic!("a duplicate credential id must fail closed, got {other:?}"),
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Negative controls — these prove the criterion-1 assertions can fail
 // ---------------------------------------------------------------------------
@@ -972,6 +1222,7 @@ async fn negative_control_tampered_auth_data_fails() -> Result<(), CommandError>
 
     let loaded = load_vault(&target, PASSWORD, &manager).await?;
     let stored_key = stored_verifying_key(only_passkey(&loaded.vault));
+    assert!(verify_response_with(&stored_key, &response), "sanity");
     let client_data_json = decode_base64_urlsafe(&response.response.client_data_json)?;
 
     // Flip one byte of the rpIdHash (a different RP would be a different
@@ -998,6 +1249,7 @@ async fn negative_control_tampered_signature_fails() -> Result<(), CommandError>
 
     let loaded = load_vault(&target, PASSWORD, &manager).await?;
     let stored_key = stored_verifying_key(only_passkey(&loaded.vault));
+    assert!(verify_response_with(&stored_key, &response), "sanity");
     let message = assertion_signature_input(
         &raw_auth_data(&response),
         &decode_base64_urlsafe(&response.response.client_data_json)?,

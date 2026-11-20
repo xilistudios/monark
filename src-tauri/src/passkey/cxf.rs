@@ -463,7 +463,12 @@ pub fn validate_passkey(passkey: &CxfPasskey) -> Result<ValidatedPasskey, String
 
     Ok(ValidatedPasskey {
         credential_id,
-        rp_id: passkey.rp_id.clone(),
+        // Canonical (ASCII-lowercased) at the store entry point, exactly like
+        // the ceremony commands do (`webauthn::validate_rp_id`): every `rp_id`
+        // that reaches the vault is lowercase, so an import with `Example.COM`
+        // is still matched by an assertion for `example.com`. The *validation*
+        // above stays syntactic-only (see `is_valid_rp_id`).
+        rp_id: passkey.rp_id.to_ascii_lowercase(),
         user_name: passkey.username.clone(),
         user_display_name: passkey.user_display_name.clone(),
         user_handle,
@@ -481,7 +486,10 @@ fn decode_field(encoded: &str, field: &str) -> Result<Vec<u8>, String> {
 /// A WebAuthn RP ID is a bare domain: no scheme, no path, no port, no spaces.
 ///
 /// Deliberately syntactic only (the WebAuthn-level checks — registrable-domain
-/// suffix, public suffix — belong to the ceremony, not to a file import).
+/// suffix, public suffix — belong to the ceremony, not to a file import). Case
+/// is not part of this check either: the value is canonicalized to ASCII
+/// lowercase when it is stored ([`validate_passkey`]), so `Example.COM` imports
+/// as `example.com`.
 fn is_valid_rp_id(rp_id: &str) -> bool {
     !rp_id.is_empty()
         && !rp_id.contains("://")
@@ -863,6 +871,25 @@ mod tests {
         // a P-256 key: the ES256 gate accepted a real key, not just "something".
         assert_eq!(encode_base64_urlsafe(&validated.pkcs8_der), SPEC_KEY_B64URL);
         signing_key_from_pkcs8_der(&validated.pkcs8_der).expect("accepted key is P-256 PKCS#8");
+    }
+
+    /// `rpId` is stored canonicalized (ASCII lowercase), so an import with mixed
+    /// case is matched by an assertion for the lowercase RP id.
+    #[test]
+    fn validate_passkey_canonicalizes_the_rp_id() {
+        let mut mixed = valid_passkey();
+        mixed.rp_id = "WebAuthn.IO".to_string();
+        let validated = validate_passkey(&mixed).expect("mixed case is accepted");
+        assert_eq!(validated.rp_id, "webauthn.io");
+        // Identity for the already-canonical fixtures (T15 stays green).
+        assert_eq!(
+            validate_passkey(&valid_passkey()).expect("valid").rp_id,
+            "webauthn.io"
+        );
+        // The syntactic rule is unchanged: a scheme is still rejected.
+        let mut bad = valid_passkey();
+        bad.rp_id = "https://WebAuthn.IO".to_string();
+        assert!(validate_passkey(&bad).is_err());
     }
 
     #[test]

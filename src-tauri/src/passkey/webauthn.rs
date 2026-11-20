@@ -13,6 +13,25 @@
 //! attestation statement is `"none"` (ruling Q3), and `signCount` is always `0`
 //! and never incremented (ruling Q15) — the vault is the only source of truth
 //! for the credential, so a counter would be a false anti-cloning signal.
+//!
+//! # RP ID canonicalization and origin binding
+//!
+//! Two client duties of WebAuthn L2 §5.1.4 are implemented here so that every
+//! entry point shares one implementation:
+//!
+//! * [`validate_rp_id`] returns the **canonical** RP ID (ASCII-lowercased), and
+//!   that canonical string is what gets hashed into `rpIdHash`, stored in the
+//!   vault and compared during selection. A credential registered for
+//!   `Example.COM` is therefore the same credential as one for `example.com`.
+//! * [`validate_rp_id_binding`] enforces `rpId` ≡ the origin's effective domain
+//!   (or a domain suffix of it), the check that stops a caller from obtaining a
+//!   signature over `rpIdHash = SHA-256(victim.example)` with
+//!   `clientDataJSON.origin = "https://evil.example"`.
+//!
+//! **Known limitation (F0, tracked for T14):** the binding is a plain domain
+//! suffix check, with no public-suffix-list lookup. `rpId = "com"` is therefore
+//! accepted for `origin = "https://evil.com"`. Full registrable-domain
+//! validation is out of scope for F0 and is documented in `docs/passkeys.md`.
 
 use crate::commands::errors::CommandError;
 use crate::crypto::base64::decode_base64_urlsafe;
@@ -156,8 +175,19 @@ fn canonical_origin(origin: &str) -> Result<String, CommandError> {
     Ok(parsed.origin().ascii_serialization())
 }
 
-/// Validates an RP ID: a bare host name, no scheme, path, port or whitespace.
-pub fn validate_rp_id(rp_id: &str) -> Result<(), CommandError> {
+/// Validates an RP ID and returns its **canonical** form.
+///
+/// The canonical form is the ASCII-lowercased RP ID (WebAuthn L2 §5.1.4: RP IDs
+/// are domain names, and domain names are case-insensitive). Everything
+/// downstream — `rpIdHash`, the stored `rp_id`, the exact-match selection — must
+/// use the returned value, never the caller's string, so a credential registered
+/// as `Example.COM` and asserted as `example.com` is the same credential.
+///
+/// The check itself is purely lexical: a bare host name, no scheme, path, port
+/// or whitespace. [`validate_rp_id_binding`] is what ties the value to a real
+/// origin; `list_for_rp` has no origin to bind to and stays lexical-only
+/// (fail-closed: an RP ID that matches nothing returns an empty list).
+pub fn validate_rp_id(rp_id: &str) -> Result<String, CommandError> {
     if rp_id.is_empty() {
         return Err(validation("RP ID is empty"));
     }
@@ -170,7 +200,45 @@ pub fn validate_rp_id(rp_id: &str) -> Result<(), CommandError> {
     if rp_id.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Err(validation("RP ID must not contain whitespace"));
     }
-    Ok(())
+    Ok(rp_id.to_ascii_lowercase())
+}
+
+/// Enforces WebAuthn L2 §5.1.4: `rpId` must equal the origin's effective domain
+/// or be a domain suffix of it.
+///
+/// Both arguments are expected to be canonical already — `rp_id` comes out of
+/// [`validate_rp_id`] and `origin` out of [`canonical_origin`] — so the
+/// comparison is a plain ASCII one. A suffix match must fall on a label
+/// boundary: `example.com` binds to `sub.example.com` but **not** to
+/// `notexample.com`.
+///
+/// This is defense in depth, not the vault's security boundary (the caller
+/// already needs the vault password): without it a caller could obtain a
+/// signature over `rpIdHash = SHA-256(victim.example)` carrying
+/// `origin = "https://evil.example"`, which no real authenticator stack would
+/// produce.
+///
+/// **F0 limitation:** no public-suffix-list lookup, so `rpId = "com"` binds to
+/// `https://evil.com`. Registrable-domain validation is tracked for T14.
+pub fn validate_rp_id_binding(rp_id: &str, origin: &str) -> Result<(), CommandError> {
+    let host = origin_host(origin)?;
+    if host == rp_id || host.ends_with(&format!(".{rp_id}")) {
+        return Ok(());
+    }
+    Err(validation(
+        "RP ID is not a domain suffix of the origin's host",
+    ))
+}
+
+/// The ASCII-lowercased host of a canonical origin (`https://example.com:8443`
+/// → `example.com`).
+fn origin_host(origin: &str) -> Result<String, CommandError> {
+    let parsed = url::Url::parse(origin).map_err(|_| validation("Origin is not a valid URL"))?;
+    let host = parsed
+        .host_str()
+        .filter(|host| !host.is_empty())
+        .ok_or_else(|| validation("Origin has no host"))?;
+    Ok(host.to_ascii_lowercase())
 }
 
 /// Builds `authenticatorData`.
@@ -179,13 +247,17 @@ pub fn validate_rp_id(rp_id: &str) -> Result<(), CommandError> {
 /// (the `AT` flag must be set) and `None` for assertions (the `AT` flag must be
 /// clear). Mismatches are rejected rather than silently producing data that a
 /// relying party would parse differently than we do.
+///
+/// `rpIdHash` is `SHA-256` of the **canonical** RP ID ([`validate_rp_id`]), so
+/// `Example.COM` and `example.com` produce the same first 32 bytes — which is
+/// what a relying party computes on its side.
 pub fn build_authenticator_data(
     rp_id: &str,
     flags: u8,
     sign_count: u32,
     attested: Option<(&[u8; 16], &[u8], &Value)>,
 ) -> Result<Vec<u8>, CommandError> {
-    validate_rp_id(rp_id)?;
+    let canonical_rp_id = validate_rp_id(rp_id)?;
     let has_attested = attested.is_some();
     if has_attested != (flags & FLAG_AT != 0) {
         return Err(validation(
@@ -194,7 +266,7 @@ pub fn build_authenticator_data(
     }
 
     let mut out = Vec::with_capacity(AUTH_DATA_PREFIX_LEN + 64);
-    out.extend_from_slice(&rp_id_hash(rp_id));
+    out.extend_from_slice(&rp_id_hash(&canonical_rp_id));
     out.push(flags);
     out.extend_from_slice(&sign_count.to_be_bytes());
 
@@ -662,5 +734,101 @@ mod tests {
         assert_eq!(input.len(), 37 + 32);
         assert_eq!(&input[..37], auth_data.as_slice());
         assert_eq!(&input[37..], &sha256(client_data));
+    }
+
+    #[test]
+    fn validate_rp_id_returns_the_ascii_lowercase_canonical_form() {
+        assert_eq!(validate_rp_id("example.com").expect("valid"), "example.com");
+        assert_eq!(validate_rp_id("Example.COM").expect("valid"), "example.com");
+        assert_eq!(
+            validate_rp_id("LOGIN.Example.Com").expect("valid"),
+            "login.example.com"
+        );
+        // Lexically invalid values are still rejected, before any lowercasing.
+        for bad in [
+            "",
+            "https://example.com",
+            "example.com/x",
+            "example.com:443",
+            "example com",
+        ] {
+            assert!(
+                validate_rp_id(bad).is_err(),
+                "rpId {bad:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn rp_id_hash_uses_the_canonical_rp_id() {
+        // The mixed-case spelling must hash exactly like the canonical one:
+        // `build_authenticator_data` canonicalizes before hashing.
+        let canonical = build_authenticator_data(RP_ID, FLAG_UP, SIGN_COUNT, None).expect("build");
+        let mixed = build_authenticator_data("Example.COM", FLAG_UP, SIGN_COUNT, None)
+            .expect("mixed case is canonicalized, not rejected");
+        assert_eq!(canonical, mixed);
+        assert_eq!(&mixed[..32], &rp_id_hash(RP_ID));
+        assert_eq!(
+            hex::encode(&mixed[..32]),
+            RP_ID_HASH_HEX,
+            "rpIdHash is SHA-256 of the canonical rpId, never of the raw input"
+        );
+    }
+
+    #[test]
+    fn rp_id_binding_accepts_equal_and_suffix_hosts() {
+        // (a) exact match.
+        validate_rp_id_binding("example.com", "https://example.com").expect("exact match");
+        // (b) the RP ID is a domain suffix of the origin host.
+        validate_rp_id_binding("example.com", "https://sub.example.com").expect("suffix match");
+        validate_rp_id_binding("example.com", "https://a.b.example.com").expect("deep suffix");
+        // A non-default port and the canonical origin form do not matter.
+        validate_rp_id_binding("example.com", "https://example.com:8443").expect("port");
+        validate_rp_id_binding("localhost", "http://localhost:1420").expect("localhost");
+    }
+
+    #[test]
+    fn rp_id_binding_rejects_foreign_and_lookalike_hosts() {
+        // (c) the review's case: a foreign RP ID with an attacker origin.
+        let err = validate_rp_id_binding("victim.example", "https://evil.example")
+            .expect_err("a foreign rpId must not bind");
+        assert_eq!(
+            err.to_string(),
+            "Validation Error: RP ID is not a domain suffix of the origin's host"
+        );
+        // (d) a suffix that does not fall on a label boundary is not a suffix.
+        assert!(validate_rp_id_binding("example.com", "https://notexample.com").is_err());
+        assert!(validate_rp_id_binding("example.com", "https://example.org").is_err());
+        // A malformed origin is reported as such, not as a binding failure.
+        assert!(validate_rp_id_binding("example.com", "not a url").is_err());
+    }
+
+    /// Known F0 limitation, pinned so it cannot change silently: the binding is
+    /// a plain domain-suffix check with **no** public-suffix-list lookup, so a
+    /// bare TLD binds to any host under it. Registrable-domain validation is
+    /// tracked for T14 (`docs/passkeys.md`); this test documents the gap rather
+    /// than endorsing it.
+    #[test]
+    fn rp_id_binding_has_no_public_suffix_list_in_f0() {
+        validate_rp_id_binding("com", "https://evil.com")
+            .expect("F0: a bare TLD is a suffix of any host under it");
+        // …but it still refuses a host that is not under the TLD at all.
+        assert!(validate_rp_id_binding("com", "https://evil.example").is_err());
+    }
+
+    /// Negative control: the binding check bites. If `validate_rp_id_binding`
+    /// were a no-op (the pre-fix state), the foreign-origin case below would be
+    /// accepted and this test would fail.
+    #[test]
+    fn negative_control_rp_id_binding_is_not_a_no_op() {
+        let foreign = validate_rp_id_binding("victim.example", "https://evil.example");
+        assert!(
+            foreign.is_err(),
+            "the binding must reject a foreign rpId/origin pair"
+        );
+        // …and the same call on a legitimate pair succeeds, so the rejection
+        // above is caused by the mismatch and not by a blanket error.
+        validate_rp_id_binding("victim.example", "https://victim.example")
+            .expect("the matching pair binds");
     }
 }
