@@ -41,8 +41,16 @@ export function vaultRefFor(vault: Vault): VaultRef {
  * `assert`/`listForRp`/`delete`, T16/T17 the CXF commands) so the frontend has a
  * single import surface. Every wrapper forwards the vault **by reference**
  * (`VaultRef`, see {@link vaultRefFor}) plus the vault password: the backend
- * unlocks the vault itself, so no plaintext vault content ever crosses the IPC
+ * unlocks the vault itself, so no plaintext vault content crosses the IPC
  * boundary in either direction.
+ *
+ * **One deliberate exception: {@link PasskeyCommands.exportCxf}.** It returns
+ * the exported CXF document, which contains the passkeys' private keys in plain
+ * text — that is the whole point of an export, and it only happens behind the
+ * explicit `consent` gate (F1). It is the *only* command that hands secret
+ * material to the webview; every other wrapper returns metadata, a spec-shaped
+ * public response, or nothing at all. Callers of `exportCxf` must therefore
+ * treat its result as secret material (see its own JSDoc).
  */
 export default class PasskeyCommands {
 	/**
@@ -145,5 +153,31 @@ export default class PasskeyCommands {
 			password,
 			entryId,
 		});
+	}
+
+	/**
+	 * Exports the vault's passkeys as a CXF JSON document (`export_cxf`, T17).
+	 *
+	 * ⚠️ **The returned string contains the passkeys' PRIVATE KEYS in plain
+	 * text.** Anyone holding it can sign in as the user on every relying party
+	 * the vault covers, so it must never be logged, put on the clipboard without
+	 * a warning, or sent anywhere the user did not explicitly choose.
+	 *
+	 * `consent` is a hard gate, not a hint: the backend refuses (before touching
+	 * the vault file at all) unless it is exactly `true`. The UI is responsible
+	 * for collecting **informed** consent first — show the warning, require an
+	 * explicit acknowledgement — and only then call this wrapper with `true`.
+	 *
+	 * @param vault - Vault to export from (see {@link vaultRefFor}).
+	 * @param password - Vault password, used to unlock the vault.
+	 * @param consent - `true` only after the user acknowledged the warning.
+	 * @returns The CXF document as a JSON string (secret material).
+	 */
+	static async exportCxf(
+		vault: VaultRef,
+		password: string,
+		consent: boolean,
+	): Promise<string> {
+		return await invoke<string>("export_cxf", { vault, password, consent });
 	}
 }

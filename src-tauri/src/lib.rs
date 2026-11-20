@@ -288,6 +288,7 @@ fn build_app() {
             commands::passkey::passkey_assert,
             commands::passkey::passkey_list_for_rp,
             commands::passkey::passkey_delete,
+            commands::passkey_export::export_cxf,
             commands::totp::generate_totp,
             commands::updater::get_update_context,
             commands::updater::install_system_update,

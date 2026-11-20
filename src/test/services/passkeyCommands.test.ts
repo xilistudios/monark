@@ -436,3 +436,130 @@ describe("PasskeyCommands.delete (T10)", () => {
 		);
 	});
 });
+/**
+ * A minimal CXF document as the backend serializes it (`passkey::cxf::build_export`):
+ * camelCase members, `key` carrying the base64url PKCS#8 private key.
+ *
+ * The key below is the published CXF Appendix A example key — a specification
+ * vector, not a real credential.
+ */
+const CXF_EXPORT_JSON = JSON.stringify({
+	version: { major: 1, minor: 0 },
+	exporterRpId: "monark.app",
+	exporterDisplayName: "Monark",
+	timestamp: 1767225600,
+	accounts: [
+		{
+			id: "YWNjb3VudC1pZA",
+			username: "",
+			email: "",
+			collections: [],
+			items: [
+				{
+					id: "aXRlbS1pZA",
+					creationAt: 1767139200,
+					modifiedAt: 1767225600,
+					title: "alice",
+					credentials: [
+						{
+							type: "passkey",
+							credentialId: "Y3JlZGVudGlhbElkRXhhbXBsZQ",
+							rpId: "example.com",
+							username: "alice",
+							userDisplayName: "Alice",
+							userHandle: "AQIDBA",
+							key: "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY",
+						},
+					],
+					tags: ["work"],
+				},
+			],
+		},
+	],
+});
+
+describe("PasskeyCommands.exportCxf (T17)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("invokes export_cxf with { vault, password, consent }", async () => {
+		mockInvoke.mockResolvedValue(CXF_EXPORT_JSON);
+
+		const result = await PasskeyCommands.exportCxf(
+			LOCAL_REF,
+			"vault-password",
+			true,
+		);
+
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(mockInvoke).toHaveBeenCalledWith("export_cxf", {
+			vault: LOCAL_REF,
+			password: "vault-password",
+			consent: true,
+		});
+		expect(result).toBe(CXF_EXPORT_JSON);
+	});
+
+	it("forwards the consent flag verbatim (it is the backend's hard gate)", async () => {
+		mockInvoke.mockResolvedValue(CXF_EXPORT_JSON);
+
+		await PasskeyCommands.exportCxf(LOCAL_REF, "vault-password", false);
+
+		const [, args] = mockInvoke.mock.calls[0] as [
+			string,
+			Record<string, unknown>,
+		];
+		// The Rust command takes `consent: bool`; a renamed member (`consented`)
+		// would type-check here and fail at runtime with a serde error.
+		expect(args.consent).toBe(false);
+		expect(Object.keys(args).sort()).toEqual(["consent", "password", "vault"]);
+	});
+
+	it("sends a cloud vault by reference (snake_case members)", async () => {
+		mockInvoke.mockResolvedValue(CXF_EXPORT_JSON);
+
+		await PasskeyCommands.exportCxf(CLOUD_REF, "vault-password", true);
+
+		const [, args] = mockInvoke.mock.calls[0] as [
+			string,
+			Record<string, unknown>,
+		];
+		expect(JSON.parse(JSON.stringify(args.vault))).toEqual({
+			kind: "cloud",
+			vault_id: "file-123",
+			provider_name: "google_drive",
+		});
+	});
+
+	it("returns the CXF document string unchanged", async () => {
+		mockInvoke.mockResolvedValue(CXF_EXPORT_JSON);
+
+		const result = await PasskeyCommands.exportCxf(
+			LOCAL_REF,
+			"vault-password",
+			true,
+		);
+
+		// The wrapper must not reshape or re-serialize: the string is what the
+		// user writes to disk, and it is the exact document the backend built.
+		expect(typeof result).toBe("string");
+		const parsed = JSON.parse(result);
+		expect(parsed.exporterRpId).toBe("monark.app");
+		expect(parsed.version).toEqual({ major: 1, minor: 0 });
+		expect(parsed.accounts[0].items[0].credentials[0].type).toBe("passkey");
+		expect(parsed.accounts[0].items[0].credentials[0].key).toBe(
+			"MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY",
+		);
+	});
+
+	it("propagates the consent rejection", async () => {
+		mockInvoke.mockRejectedValue(
+			"Validation Error: Export requires explicit user consent",
+		);
+
+		await expect(
+			PasskeyCommands.exportCxf(LOCAL_REF, "vault-password", false),
+		).rejects.toBe("Validation Error: Export requires explicit user consent");
+	});
+});
