@@ -16,8 +16,15 @@ use crate::commands::errors::CommandError;
 use crate::crypto::random::generate_random_bytes;
 use p256::ecdsa::signature::{SignatureEncoding, Signer, Verifier};
 use p256::ecdsa::{DerSignature, Signature, SigningKey, VerifyingKey};
+use p256::pkcs8::der::Decode;
 use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
+use sec1::EcPrivateKey;
 use zeroize::Zeroizing;
+
+/// SEC1 `ECPrivateKey` (RFC 5915) — the ASN.1 structure carried inside the
+/// PKCS#8 `privateKey` OCTET STRING of a P-256 key. Used only to read the
+/// encoded width of the private scalar before it is handed to `p256`.
+type EcPrivateKeyDer<'a> = EcPrivateKey<'a>;
 
 /// COSE algorithm identifier for ECDSA P-256 with SHA-256 (RFC 9053 §2).
 pub const ALG_ES256: i32 = -7;
@@ -45,18 +52,39 @@ pub fn generate_signing_key() -> Result<SigningKey, CommandError> {
 ///
 /// Rejects anything that is not a P-256 PKCS#8 key: Ed25519, RSA, P-384 and
 /// garbage all fail here. The error never echoes key material.
+///
+/// The private scalar must additionally be encoded at its **full width**
+/// (32 bytes): `p256`'s PKCS#8 path reaches `SecretKey::from_slice`, which
+/// left-pads any scalar between 24 and 31 bytes instead of rejecting it, and
+/// `SecretKey::to_bytes` always returns a 32-byte `FieldBytes`, so the padding
+/// is invisible after the fact. A short scalar is therefore rejected here, on
+/// the encoded bytes, before the key object exists.
 pub fn signing_key_from_pkcs8_der(der: &[u8]) -> Result<SigningKey, CommandError> {
-    let key = SigningKey::from_pkcs8_der(der).map_err(|_| {
-        CommandError::Validation("Private key is not a valid P-256 PKCS#8 key".to_string())
-    })?;
-    // `from_pkcs8_der` accepts short scalars by left-padding them; a WebAuthn
-    // credential must carry a full-width scalar, so re-check the round-trip.
-    if key.to_bytes().len() != P256_SCALAR_LEN {
-        return Err(CommandError::Validation(
-            "Private key is not a valid P-256 PKCS#8 key".to_string(),
-        ));
+    reject_short_encoded_scalar(der)?;
+    SigningKey::from_pkcs8_der(der).map_err(|_| invalid_pkcs8())
+}
+
+/// Rejects a PKCS#8 DER document whose encoded private scalar is not 32 bytes.
+///
+/// Walks the two ASN.1 layers that carry the scalar — `PrivateKeyInfo`
+/// (`privateKey` OCTET STRING) and the RFC 5915 `ECPrivateKey` inside it
+/// (`private_key` OCTET STRING) — and checks the length of the inner OCTET
+/// STRING *as encoded*, which is the only place the padding is still visible.
+///
+/// Any structural problem is reported as a validation error here; the caller
+/// would reject the document anyway, so this never turns a valid key into an
+/// error.
+fn reject_short_encoded_scalar(der: &[u8]) -> Result<(), CommandError> {
+    let info = pkcs8::PrivateKeyInfo::try_from(der).map_err(|_| invalid_pkcs8())?;
+    let ec = EcPrivateKeyDer::from_der(info.private_key).map_err(|_| invalid_pkcs8())?;
+    if ec.private_key.len() != P256_SCALAR_LEN {
+        return Err(invalid_pkcs8());
     }
-    Ok(key)
+    Ok(())
+}
+
+fn invalid_pkcs8() -> CommandError {
+    CommandError::Validation("Private key is not a valid P-256 PKCS#8 key".to_string())
 }
 
 /// Serializes a signing key as PKCS#8 DER (the vault / CXF representation).
@@ -110,6 +138,7 @@ pub fn verify_es256(
 mod tests {
     use super::*;
     use crate::crypto::base64::{decode_base64_urlsafe, encode_base64_urlsafe};
+    use p256::pkcs8::der::Encode;
 
     /// Published CXF specification example key (Appendix A of the CXF 1.0 review
     /// draft). It is an example credential, NOT a real secret.
@@ -231,6 +260,66 @@ mod tests {
         assert!(signing_key_from_pkcs8_der(&ed25519).is_err());
         assert!(signing_key_from_pkcs8_der(&[]).is_err());
         assert!(signing_key_from_pkcs8_der(b"not der at all").is_err());
+    }
+
+    /// Rebuilds the CXF fixture as a PKCS#8 document whose RFC 5915
+    /// `ECPrivateKey.private_key` OCTET STRING carries `scalar` verbatim.
+    ///
+    /// The rest of the structure (version, OIDs, public point) is copied from
+    /// the published fixture, so the only difference from a valid key is the
+    /// encoded width of the scalar — exactly the input the guard must catch.
+    fn pkcs8_with_encoded_scalar(scalar: &[u8]) -> Vec<u8> {
+        let fixture = decode_base64_urlsafe(CXF_EXAMPLE_KEY_B64URL).expect("fixture decodes");
+        let info = pkcs8::PrivateKeyInfo::try_from(fixture.as_slice()).expect("fixture is pkcs8");
+        let ec = EcPrivateKeyDer::from_der(info.private_key).expect("fixture is ECPrivateKey");
+        assert_eq!(
+            ec.private_key.len(),
+            P256_SCALAR_LEN,
+            "fixture is full width"
+        );
+
+        // The public point is dropped: a left-padded scalar no longer matches
+        // the fixture's point, and `p256` would reject that mismatch for the
+        // wrong reason (BIT STRING value error) instead of on the width.
+        let rebuilt = EcPrivateKeyDer {
+            private_key: scalar,
+            parameters: ec.parameters,
+            public_key: None,
+        };
+        let ec_der = rebuilt.to_der().expect("encode ECPrivateKey");
+        let document = pkcs8::PrivateKeyInfo::new(info.algorithm, &ec_der);
+        document.to_der().expect("encode PKCS#8")
+    }
+
+    #[test]
+    fn rejects_short_encoded_scalar() {
+        // A 31-byte scalar is left-padded by `SecretKey::from_slice` and would
+        // come back as a 32-byte `FieldBytes`, so only the encoded length can
+        // catch it. 31 bytes of the fixture scalar, unchanged otherwise.
+        let scalar = hex::decode(CXF_EXAMPLE_SCALAR_HEX).expect("hex");
+        let short = &scalar[1..];
+        assert_eq!(short.len(), 31);
+        let der = pkcs8_with_encoded_scalar(short);
+        assert!(
+            signing_key_from_pkcs8_der(&der).is_err(),
+            "a 31-byte encoded scalar must be rejected"
+        );
+
+        // Same document, full-width scalar: accepted and identical to the
+        // fixture key, which proves the rejection above is about the width and
+        // not about the re-encoding.
+        let full = pkcs8_with_encoded_scalar(&scalar);
+        let key = signing_key_from_pkcs8_der(&full).expect("full-width scalar is accepted");
+        assert_eq!(hex::encode(key.to_bytes()), CXF_EXAMPLE_SCALAR_HEX);
+    }
+
+    #[test]
+    fn rejects_scalar_shorter_than_the_padding_threshold() {
+        // 23 bytes is below `SecretKey::MIN_SIZE` (24): `p256` rejects it on its
+        // own, and so must we (with the same validation error, never a panic).
+        let scalar = hex::decode(CXF_EXAMPLE_SCALAR_HEX).expect("hex");
+        let der = pkcs8_with_encoded_scalar(&scalar[9..]);
+        assert!(signing_key_from_pkcs8_der(&der).is_err());
     }
 
     #[test]

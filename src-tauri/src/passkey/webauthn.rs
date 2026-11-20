@@ -87,6 +87,13 @@ pub struct ClientData {
 /// * `origin` must parse as an absolute `http`/`https` origin: no path (other
 ///   than `/`), no query, no fragment, no userinfo.
 ///
+/// The `origin` member is **not** the caller's string: it is the canonical
+/// serialization of the parsed URL (`Url::origin().ascii_serialization()`), so
+/// `https://example.com:443` and `HTTPS://EXAMPLE.COM` both become
+/// `https://example.com`. Relying parties compare `clientDataJSON.origin`
+/// byte-for-byte against their own serialized origin, so echoing the raw input
+/// would make a valid assertion fail the ceremony.
+///
 /// The output is compact JSON (no whitespace) with the member order
 /// `type`, `challenge`, `origin`; it is the exact byte string that gets hashed
 /// into the signature, so it must be reproducible.
@@ -103,18 +110,28 @@ pub fn build_client_data_json(
     if challenge.len() < MIN_CHALLENGE_LEN || challenge.len() > MAX_CHALLENGE_LEN {
         return Err(validation("Challenge length is out of range"));
     }
-    validate_origin(origin)?;
+    let canonical_origin = canonical_origin(origin)?;
 
     let client_data = ClientData {
         type_: kind.to_string(),
         challenge: challenge_b64.to_string(),
-        origin: origin.to_string(),
+        origin: canonical_origin,
     };
     serde_json::to_vec(&client_data).map_err(|_| validation("Failed to build client data"))
 }
 
 /// Validates a WebAuthn origin: absolute `http(s)` URL with no path/query/fragment.
 pub fn validate_origin(origin: &str) -> Result<(), CommandError> {
+    canonical_origin(origin).map(|_| ())
+}
+
+/// Validates `origin` and returns its canonical serialized form.
+///
+/// The canonical form is `scheme://host[:port]` with the scheme and host
+/// lowercased and the port omitted when it is the scheme's default
+/// (`Url::origin().ascii_serialization()`), which is what a relying party
+/// compares against.
+fn canonical_origin(origin: &str) -> Result<String, CommandError> {
     if origin.is_empty() {
         return Err(validation("Origin is empty"));
     }
@@ -136,7 +153,7 @@ pub fn validate_origin(origin: &str) -> Result<(), CommandError> {
     if !path.is_empty() && path != "/" {
         return Err(validation("Origin must not carry a path"));
     }
-    Ok(())
+    Ok(parsed.origin().ascii_serialization())
 }
 
 /// Validates an RP ID: a bare host name, no scheme, path, port or whitespace.
@@ -230,7 +247,9 @@ impl ParsedAuthData {
 ///
 /// Used by the ceremony commands to self-check what they emit, and by tests to
 /// pin the byte layout. Trailing bytes after the attested credential data are
-/// rejected (extensions are not implemented in F0).
+/// rejected (extensions are not implemented in F0): the COSE key must consume
+/// the buffer exactly, which `ciborium::de::from_reader` does not check on its
+/// own (it deserializes a single value and ignores whatever follows).
 pub fn parse_authenticator_data(data: &[u8]) -> Result<ParsedAuthData, CommandError> {
     if data.len() < AUTH_DATA_PREFIX_LEN {
         return Err(validation("Authenticator data is too short"));
@@ -279,8 +298,14 @@ pub fn parse_authenticator_data(data: &[u8]) -> Result<ParsedAuthData, CommandEr
     }
     let credential_id = data[credential_id_start..credential_id_end].to_vec();
 
-    let cose: Value = ciborium::de::from_reader(&data[credential_id_end..])
+    let mut cose_bytes = &data[credential_id_end..];
+    let cose: Value = ciborium::de::from_reader(&mut cose_bytes)
         .map_err(|_| validation("Authenticator data has a malformed COSE key"))?;
+    if !cose_bytes.is_empty() {
+        return Err(validation(
+            "Authenticator data has trailing bytes after the COSE key",
+        ));
+    }
     let cose_key = verifying_key_from_cose(&cose)?;
 
     Ok(ParsedAuthData {
@@ -399,6 +424,64 @@ mod tests {
             assert!(
                 build_client_data_json(CLIENT_DATA_TYPE_GET, &challenge_b64(), origin).is_ok(),
                 "origin {origin:?} must be accepted"
+            );
+        }
+    }
+
+    /// The `origin` member of `clientDataJSON` for `origin`, as a string.
+    fn origin_member(origin: &str) -> String {
+        let json = build_client_data_json(CLIENT_DATA_TYPE_GET, &challenge_b64(), origin)
+            .expect("origin is accepted");
+        let parsed: ClientData = serde_json::from_slice(&json).expect("parse");
+        parsed.origin
+    }
+
+    #[test]
+    fn client_data_json_serializes_the_canonical_origin() {
+        // Default port is dropped: a relying party compares against
+        // `https://example.com`, so echoing `:443` would fail the ceremony.
+        assert_eq!(
+            origin_member("https://example.com:443"),
+            "https://example.com"
+        );
+        // Scheme and host are lowercased.
+        assert_eq!(origin_member("HTTPS://EXAMPLE.COM"), "https://example.com");
+        assert_eq!(origin_member("Http://Example.Com/"), "http://example.com");
+        // A non-default port is preserved, and `http://` keeps its own default.
+        assert_eq!(
+            origin_member("https://example.com:8443"),
+            "https://example.com:8443"
+        );
+        assert_eq!(origin_member("http://example.com:80"), "http://example.com");
+        // Already-canonical origins are unchanged (the known-answer vector).
+        assert_eq!(origin_member("https://example.com"), "https://example.com");
+        assert_eq!(
+            origin_member("http://localhost:1420"),
+            "http://localhost:1420"
+        );
+    }
+
+    #[test]
+    fn client_data_json_origin_is_canonical_in_the_signed_bytes() {
+        // The canonical form is what gets hashed, not just what gets parsed
+        // back: the two spellings of the same origin must produce identical
+        // bytes (and therefore identical signature inputs).
+        let canonical = build_client_data_json(
+            CLIENT_DATA_TYPE_GET,
+            &challenge_b64(),
+            "https://example.com",
+        )
+        .expect("build");
+        for alias in [
+            "https://example.com:443",
+            "HTTPS://EXAMPLE.COM",
+            "https://example.com/",
+        ] {
+            assert_eq!(
+                build_client_data_json(CLIENT_DATA_TYPE_GET, &challenge_b64(), alias)
+                    .expect("build"),
+                canonical,
+                "origin {alias:?} must serialize exactly like the canonical origin"
             );
         }
     }
@@ -530,6 +613,45 @@ mod tests {
         )
         .expect("build");
         assert!(parse_authenticator_data(&full[..60]).is_err());
+    }
+
+    #[test]
+    fn parse_rejects_trailing_bytes_after_the_cose_key() {
+        let key = verifying_key_from_signing(&generate_signing_key().expect("generate"));
+        let cose = cose_key_from_verifying(&key).expect("cose");
+        let full = build_authenticator_data(
+            RP_ID,
+            FLAG_UP | FLAG_AT,
+            0,
+            Some((&AAGUID_ZERO, &[0x02u8; 32], &cose)),
+        )
+        .expect("build");
+        // Sanity: the unmodified buffer parses.
+        parse_authenticator_data(&full).expect("valid AT data parses");
+
+        // A CBOR extension map appended after the COSE key. `ciborium`'s
+        // `from_reader` deserializes one value and never checks EOF, so without
+        // the explicit consumption check this buffer parses "successfully" and
+        // the trailing extension is silently dropped.
+        let mut extension = Vec::new();
+        let extension_map = ciborium::value::Value::Map(vec![(
+            ciborium::value::Value::Text("credProtect".to_string()),
+            ciborium::value::Value::Integer(2.into()),
+        )]);
+        ciborium::ser::into_writer(&extension_map, &mut extension).expect("cbor");
+        assert!(!extension.is_empty());
+
+        let mut with_extension = full.clone();
+        with_extension.extend_from_slice(&extension);
+        assert!(
+            parse_authenticator_data(&with_extension).is_err(),
+            "trailing bytes after the COSE key must be rejected"
+        );
+
+        // A single stray byte is rejected too (not just well-formed CBOR).
+        let mut with_byte = full.clone();
+        with_byte.push(0x00);
+        assert!(parse_authenticator_data(&with_byte).is_err());
     }
 
     #[test]
