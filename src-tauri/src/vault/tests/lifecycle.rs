@@ -782,7 +782,10 @@ mod tests {
         assert_eq!(user_name, "octocat2");
         assert_eq!(rp_id, "github.com", "rp_id must come from disk");
         assert_eq!(credential_id, &vec![0xde, 0xad, 0xbe, 0xef]);
-        assert_eq!(private_key.to_pkcs8_der()?, TEST_PKCS8_DER.to_vec());
+        assert_eq!(
+            private_key.to_pkcs8_der()?.to_vec(),
+            TEST_PKCS8_DER.to_vec()
+        );
 
         Ok(())
     }

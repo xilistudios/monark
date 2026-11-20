@@ -284,6 +284,7 @@ fn build_app() {
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
             commands::storage::test_webdav_connection,
+            commands::passkey::passkey_create,
             commands::totp::generate_totp,
             commands::updater::get_update_context,
             commands::updater::install_system_update,

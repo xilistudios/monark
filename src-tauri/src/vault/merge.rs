@@ -447,7 +447,7 @@ mod tests {
             panic!("the merged vault must still hold the passkey");
         };
         assert_eq!(
-            private_key.to_pkcs8_der()?,
+            private_key.to_pkcs8_der()?.to_vec(),
             TEST_PKCS8_DER.to_vec(),
             "the private key must be restored byte-identically from disk"
         );
@@ -550,7 +550,10 @@ mod tests {
         assert!(*discoverable);
         assert_eq!(transports, &vec!["internal".to_string()]);
         assert_eq!(*aaguid, Uuid::nil());
-        assert_eq!(private_key.to_pkcs8_der()?, TEST_PKCS8_DER.to_vec());
+        assert_eq!(
+            private_key.to_pkcs8_der()?.to_vec(),
+            TEST_PKCS8_DER.to_vec()
+        );
 
         Ok(())
     }
@@ -888,7 +891,12 @@ mod tests {
         assert_eq!(entry.parent_path, vec![GROUP_ID]);
         assert_eq!(entry.core.rp_id, "github.com");
         assert_eq!(
-            entry.core.private_key.to_pkcs8_der().expect("valid b64"),
+            entry
+                .core
+                .private_key
+                .to_pkcs8_der()
+                .expect("valid b64")
+                .to_vec(),
             TEST_PKCS8_DER.to_vec()
         );
     }

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use crate::commands::errors::CommandError;
 
 /// Number of attempts allowed before any delay is imposed.
-const MAX_FREE_ATTEMPTS: u32 = 3;
+pub(crate) const MAX_FREE_ATTEMPTS: u32 = 3;
 /// Maximum enforced delay between attempts.
 const MAX_DELAY_SECS: u64 = 60;
 /// Entries idle for longer than this are pruned.

@@ -3,7 +3,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 pub use uuid::Uuid; // Re-export Uuid publicly
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 // Section 2: Vault File Structure (on disk)
 
@@ -163,9 +163,17 @@ impl SecretPkcs8 {
     ///
     /// Invalid base64 is a caller error (corrupted vault content), reported as
     /// [`CommandError::Validation`] — never a panic.
-    pub fn to_pkcs8_der(&self) -> Result<Vec<u8>, CommandError> {
+    ///
+    /// The returned buffer **is** the private key: it is wrapped in
+    /// [`Zeroizing`] so it is scrubbed when it goes out of scope. Callers never
+    /// have to remember to wipe it, and a plain `Vec<u8>` copy cannot be
+    /// produced by accident (review T03-1: the first consumer,
+    /// `passkey_create`, holds this buffer while building the COSE key and the
+    /// authenticator data).
+    pub fn to_pkcs8_der(&self) -> Result<Zeroizing<Vec<u8>>, CommandError> {
         URL_SAFE_NO_PAD
             .decode(&self.0)
+            .map(Zeroizing::new)
             .map_err(|_| CommandError::Validation("Invalid passkey private key encoding".into()))
     }
 
@@ -695,8 +703,36 @@ mod tests {
         // A well-formed value still decodes to the original bytes.
         let good = SecretPkcs8::from_pkcs8_der(&TEST_PKCS8_DER);
         assert_eq!(
-            good.to_pkcs8_der().expect("valid base64 decodes"),
+            good.to_pkcs8_der().expect("valid base64 decodes").to_vec(),
             TEST_PKCS8_DER.to_vec()
+        );
+    }
+
+    // --- Review T03-1: the decoded key buffer is scrubbed on drop ---
+
+    /// `to_pkcs8_der` hands out the private scalar, so it must hand out a
+    /// `Zeroizing<Vec<u8>>` — not a plain `Vec<u8>` that a caller can forget to
+    /// wipe. This test pins the *type* (a plain `Vec<u8>` would not compile
+    /// here) and the observable wipe-on-drop behaviour.
+    #[test]
+    fn secret_pkcs8_der_buffer_is_zeroized_on_drop() {
+        let secret = SecretPkcs8::from_pkcs8_der(&TEST_PKCS8_DER);
+
+        // Type pin: the binding is a `Zeroizing<Vec<u8>>`. The `let` annotation
+        // is the assertion; the value is also checked.
+        let der: Zeroizing<Vec<u8>> = secret.to_pkcs8_der().expect("valid base64 decodes");
+        assert_eq!(der.as_slice(), TEST_PKCS8_DER);
+
+        // Drop behaviour: `Zeroizing` wipes the buffer it owns. `zeroize` on a
+        // `Vec<u8>` overwrites the bytes and truncates, so a clone taken before
+        // the wipe is the only way to observe the post-condition.
+        let mut buffer = secret.to_pkcs8_der().expect("valid base64 decodes");
+        let len = buffer.len();
+        assert!(len > 0);
+        buffer.zeroize();
+        assert!(
+            buffer.is_empty(),
+            "zeroize must leave no readable key bytes behind"
         );
     }
 
@@ -729,7 +765,7 @@ mod tests {
                 assert_eq!(credential_id, &TEST_CREDENTIAL_ID.to_vec());
                 assert_eq!(user_handle, &TEST_USER_HANDLE.to_vec());
                 assert_eq!(
-                    private_key.to_pkcs8_der().expect("key decodes"),
+                    private_key.to_pkcs8_der().expect("key decodes").to_vec(),
                     TEST_PKCS8_DER.to_vec()
                 );
                 assert_eq!(*algorithm, -7);

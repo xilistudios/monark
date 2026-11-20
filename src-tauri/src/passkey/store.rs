@@ -750,7 +750,11 @@ mod tests {
             .entries
             .iter()
             .find_map(|e| match e {
-                Entry::Passkey { private_key, .. } => private_key.to_pkcs8_der().ok(),
+                // `to_pkcs8_der` returns a `Zeroizing` buffer: copy it out for
+                // the assertion and let the original be scrubbed on drop.
+                Entry::Passkey { private_key, .. } => {
+                    private_key.to_pkcs8_der().ok().map(|der| der.to_vec())
+                }
                 _ => None,
             })
             .expect("the passkey must still be on disk");

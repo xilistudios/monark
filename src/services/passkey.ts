@@ -1,4 +1,9 @@
-import type { VaultRef } from "../interfaces/passkey.interface";
+import { invoke } from "@tauri-apps/api/core";
+import type {
+	PasskeyCreateRequest,
+	PasskeyCreateResponse,
+	VaultRef,
+} from "../interfaces/passkey.interface";
 import type { Vault } from "../redux/actions/vault";
 
 /**
@@ -29,8 +34,36 @@ export function vaultRefFor(vault: Vault): VaultRef {
 /**
  * IPC wrappers for the passkey commands.
  *
- * T08 only establishes the module and `vaultRefFor`; each command task adds its
- * own static wrapper here (T09 `create`, T10 `assert`/`listForRp`/`delete`,
- * T16/T17 the CXF commands) so the frontend has a single import surface.
+ * Each command task adds its own static wrapper (T09 `create`, T10
+ * `assert`/`listForRp`/`delete`, T16/T17 the CXF commands) so the frontend has a
+ * single import surface. Every wrapper forwards the vault **by reference**
+ * (`VaultRef`, see {@link vaultRefFor}) plus the vault password: the backend
+ * unlocks the vault itself, so no plaintext vault content ever crosses the IPC
+ * boundary in either direction.
  */
-export default class PasskeyCommands {}
+export default class PasskeyCommands {
+	/**
+	 * Runs the WebAuthn registration ceremony (`passkey_create`, T09).
+	 *
+	 * The whole ceremony — validation, key generation, attestation, persistence —
+	 * happens in Rust; this wrapper only forwards the RP's options object. The
+	 * backend rejects (before touching the vault) any request that is not
+	 * ES256-only, discoverable-credential-required and attestation `"none"`.
+	 *
+	 * @param vault - Vault to store the passkey in (see {@link vaultRefFor}).
+	 * @param password - Vault password, used to unlock the vault.
+	 * @param request - `PublicKeyCredentialCreationOptions` subset.
+	 * @returns The spec-shaped `PublicKeyCredential` JSON plus the vault entry id.
+	 */
+	static async create(
+		vault: VaultRef,
+		password: string,
+		request: PasskeyCreateRequest,
+	): Promise<PasskeyCreateResponse> {
+		return await invoke<PasskeyCreateResponse>("passkey_create", {
+			vault,
+			password,
+			request,
+		});
+	}
+}

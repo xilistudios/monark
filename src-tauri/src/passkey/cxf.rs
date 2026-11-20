@@ -596,9 +596,11 @@ pub fn secret_from_validated(passkey: &ValidatedPasskey) -> SecretPkcs8 {
 }
 
 /// The COSE algorithm Monark stores for an imported CXF passkey (ES256).
-pub const IMPORTED_ALGORITHM: i32 = ALG_ES256; // ---------------------------------------------------------------------------
-                                               // Tests
-                                               // ---------------------------------------------------------------------------
+pub const IMPORTED_ALGORITHM: i32 = ALG_ES256;
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

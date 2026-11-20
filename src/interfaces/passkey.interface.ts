@@ -63,7 +63,23 @@ export interface AuthenticatorSelection {
 	authenticatorAttachment?: string;
 }
 
-/** Input of `passkey_create` (registration ceremony). */
+/**
+ * Input of `passkey_create` (registration ceremony).
+ *
+ * The backend validates every member before touching the vault, and refuses
+ * (rather than silently adjusting) anything outside Monark's capabilities:
+ *
+ * - `pubKeyCredParams` must contain `{ type: "public-key", alg: -7 }` (ES256 is
+ *   the only algorithm implemented);
+ * - `authenticatorSelection` is **mandatory** and `residentKey` must be
+ *   `"required"` — only discoverable credentials are issued;
+ * - `attestation` must be omitted or `"none"` (no attestation identity);
+ * - `rp.id` is a bare host name (no scheme, path, port or whitespace);
+ * - `user.id` decodes to 1..=64 bytes, `user.name`/`displayName` ≤ 256 chars;
+ * - `challenge` decodes to 16..=1024 bytes; `origin` is an `http(s)` origin;
+ * - `excludeCredentials` is the only deduplication mechanism: a duplicate
+ *   registration for the same RP and user is otherwise allowed.
+ */
 export interface PasskeyCreateRequest {
 	rp: RpEntity;
 	user: UserEntity;
@@ -72,8 +88,10 @@ export interface PasskeyCreateRequest {
 	/** WebAuthn origin, e.g. `https://webauthn.io`. */
 	origin: string;
 	pubKeyCredParams: PubKeyCredParam[];
+	/** Mandatory: Monark only issues discoverable credentials. */
 	authenticatorSelection?: AuthenticatorSelection;
 	excludeCredentials?: PublicKeyCredentialDescriptor[];
+	/** Omitted or `"none"`. */
 	attestation?: string;
 }
 
