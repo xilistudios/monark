@@ -125,8 +125,6 @@ export class ButtercupParser implements ICsvParser {
           entry_type: 'group',
           name: entry.name,
           data_type: 'group',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           children: [],
         };
 

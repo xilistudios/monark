@@ -100,7 +100,8 @@ export const EntryDetailsModal: React.FC = () => {
           <input
             type="text"
             className="input input-bordered"
-            value={selectedEntry.created_at}
+            value={isDataEntry(selectedEntry) ? selectedEntry.created_at : ''}
+            placeholder={t('vault.entry.notTracked')}
             readOnly
           />
         </div>
@@ -113,7 +114,8 @@ export const EntryDetailsModal: React.FC = () => {
           <input
             type="text"
             className="input input-bordered"
-            value={selectedEntry.updated_at}
+            value={isDataEntry(selectedEntry) ? selectedEntry.updated_at : ''}
+            placeholder={t('vault.entry.notTracked')}
             readOnly
           />
         </div>

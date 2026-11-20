@@ -10,17 +10,25 @@
  * Merge rules:
  * - Recursive **union by entry id** over the tree. Groups are matched by id and
  *   their children are merged recursively; everything else is matched by id.
- * - Same id on both sides → the entry with the **newest `updated_at` wins
- *   wholesale** (no field-level merge). Groups are subject to the same rule for
- *   their own metadata, but their children are still merged recursively so that
- *   entries living in a group whose metadata lost the conflict are not lost.
+ * - Same id on both sides, **data/passkey entries** → the entry with the
+ *   **newest `updated_at` wins wholesale** (no field-level merge).
+ * - Same id on both sides, **groups** → the group's own metadata (`name`,
+ *   `data_type`) is **cloud-authoritative**: the cloud copy always wins. This is
+ *   not a preference, it is forced by the vault format: `Entry::Group` carries
+ *   no `created_at`/`updated_at` (neither on disk nor in the IPC `EntryView`),
+ *   so there is no timestamp to compare. Their children are still merged
+ *   recursively, so entries living in a group whose metadata lost are not lost.
+ *   Consequence, accepted and documented: renaming a group locally is reverted
+ *   by the next sync (and, because the merged view is pushed back, reverted for
+ *   every device). Giving groups timestamps would enable a real newest-wins rule
+ *   but is a disk-format change — out of scope here.
  * - An id present on only one side is kept as-is.
  * - Deterministic output order: cloud order first, then local-only entries in
  *   local order. For a same-id conflict the winner keeps the cloud position.
  * - Inputs are never mutated: every entry that reaches the output is a fresh
- *   object, recursively — including the children of a group that exists on one
- *   side only (structural sharing is not used, so callers can safely mutate the
- *   result).
+ *   object, recursively — including `fields`/`tags` of data entries and the
+ *   children of a group that exists on one side only (structural sharing is not
+ *   used, so callers can safely mutate the result).
  * - Passkey views (`entry_type: "passkey"`) merge like any other entry. They
  *   carry no secret material — the backend write-merge re-attaches the private
  *   key from the stored vault by entry id — so nothing here needs to special
@@ -37,11 +45,28 @@
  * @module services/vaultMerge
  */
 
-import type { Entry, GroupEntry } from "../interfaces/vault.interface";
-import { isGroupEntry } from "../interfaces/vault.interface";
+import type {
+	DataEntry,
+	Entry,
+	Field,
+	GroupEntry,
+	PasskeyEntry,
+} from "../interfaces/vault.interface";
+import { isDataEntry, isGroupEntry } from "../interfaces/vault.interface";
+
+/**
+ * The entry kinds that carry `updated_at` on the wire (data entries and passkey
+ * views). Groups are excluded by construction: the vault format gives them no
+ * timestamp, so they can never take part in a newest-wins comparison.
+ */
+type TimestampedEntry = DataEntry | PasskeyEntry;
 
 /**
  * Returns true when `candidate` should replace `incumbent` for the same id.
+ *
+ * Only ever called for entries that carry `updated_at` on the wire — data
+ * entries and passkey views. Groups have no timestamp at all (see
+ * `mergeGroupPair`), so they never reach this function.
  *
  * The comparison is on `updated_at` only: "newest wins wholesale". Ties (equal
  * timestamps, or two unparsable values) keep the incumbent, which is the cloud
@@ -52,7 +77,10 @@ import { isGroupEntry } from "../interfaces/vault.interface";
  * which is correct for the ISO-8601 strings the backend emits (`DateTime<Utc>`
  * serializes as RFC 3339 with a `Z` suffix and fixed-width fields).
  */
-function isNewer(candidate: Entry, incumbent: Entry): boolean {
+function isNewer(
+	candidate: TimestampedEntry,
+	incumbent: TimestampedEntry,
+): boolean {
 	const candidateTime = Date.parse(candidate.updated_at);
 	const incumbentTime = Date.parse(incumbent.updated_at);
 
@@ -66,33 +94,87 @@ function isNewer(candidate: Entry, incumbent: Entry): boolean {
 /**
  * Merges the children of two versions of the same group.
  *
- * The winner's copy supplies the group metadata; its children are the union of
- * both sides' children, so a newer group rename never drops entries that only
- * exist in the losing copy.
+ * The group's own metadata (`name`, `data_type`) is **cloud-authoritative**:
+ * the cloud copy always wins, deterministically. The vault format gives groups
+ * no `created_at`/`updated_at` (Rust `Entry::Group`), so there is no timestamp
+ * to order them by — a "newest wins" rule for groups would be inert. The
+ * children are the union of both sides, so a group whose metadata was taken
+ * from the cloud never drops entries that only exist in the local copy.
+ *
+ * Known limitation (documented in `docs/cloud-storage-architecture.md` §8.3): a
+ * local group rename is reverted by the next sync. Fixing that requires
+ * timestamps on groups, i.e. a vault-format change — out of scope.
  */
 function mergeGroupPair(local: GroupEntry, cloud: GroupEntry): GroupEntry {
-	const winner = isNewer(local, cloud) ? local : cloud;
-
 	return {
-		...winner,
+		id: cloud.id,
+		entry_type: "group",
+		name: cloud.name,
+		data_type: cloud.data_type,
 		children: mergeVaultEntries(local.children, cloud.children),
 	};
 }
 
 /**
- * Copies an entry that has no counterpart on the other side.
+ * Copies an entry that has no counterpart on the other side (and the winning
+ * side of a wholesale conflict).
  *
- * Groups are copied recursively: a shallow copy would alias the input's
- * `children` array and its entries into the merged tree, so a later mutation of
- * the result would write through into the source (Redux state or the freshly
- * read cloud view).
+ * The copy is **deep**: `fields`/`tags` of a data entry, `tags`/`transports` of
+ * a passkey view and `children` of a group are copied too. A shallow copy would
+ * alias those arrays (and their objects) into the merged tree, so a later
+ * mutation of the result would write through into the source (Redux state or the
+ * freshly read cloud view).
+ *
+ * Array copies are defensive (`Array.isArray`): the merge is a pure data
+ * transform and must not throw on an entry whose optional arrays are missing,
+ * which is what a legacy or hand-written vault file can contain.
  */
 function cloneEntry(entry: Entry): Entry {
 	if (isGroupEntry(entry)) {
-		return { ...entry, children: entry.children.map(cloneEntry) };
+		return {
+			...entry,
+			children: Array.isArray(entry.children)
+				? entry.children.map(cloneEntry)
+				: [],
+		};
 	}
 
-	return { ...entry };
+	if (isDataEntry(entry)) {
+		return {
+			...entry,
+			fields: cloneFieldArray(entry.fields),
+			tags: cloneStringArray(entry.tags),
+		};
+	}
+
+	// Passkey view: `tags` and `transports` are the only arrays it carries.
+	return {
+		...entry,
+		tags: cloneStringArray(entry.tags),
+		transports: cloneStringArray(entry.transports),
+	};
+}
+
+/**
+ * Copies a `Field[]`, element by element. Field objects are flat
+ * (`title`/`property`/`value`/`secret`), so a one-level element copy is a full
+ * deep copy.
+ *
+ * Defensive about a missing array: the merge is a pure data transform and must
+ * not throw on an entry whose optional arrays are absent, which is what a legacy
+ * or hand-written vault file can contain.
+ */
+function cloneFieldArray(fields: Field[]): Field[] {
+	if (!Array.isArray(fields)) {
+		return [];
+	}
+
+	return fields.map((field) => ({ ...field }));
+}
+
+/** Copies a `string[]`, defensively (see `cloneFieldArray`). */
+function cloneStringArray(values: string[]): string[] {
+	return Array.isArray(values) ? [...values] : [];
 }
 
 /**
@@ -108,6 +190,13 @@ function mergeEntryPair(local: Entry, cloud: Entry): Entry {
 	// (e.g. an id that is a group in one vault and a data entry in the other)
 	// cannot be reconciled field-by-field, so the newest version is taken as a
 	// whole rather than producing a hybrid entry.
+	if (isGroupEntry(local) || isGroupEntry(cloud)) {
+		// One side is a group and the other is not: there is no timestamp on the
+		// group side to compare, so fall back to the cloud copy — the same
+		// cloud-authoritative rule groups follow among themselves.
+		return cloneEntry(isGroupEntry(cloud) ? cloud : local);
+	}
+
 	return cloneEntry(isNewer(local, cloud) ? local : cloud);
 }
 

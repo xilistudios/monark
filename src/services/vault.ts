@@ -270,10 +270,16 @@ export class VaultInstance {
 		const targetEntry = findEntryByPath(newEntries, path);
 
 		if (targetEntry) {
-			// Update the entry properties
-			Object.assign(targetEntry, updates, {
-				updated_at: new Date().toISOString(),
-			});
+			// Update the entry properties. `updated_at` is stamped only on the
+			// entry kinds that carry it on the wire: a group has no timestamp in
+			// the vault format (Rust `Entry::Group`), so stamping one here would
+			// put a field into the persisted file that the type does not have and
+			// the backend would drop on the next read.
+			Object.assign(
+				targetEntry,
+				updates,
+				isGroupEntry(targetEntry) ? {} : { updated_at: new Date().toISOString() },
+			);
 
 			// Dispatch setVaultEntries with the new, updated entries
 			this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
@@ -458,9 +464,12 @@ export class VaultInstance {
 			});
 
 			// Union merge instead of pull-only last-write-wins: entries created
-			// locally since the last push survive the sync, same-id conflicts go
-			// to the newest `updated_at`. See `services/vaultMerge.ts` for the
-			// rules and the documented deletion limitation.
+			// locally since the last push survive the sync. Same-id data/passkey
+			// conflicts go to the newest `updated_at`; same-id group conflicts are
+			// cloud-authoritative for the group's own metadata (groups carry no
+			// timestamp in the vault format) while their children are unioned.
+			// See `services/vaultMerge.ts` for the rules and the documented
+			// deletion limitation.
 			const merged = mergeVaultEntries(
 				vault.volatile.entries ?? [],
 				vaultContent.entries ?? [],
