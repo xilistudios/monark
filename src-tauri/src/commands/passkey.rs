@@ -24,6 +24,32 @@
 //! 6. **Respond** with base64url members, `authenticatorAttachment: "platform"`
 //!    and `clientExtensionResults: {}`.
 //!
+//! # Authentication (`passkey_assert`, T10)
+//!
+//! 1. **Validate the request** ([`validate_assert_request`]) — same pure rules
+//!    as registration, minus the ones that only make sense for creation.
+//! 2. **Unlock the vault** and **select** the credential
+//!    ([`select_assertion_candidate`]): exact `rpId` match (ruling Q6),
+//!    `allowCredentials` intersection, explicit `credentialId` disambiguation.
+//!    Several candidates without a `credentialId` is a `Validation` error
+//!    (fail closed, ruling Q5); no candidate is a `NotFound`.
+//! 3. **Sign** `authenticatorData || SHA-256(clientDataJSON)` with the stored
+//!    ES256 key and return the assertion.
+//!
+//! The assertion is a **read-only ceremony**: nothing is written back, the
+//! vault file stays byte-identical and the stored `signCount` stays `0`
+//! (ruling Q15). See [`passkey_assert_with`].
+//!
+//! # Listing and deletion (`passkey_list_for_rp`, `passkey_delete`, T10)
+//!
+//! * [`passkey_list_for_rp`] answers "which passkeys does this RP have?" for the
+//!   account picker. It returns [`PasskeySummary`] values only — no key
+//!   material, no user handle. An empty list is a valid answer, not an error.
+//! * [`passkey_delete`] is the **only** deletion path for a passkey: the
+//!   write-merge preserves every passkey it finds on disk (a stale full-vault
+//!   write must never lock a user out of an account), so removing one requires
+//!   this explicit command.
+//!
 //! # Secret handling
 //!
 //! The PKCS#8 DER buffer is a [`Zeroizing`] value from the moment it exists
@@ -46,16 +72,18 @@ use crate::crypto::random::generate_random_bytes;
 use crate::models::{Entry, SecretPkcs8};
 use crate::passkey::cose::{attestation_object_none, cose_key_from_verifying};
 use crate::passkey::es256::{
-    generate_signing_key, signing_key_to_pkcs8_der, verifying_key_from_signing, ALG_ES256,
+    generate_signing_key, sign_es256, signing_key_from_pkcs8_der, signing_key_to_pkcs8_der,
+    verifying_key_from_signing, ALG_ES256,
 };
 use crate::passkey::store::{self, VaultRef};
 use crate::passkey::types::{
-    AttestationResponse, PasskeyCreateRequest, PasskeyCreateResponse, PUBLIC_KEY_TYPE,
+    AssertionResponse, AttestationResponse, PasskeyAssertRequest, PasskeyAssertResponse,
+    PasskeyCreateRequest, PasskeyCreateResponse, PasskeySummary, PUBLIC_KEY_TYPE,
 };
 use crate::passkey::webauthn::{
-    build_authenticator_data, build_client_data_json, validate_origin, validate_rp_id, AAGUID_ZERO,
-    CLIENT_DATA_TYPE_CREATE, FLAG_AT, FLAG_UP, FLAG_UV, MAX_CHALLENGE_LEN, MIN_CHALLENGE_LEN,
-    SIGN_COUNT,
+    assertion_signature_input, build_authenticator_data, build_client_data_json, validate_origin,
+    validate_rp_id, AAGUID_ZERO, CLIENT_DATA_TYPE_CREATE, CLIENT_DATA_TYPE_GET, FLAG_AT, FLAG_UP,
+    FLAG_UV, MAX_CHALLENGE_LEN, MIN_CHALLENGE_LEN, SIGN_COUNT,
 };
 use chrono::Utc;
 use uuid::Uuid;
@@ -391,6 +419,446 @@ fn find_excluded_passkey(entries: &[Entry], rp_id: &str, excluded_ids: &[Vec<u8>
     None
 }
 
+// ---------------------------------------------------------------------------
+// Authentication ceremony (T10)
+// ---------------------------------------------------------------------------
+
+/// Authenticates with a stored passkey and returns the WebAuthn assertion.
+///
+/// See the module docs for the flow. The vault is unlocked with `password`; a
+/// wrong password is rate-limited by the [`store`] seam exactly like the vault
+/// commands. The ceremony never writes: the vault file is left untouched.
+#[tauri::command(async)]
+pub async fn passkey_assert(
+    vault: VaultRef,
+    password: String,
+    request: PasskeyAssertRequest,
+    state: tauri::State<'_, StorageState>,
+) -> Result<PasskeyAssertResponse, CommandError> {
+    passkey_assert_with(&vault, &password, request, &state.manager).await
+}
+
+/// Body of [`passkey_assert`], taking the storage manager directly.
+///
+/// **Read-only by construction**: it loads the vault, signs and returns. There
+/// is no `store::save_vault` call on any path, so the encrypted file cannot
+/// change (acceptance criterion 5) and the stored `signCount` stays `0`
+/// (ruling Q15) — a software authenticator whose credential lives in a single
+/// vault has no clone signal to report.
+pub async fn passkey_assert_with(
+    vault: &VaultRef,
+    password: &str,
+    request: PasskeyAssertRequest,
+    manager: &std::sync::Arc<crate::storage::StorageManager>,
+) -> Result<PasskeyAssertResponse, CommandError> {
+    // 1. Everything decidable from the request alone, before any IO.
+    let validated = validate_assert_request(&request)?;
+
+    // 2. Unlock (rate-limited) and pick the credential that will sign.
+    let loaded = store::load_vault(vault, password, manager).await?;
+    let candidate = select_assertion_candidate(&loaded.vault.entries, &validated)?;
+
+    // 3. WebAuthn structures: no attested credential data on an assertion.
+    let auth_data =
+        build_authenticator_data(&validated.rp_id, FLAG_UP | FLAG_UV, SIGN_COUNT, None)?;
+    let client_data_json = build_client_data_json(
+        CLIENT_DATA_TYPE_GET,
+        &validated.challenge_b64,
+        &validated.origin,
+    )?;
+
+    // 4. Sign `authData || SHA-256(clientDataJSON)` with the stored key. The
+    //    PKCS#8 buffer and the `SigningKey` (zeroize-on-drop) live only inside
+    //    this scope.
+    let signature = {
+        let pkcs8_der = candidate.private_key.to_pkcs8_der()?;
+        let signing_key = signing_key_from_pkcs8_der(&pkcs8_der)?;
+        let message = assertion_signature_input(&auth_data, &client_data_json);
+        sign_es256(&signing_key, &message)?
+    };
+
+    // 5. Spec-shaped response. `id` and `rawId` are the same base64url string,
+    //    and `userHandle` echoes the stored handle so the RP can identify the
+    //    account (a discoverable credential must return it).
+    let credential_id_b64 = encode_base64_urlsafe(candidate.credential_id);
+    Ok(PasskeyAssertResponse {
+        entry_id: candidate.entry_id.to_string(),
+        id: credential_id_b64.clone(),
+        raw_id: credential_id_b64,
+        type_: PUBLIC_KEY_TYPE.to_string(),
+        response: AssertionResponse {
+            client_data_json: encode_base64_urlsafe(&client_data_json),
+            authenticator_data: encode_base64_urlsafe(&auth_data),
+            signature: encode_base64_urlsafe(&signature),
+            user_handle: Some(encode_base64_urlsafe(candidate.user_handle)),
+        },
+        authenticator_attachment: AUTHENTICATOR_ATTACHMENT.to_string(),
+        client_extension_results: serde_json::json!({}),
+    })
+}
+
+/// An authentication request that passed every pure check.
+///
+/// Holds the base64url challenge (echoed into the client data), the canonical
+/// origin and the decoded credential ids the RP allows.
+pub struct ValidatedAssertRequest {
+    pub rp_id: String,
+    pub challenge_b64: String,
+    pub origin: String,
+    /// Decoded ids of `allowCredentials`; `None` means "any credential of this
+    /// RP" (an empty list is treated the same way — see
+    /// [`validate_assert_request`]).
+    pub allowed_ids: Option<Vec<Vec<u8>>>,
+    /// Decoded explicit credential selection, when the caller made one.
+    pub credential_id: Option<Vec<u8>>,
+}
+
+impl std::fmt::Debug for ValidatedAssertRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ValidatedAssertRequest")
+            .field("rp_id", &self.rp_id)
+            .field("origin", &self.origin)
+            .field("allowed_ids", &self.allowed_ids.as_ref().map(Vec::len))
+            .field("credential_id", &self.credential_id.as_ref().map(Vec::len))
+            .finish()
+    }
+}
+
+/// Validates an authentication request. Pure: no IO, no randomness, no clock.
+///
+/// Rules (all failures are [`CommandError::Validation`] with a fixed message
+/// that never echoes request content):
+///
+/// * `rpId` must be a bare host name ([`validate_rp_id`]);
+/// * `challenge` must decode to 16..=1024 bytes;
+/// * `origin` must be a valid WebAuthn origin ([`validate_origin`]);
+/// * every `allowCredentials` entry must be `{type: "public-key", id: b64url}`;
+/// * `credentialId`, when present, must be valid base64url.
+///
+/// `userVerification` is accepted but **not** used to gate the `UV` flag: Monark
+/// always sets `UV` because the vault password (or the biometric prompt that
+/// guards it, T11) has just been verified. See the module docs.
+pub fn validate_assert_request(
+    request: &PasskeyAssertRequest,
+) -> Result<ValidatedAssertRequest, CommandError> {
+    validate_rp_id(&request.rp_id)?;
+
+    let challenge = decode_base64_urlsafe(&request.challenge)
+        .map_err(|_| validation("Challenge is not valid base64url"))?;
+    if challenge.len() < MIN_CHALLENGE_LEN || challenge.len() > MAX_CHALLENGE_LEN {
+        return Err(validation("Challenge length is out of range"));
+    }
+
+    validate_origin(&request.origin)?;
+
+    // `allowCredentials: []` and an absent member mean the same thing in
+    // WebAuthn — "no restriction" — so an empty list is not an error.
+    let allowed_ids = match request.allow_credentials.as_ref() {
+        Some(descriptors) if !descriptors.is_empty() => {
+            let mut ids = Vec::with_capacity(descriptors.len());
+            for descriptor in descriptors {
+                if descriptor.type_ != PUBLIC_KEY_TYPE {
+                    return Err(validation("Allowed credential type is not public-key"));
+                }
+                let id = decode_base64_urlsafe(&descriptor.id)
+                    .map_err(|_| validation("Allowed credential id is not valid base64url"))?;
+                ids.push(id);
+            }
+            Some(ids)
+        }
+        Some(_) | None => None,
+    };
+
+    let credential_id = match request.credential_id.as_deref() {
+        Some(raw) => Some(
+            decode_base64_urlsafe(raw)
+                .map_err(|_| validation("Credential id is not valid base64url"))?,
+        ),
+        None => None,
+    };
+
+    Ok(ValidatedAssertRequest {
+        rp_id: request.rp_id.clone(),
+        challenge_b64: request.challenge.clone(),
+        origin: request.origin.clone(),
+        allowed_ids,
+        credential_id,
+    })
+}
+
+/// The credential an assertion will be signed with.
+///
+/// Borrows the stored entry: the private key never leaves the vault structure,
+/// it is decoded inside [`passkey_assert_with`] and dropped there.
+pub struct AssertionCandidate<'a> {
+    pub entry_id: Uuid,
+    pub credential_id: &'a [u8],
+    pub user_handle: &'a [u8],
+    pub private_key: &'a SecretPkcs8,
+    pub user_name: &'a str,
+    pub user_display_name: &'a str,
+    pub created_at: chrono::DateTime<Utc>,
+    pub transports: &'a [String],
+}
+
+impl std::fmt::Debug for AssertionCandidate<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AssertionCandidate")
+            .field("entry_id", &self.entry_id)
+            .field("credential_id_len", &self.credential_id.len())
+            .field("user_handle_len", &self.user_handle.len())
+            .finish()
+    }
+}
+
+/// Picks the passkey that signs `request`, or explains why it cannot.
+///
+/// Selection algorithm (plan §6 T10):
+///
+/// 1. **RP match is exact** (ruling Q6): a passkey stored for `example.com` is
+///    *not* offered to `login.example.com`. WebAuthn permits a registrable
+///    domain suffix, but exact match is the safe minimal subset for F0 and the
+///    only rule that cannot be turned into a cross-origin credential leak by a
+///    typo in the RP id.
+/// 2. `allowCredentials`, when given, **intersects** the candidates.
+/// 3. `credentialId`, when given, must select exactly one of the remaining
+///    candidates.
+/// 4. Zero candidates → [`CommandError::NotFound`]; more than one without an
+///    explicit `credentialId` → [`CommandError::Validation`] (fail closed,
+///    ruling Q5: the UI disambiguates with [`passkey_list_for_rp`]).
+///
+/// Passkeys nested in groups are considered: the vault tree is searched
+/// recursively.
+pub fn select_assertion_candidate<'a>(
+    entries: &'a [Entry],
+    request: &ValidatedAssertRequest,
+) -> Result<AssertionCandidate<'a>, CommandError> {
+    let mut candidates = Vec::new();
+    collect_rp_passkeys(entries, &request.rp_id, &mut candidates);
+
+    if let Some(allowed) = request.allowed_ids.as_ref() {
+        candidates.retain(|candidate| {
+            allowed
+                .iter()
+                .any(|id| id.as_slice() == candidate.credential_id)
+        });
+    }
+
+    if let Some(wanted) = request.credential_id.as_ref() {
+        candidates.retain(|candidate| candidate.credential_id == wanted.as_slice());
+        return match candidates.len() {
+            0 => Err(CommandError::NotFound(
+                "No passkey for this relying party".to_string(),
+            )),
+            1 => Ok(candidates.remove(0)),
+            // Two entries sharing one credential id would be a corrupted vault
+            // (ruling Q8 dedups on `(rp_id, credential_id)`); refuse rather than
+            // pick one arbitrarily.
+            _ => Err(validation("Multiple passkeys match; specify credential_id")),
+        };
+    }
+
+    match candidates.len() {
+        0 => Err(CommandError::NotFound(
+            "No passkey for this relying party".to_string(),
+        )),
+        1 => Ok(candidates.remove(0)),
+        // Fail closed (ruling Q5): the caller must say which credential it
+        // means; guessing would sign with the wrong account.
+        _ => Err(validation("Multiple passkeys match; specify credential_id")),
+    }
+}
+
+/// Collects every passkey stored for `rp_id`, at any depth of the tree.
+fn collect_rp_passkeys<'a>(
+    entries: &'a [Entry],
+    rp_id: &str,
+    out: &mut Vec<AssertionCandidate<'a>>,
+) {
+    for entry in entries {
+        match entry {
+            Entry::Passkey {
+                id,
+                rp_id: stored_rp_id,
+                credential_id,
+                user_handle,
+                private_key,
+                user_name,
+                user_display_name,
+                created_at,
+                transports,
+                ..
+            } => {
+                if stored_rp_id == rp_id {
+                    out.push(AssertionCandidate {
+                        entry_id: *id,
+                        credential_id,
+                        user_handle,
+                        private_key,
+                        user_name,
+                        user_display_name,
+                        created_at: *created_at,
+                        transports,
+                    });
+                }
+            }
+            Entry::Group { children, .. } => collect_rp_passkeys(children, rp_id, out),
+            Entry::Data { .. } => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Listing (T10)
+// ---------------------------------------------------------------------------
+
+/// Lists the passkeys stored for one relying party, for the account picker.
+///
+/// The result holds no secret material (no private key, no user handle): a
+/// [`PasskeySummary`] is exactly what a picker needs to render a choice and to
+/// pass back as `credentialId`. An empty list is a valid answer.
+#[tauri::command(async)]
+pub async fn passkey_list_for_rp(
+    vault: VaultRef,
+    password: String,
+    rp_id: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<Vec<PasskeySummary>, CommandError> {
+    passkey_list_for_rp_with(&vault, &password, &rp_id, &state.manager).await
+}
+
+/// Body of [`passkey_list_for_rp`], taking the storage manager directly.
+pub async fn passkey_list_for_rp_with(
+    vault: &VaultRef,
+    password: &str,
+    rp_id: &str,
+    manager: &std::sync::Arc<crate::storage::StorageManager>,
+) -> Result<Vec<PasskeySummary>, CommandError> {
+    // The RP id is validated like everywhere else: a query for a malformed
+    // relying party is a caller bug, not an empty result.
+    validate_rp_id(rp_id)?;
+
+    let loaded = store::load_vault(vault, password, manager).await?;
+    let mut candidates = Vec::new();
+    collect_rp_passkeys(&loaded.vault.entries, rp_id, &mut candidates);
+
+    Ok(candidates
+        .into_iter()
+        .map(|candidate| PasskeySummary {
+            entry_id: candidate.entry_id.to_string(),
+            credential_id: encode_base64_urlsafe(candidate.credential_id),
+            rp_id: rp_id.to_string(),
+            user_name: candidate.user_name.to_string(),
+            user_display_name: candidate.user_display_name.to_string(),
+            created_at: candidate.created_at.to_rfc3339(),
+            transports: candidate.transports.to_vec(),
+        })
+        .collect())
+}
+
+// ---------------------------------------------------------------------------
+// Deletion (T10)
+// ---------------------------------------------------------------------------
+
+/// Deletes a stored passkey. This is the **only** deletion path.
+///
+/// The write-merge ([`crate::vault::merge`]) re-inserts every passkey it finds
+/// on disk, so a full-vault write that simply omits a passkey does not delete
+/// it — by design: a stale frontend view must never lock a user out of an
+/// account. Removing a credential therefore takes this explicit command, which
+/// rewrites the vault without the entry; from then on the preservation pass has
+/// nothing to preserve and the passkey stays gone.
+///
+/// `entry_id` must name a **passkey** entry: deleting a data entry or a group
+/// through this command is a `Validation` error (the vault commands own those).
+#[tauri::command(async)]
+pub async fn passkey_delete(
+    vault: VaultRef,
+    password: String,
+    entry_id: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), CommandError> {
+    passkey_delete_with(&vault, &password, &entry_id, &state.manager).await
+}
+
+/// Body of [`passkey_delete`], taking the storage manager directly.
+pub async fn passkey_delete_with(
+    vault: &VaultRef,
+    password: &str,
+    entry_id: &str,
+    manager: &std::sync::Arc<crate::storage::StorageManager>,
+) -> Result<(), CommandError> {
+    let id =
+        Uuid::parse_str(entry_id).map_err(|_| validation("Entry id is not a valid identifier"))?;
+
+    let mut loaded = store::load_vault(vault, password, manager).await?;
+
+    // Locate the entry first: the type check must happen before anything is
+    // removed, so a rejected request never leaves a half-applied tree.
+    let target = find_entry(&loaded.vault.entries, id)
+        .ok_or_else(|| CommandError::NotFound("Passkey not found".to_string()))?;
+    if !matches!(target, Entry::Passkey { .. }) {
+        return Err(validation("Only passkey entries can be deleted here"));
+    }
+
+    let removed = remove_entry(&mut loaded.vault.entries, id);
+    debug_assert!(removed, "the entry was found a moment ago");
+    store::save_vault(vault, &mut loaded, manager).await
+}
+
+/// Finds an entry by id anywhere in the tree.
+fn find_entry(entries: &[Entry], id: Uuid) -> Option<&Entry> {
+    for entry in entries {
+        match entry {
+            Entry::Group {
+                id: group_id,
+                children,
+                ..
+            } => {
+                if *group_id == id {
+                    return Some(entry);
+                }
+                if let Some(found) = find_entry(children, id) {
+                    return Some(found);
+                }
+            }
+            Entry::Data { id: data_id, .. } | Entry::Passkey { id: data_id, .. } => {
+                if *data_id == id {
+                    return Some(entry);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Removes the entry with `id` from the tree, returning whether it was found.
+///
+/// A group is removed with its children (the caller only ever passes a passkey
+/// id, but the helper stays general so the type check above is the only place
+/// that decides what may be deleted).
+fn remove_entry(entries: &mut Vec<Entry>, id: Uuid) -> bool {
+    if let Some(position) = entries.iter().position(|entry| match entry {
+        Entry::Group { id: group_id, .. } => *group_id == id,
+        Entry::Data { id: data_id, .. } | Entry::Passkey { id: data_id, .. } => *data_id == id,
+    }) {
+        entries.remove(position);
+        return true;
+    }
+    for entry in entries.iter_mut() {
+        if let Entry::Group { children, .. } = entry {
+            if remove_entry(children, id) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 #[path = "passkey_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "passkey_assert_tests.rs"]
+mod assert_tests;

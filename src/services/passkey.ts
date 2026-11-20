@@ -1,7 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+	PasskeyAssertRequest,
+	PasskeyAssertResponse,
 	PasskeyCreateRequest,
 	PasskeyCreateResponse,
+	PasskeySummary,
 	VaultRef,
 } from "../interfaces/passkey.interface";
 import type { Vault } from "../redux/actions/vault";
@@ -64,6 +67,83 @@ export default class PasskeyCommands {
 			vault,
 			password,
 			request,
+		});
+	}
+
+	/**
+	 * Runs the WebAuthn authentication ceremony (`passkey_assert`, T10).
+	 *
+	 * The backend selects the credential (exact `rpId` match, `allowCredentials`
+	 * intersection, explicit `credentialId` disambiguation), signs
+	 * `authenticatorData || SHA-256(clientDataJSON)` with the stored ES256 key and
+	 * returns the assertion. The ceremony is **read-only**: the vault file is not
+	 * modified and the stored `signCount` stays `0`.
+	 *
+	 * A request that matches several credentials without naming one is rejected
+	 * (`Validation`); resolve the choice with {@link listForRp} first. A request
+	 * that matches none is a `NotFound`.
+	 *
+	 * @param vault - Vault holding the passkey (see {@link vaultRefFor}).
+	 * @param password - Vault password, used to unlock the vault.
+	 * @param request - `PublicKeyCredentialRequestOptions` subset.
+	 * @returns The spec-shaped `PublicKeyCredential` JSON plus the vault entry id.
+	 */
+	static async assert(
+		vault: VaultRef,
+		password: string,
+		request: PasskeyAssertRequest,
+	): Promise<PasskeyAssertResponse> {
+		return await invoke<PasskeyAssertResponse>("passkey_assert", {
+			vault,
+			password,
+			request,
+		});
+	}
+
+	/**
+	 * Lists the passkeys stored for one relying party (`passkey_list_for_rp`,
+	 * T10), for the account picker.
+	 *
+	 * The summaries carry no secret material (no private key, no user handle).
+	 * An empty list is a valid answer, not an error.
+	 *
+	 * @param vault - Vault to query (see {@link vaultRefFor}).
+	 * @param password - Vault password, used to unlock the vault.
+	 * @param rpId - Relying party id (bare host name, exact match).
+	 */
+	static async listForRp(
+		vault: VaultRef,
+		password: string,
+		rpId: string,
+	): Promise<PasskeySummary[]> {
+		return await invoke<PasskeySummary[]>("passkey_list_for_rp", {
+			vault,
+			password,
+			rpId,
+		});
+	}
+
+	/**
+	 * Deletes a stored passkey (`passkey_delete`, T10).
+	 *
+	 * This is the **only** way to delete a passkey: the write-merge preserves
+	 * every passkey it finds on disk, so a full-vault write that omits one does
+	 * not remove it. `entryId` must name a passkey entry — a data entry or a
+	 * group is rejected (`Validation`), and an unknown id is a `NotFound`.
+	 *
+	 * @param vault - Vault holding the passkey (see {@link vaultRefFor}).
+	 * @param password - Vault password, used to unlock the vault.
+	 * @param entryId - Vault entry id of the passkey.
+	 */
+	static async delete(
+		vault: VaultRef,
+		password: string,
+		entryId: string,
+	): Promise<void> {
+		return await invoke<void>("passkey_delete", {
+			vault,
+			password,
+			entryId,
 		});
 	}
 }
