@@ -96,7 +96,7 @@ export class PasskeyCeremonyError extends Error {
 }
 
 /** A vault resolved from Redux, ready for a passkey command. */
-interface ResolvedVault {
+export interface ResolvedVault {
 	/** The Redux vault record (used by {@link vaultRefFor}). */
 	vault: Vault;
 	/** The session password (`volatile.credential`) — never logged. */
@@ -193,6 +193,32 @@ async function assertUserVerification(vaultName: string): Promise<void> {
 		// No password fallback here on purpose — the user retries the action.
 		throw new PasskeyCeremonyError(i18n.t("home:passkey.uvFailed"));
 	}
+}
+
+/**
+ * Resolves the vault and its session credential for a CXF command (T18).
+ *
+ * The import/export modals need exactly what the ceremonies need — the Redux
+ * vault record (for `vaultRefFor`) and the session password — but **not** the
+ * user-verification prompt: importing a file and exporting one are explicit
+ * user actions on an already-unlocked vault, and the export carries its own
+ * informed-consent gate (see `PasskeyExportModal`).
+ *
+ * Reads through the same singleton accessor as {@link resolveUnlockedVault}, so
+ * there is one wiring point for the store.
+ *
+ * **This is a pure alias — no extra behaviour, no UV prompt, no extra check.**
+ * It exists only to name the call site's intent (and to be the single place a
+ * future CXF-specific gate would go); callers get exactly what
+ * `resolveUnlockedVault` returns.
+ *
+ * @param vaultId - Id of the vault to address.
+ * @returns The vault record and its session credential (never logged).
+ * @throws {PasskeyCeremonyError} when the manager is not initialized, the vault
+ *   does not exist, or the vault is locked.
+ */
+export function resolveUnlockedVaultForCxf(vaultId: string): ResolvedVault {
+	return resolveUnlockedVault(vaultId);
 }
 
 /**

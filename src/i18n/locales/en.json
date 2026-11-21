@@ -346,6 +346,7 @@
         "sshKey": "SSH Key",
         "otp": "OTP / 2FA",
         "note": "Note",
+        "passkey": "Passkey",
         "custom": "Custom"
       },
       "entryTitle": "Entry Title",
@@ -418,6 +419,7 @@
         "addEntry": "Add Entry",
         "addGroup": "Add Group",
         "importCsv": "Import CSV",
+        "exportPasskeys": "Export passkeys",
         "entries": "Entries",
         "groups": "Groups",
         "lock": "Lock",
@@ -631,6 +633,45 @@
         "errors": {
           "validationFailed": "Please check the fields above",
           "saveFailed": "Failed to update the passkey"
+        }
+      },
+      "import": {
+        "title": "Import passkeys",
+        "description": "Import passkeys from a CXF file exported by another password manager. Passkeys you already have are skipped.",
+        "selectFile": "Choose CXF file",
+        "importing": "Importing...",
+        "close": "Close",
+        "selectedFile": "File: {{fileName}}",
+        "imported": "Imported",
+        "duplicates": "Already in vault",
+        "nothingImported": "Nothing was imported from this file.",
+        "lossy": {
+          "title": "{{count}} passkey(s) imported with data ignored",
+          "row": "{{itemTitle}}: {{reason}}"
+        },
+        "skipped": {
+          "title": "{{count}} credential(s) not imported",
+          "row": "{{credentialType}}: {{reason}}"
+        },
+        "errors": {
+          "locked": "Unlock the vault before importing passkeys.",
+          "importFailed": "Could not import the file.",
+          "unexpectedReport": "The import finished but its result could not be read. Reopen the vault to check what was imported.",
+          "refreshFailed": "The passkeys were imported, but the vault view could not be refreshed. Lock and unlock the vault to see them."
+        }
+      },
+      "export": {
+        "title": "Export passkeys",
+        "warning": "This file contains your passkeys' private keys UNENCRYPTED. Anyone with the file can sign in as you. Store it securely and delete it after use.",
+        "consent": "I understand that this file is not encrypted and that anyone who obtains it can sign in as me.",
+        "export": "Export",
+        "exporting": "Exporting...",
+        "close": "Close",
+        "success": "Passkeys exported to {{fileName}}",
+        "deleteReminder": "Delete the file once you are done with it.",
+        "errors": {
+          "locked": "Unlock the vault before exporting passkeys.",
+          "exportFailed": "Could not export the passkeys."
         }
       }
     }

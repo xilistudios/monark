@@ -9,6 +9,8 @@ import { EditEntryModal } from '../components/Vault/Modals/EditEntryModal';
 import { EditGroupModal } from '../components/Vault/Modals/EditGroupModal';
 import { EntryDetailsModal } from '../components/Vault/Modals/EntryDetailsModal';
 import { ImportCsvModal } from '../components/Vault/Modals/ImportCsvModal';
+import { PasskeyExportModal } from '../components/Vault/Modals/PasskeyExportModal';
+import { PasskeyImportModal } from '../components/Vault/Modals/PasskeyImportModal';
 import { AddVaultModal } from '../components/Vault/Modals/AddVaultModal';
 import { EditVaultModal } from '../components/Vault/Modals/EditVaultModal';
 import { DeleteVaultModal } from '../components/Vault/Modals/DeleteVaultModal';
@@ -368,6 +370,10 @@ function HomeScreen() {
       <AddEntryModal />
       <AddGroupModal />
       <ImportCsvModal />
+      {/* CXF passkey surfaces (T18): the import modal is opened from the
+          passkey template card, the export modal from the toolbar button. */}
+      <PasskeyImportModal />
+      <PasskeyExportModal />
       {/* The details modal handles every entry kind: data entries and groups
           render the generic view, a passkey renders PasskeyDetailsSection. */}
       {selectedEntry && <EntryDetailsModal />}

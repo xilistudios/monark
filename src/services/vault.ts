@@ -38,6 +38,7 @@ import { storeVaultPassword, deleteVaultPassword } from "./biometric";
 import VaultCommands from "./commands";
 import PasskeyCommands, { vaultRefFor } from "./passkey";
 import { mergeVaultEntries } from "./vaultMerge";
+import { isVaultLocked } from "./vaultState";
 
 export class VaultInstance {
 	public readonly id: string;
@@ -165,6 +166,65 @@ export class VaultInstance {
 			...this.vault,
 			isLocked: true,
 		};
+	}
+
+	/**
+	 * Re-reads the vault from its backing store and refreshes the Redux entries.
+	 *
+	 * Needed after an **external** write: a passkey import (`import_cxf`, T16)
+	 * happens inside the backend, which writes the vault file itself. The
+	 * webview's `volatile.entries` is then stale — nothing in the Redux slice
+	 * knows about the new passkeys until they are re-read.
+	 *
+	 * Unlike {@link unlock} this does **not** touch the credential or the locked
+	 * flag: the caller is already unlocked and holds the session password, so
+	 * re-deriving them would be a redundant state transition (and a second
+	 * chance to flip `isLocked` on a transient read failure).
+	 *
+	 * - **local** vaults: `read_vault(path, credential)` then
+	 *   `setVaultEntries` — the same read `unlock` performs.
+	 * - **cloud** vaults: {@link syncWithCloud}, which re-reads the cloud file,
+	 *   union-merges it with the local view and pushes the merged result back.
+	 *   A plain re-read would drop entries created on this device since the last
+	 *   push, so the merge is the correct refresh for cloud.
+	 *
+	 * @throws Error if the vault is locked — `isVaultLocked` is true when either
+	 *   the `isLocked` flag is set or there is no session credential (locking
+	 *   clears the credential, so both hold in practice) — or the read/sync
+	 *   fails.
+	 */
+	async refreshEntries(): Promise<void> {
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+
+		if (!vault || isVaultLocked(vault)) {
+			throw new Error("Vault must be unlocked to refresh entries");
+		}
+		const credential = vault.volatile?.credential;
+		if (!credential) {
+			// Unreachable: `isVaultLocked` already rejects a missing credential.
+			// Kept so the type narrows without a cast.
+			throw new Error("Vault must be unlocked to refresh entries");
+		}
+
+		if (vault.storageType === "cloud") {
+			await this.syncWithCloud();
+			return;
+		}
+
+		try {
+			const vaultContent = await VaultCommands.read(vault.path, credential);
+			this.dispatch(
+				setVaultEntries({
+					vaultId: this.id,
+					entries: vaultContent.entries,
+				}),
+			);
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			throw new Error(`Failed to refresh vault entries: ${errorMessage}`);
+		}
 	}
 
 	/**

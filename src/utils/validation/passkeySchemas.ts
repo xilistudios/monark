@@ -475,6 +475,42 @@ export const passkeyEditSchema = z.strictObject({
 		}),
 });
 
+/**
+ * One per-credential outcome of a CXF import that did not carry over in full
+ * (T18 renders these).
+ *
+ * Mirrors `passkey::cxf::CxfSkipped` (`#[serde(rename_all = "camelCase")]`):
+ * `itemTitle`, `credentialType`, `reason`. `reason` is a user-facing string the
+ * backend composes; it never contains key material.
+ */
+export const cxfSkippedSchema = z.strictObject({
+	itemTitle: z.string(),
+	credentialType: z.string(),
+	reason: z.string(),
+});
+
+/**
+ * Report returned by `import_cxf` (T16), validated before the UI renders it.
+ *
+ * Mirrors `passkey::cxf::CxfImportReport` (`camelCase`): `imported`,
+ * `duplicates`, `skipped[]`.
+ *
+ * ⚠️ `skipped` is **not** a failure list. It carries both *rejected*
+ * credentials (not imported) and *imported but lossy* ones — the latter are
+ * reported with `reason === EXTENSIONS_IGNORED_NOTE` (see
+ * `interfaces/passkey.interface.ts` `CxfSkipped`). `imported + duplicates +
+ * skipped.length` is therefore not the number of credentials in the document.
+ *
+ * `strictObject`: an unknown member is a rejection. The report is a backend
+ * response, so an unexpected shape means the wire contract drifted and the UI
+ * must not render numbers it cannot interpret.
+ */
+export const cxfImportReportSchema = z.strictObject({
+	imported: z.number().int().nonnegative(),
+	duplicates: z.number().int().nonnegative(),
+	skipped: z.array(cxfSkippedSchema),
+});
+
 // ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
@@ -488,3 +524,5 @@ export type PasskeyAssertRequestInput = z.infer<
 export type PasskeySummaryInput = z.infer<typeof passkeySummarySchema>;
 export type PasskeyEntryInput = z.infer<typeof passkeyEntrySchema>;
 export type PasskeyEditInput = z.infer<typeof passkeyEditSchema>;
+export type CxfSkippedInput = z.infer<typeof cxfSkippedSchema>;
+export type CxfImportReportInput = z.infer<typeof cxfImportReportSchema>;

@@ -346,6 +346,7 @@
         "sshKey": "Clave SSH",
         "otp": "OTP / 2FA",
         "note": "Nota",
+        "passkey": "Passkey",
         "custom": "Personalizado"
       },
       "entryTitle": "Título de la Entrada",
@@ -418,6 +419,7 @@
         "addEntry": "Agregar Entrada",
         "addGroup": "Agregar Grupo",
         "importCsv": "Importar CSV",
+        "exportPasskeys": "Exportar passkeys",
         "entries": "Entradas",
         "groups": "Grupos",
         "lock": "Bloquear",
@@ -630,6 +632,45 @@
         "errors": {
           "validationFailed": "Revisa los campos de arriba",
           "saveFailed": "No se pudo actualizar la passkey"
+        }
+      },
+      "import": {
+        "title": "Importar passkeys",
+        "description": "Importa passkeys desde un archivo CXF exportado por otro gestor de contraseñas. Las passkeys que ya tienes se omiten.",
+        "selectFile": "Elegir archivo CXF",
+        "importing": "Importando...",
+        "close": "Cerrar",
+        "selectedFile": "Archivo: {{fileName}}",
+        "imported": "Importadas",
+        "duplicates": "Ya en la bóveda",
+        "nothingImported": "No se importó nada de este archivo.",
+        "lossy": {
+          "title": "{{count}} passkey(s) importadas con datos ignorados",
+          "row": "{{itemTitle}}: {{reason}}"
+        },
+        "skipped": {
+          "title": "{{count}} credencial(es) no importadas",
+          "row": "{{credentialType}}: {{reason}}"
+        },
+        "errors": {
+          "locked": "Desbloquea la bóveda antes de importar passkeys.",
+          "importFailed": "No se pudo importar el archivo.",
+          "unexpectedReport": "La importación terminó pero su resultado no se pudo leer. Vuelve a abrir la bóveda para comprobar qué se importó.",
+          "refreshFailed": "Las passkeys se importaron, pero la vista de la bóveda no se pudo actualizar. Bloquea y desbloquea la bóveda para verlas."
+        }
+      },
+      "export": {
+        "title": "Exportar passkeys",
+        "warning": "Este archivo contiene las claves privadas de tus passkeys SIN CIFRAR. Cualquiera que tenga el archivo puede iniciar sesión como tú. Guárdalo de forma segura y bórralo después de usarlo.",
+        "consent": "Entiendo que este archivo no está cifrado y que cualquiera que lo obtenga puede iniciar sesión como yo.",
+        "export": "Exportar",
+        "exporting": "Exportando...",
+        "close": "Cerrar",
+        "success": "Passkeys exportadas a {{fileName}}",
+        "deleteReminder": "Borra el archivo cuando termines de usarlo.",
+        "errors": {
+          "locked": "Desbloquea la bóveda antes de exportar passkeys.",
+          "exportFailed": "No se pudieron exportar las passkeys."
         }
       }
     }

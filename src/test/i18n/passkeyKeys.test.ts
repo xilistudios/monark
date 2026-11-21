@@ -102,6 +102,67 @@ describe("home.passkey i18n parity (T11 + T13)", () => {
 		);
 	});
 
+	it("defines the T18 import/export keys the CXF modals resolve", () => {
+		// Same reason as above: a missing key renders as the raw key path, and
+		// the export warning in particular must never be a raw path — the user
+		// consents to what it says.
+		expect(passkeyKeys(enFlat)).toEqual(
+			expect.arrayContaining([
+				"home.passkey.import.title",
+				"home.passkey.import.description",
+				"home.passkey.import.selectFile",
+				"home.passkey.import.importing",
+				"home.passkey.import.close",
+				"home.passkey.import.selectedFile",
+				"home.passkey.import.imported",
+				"home.passkey.import.duplicates",
+				"home.passkey.import.nothingImported",
+				"home.passkey.import.lossy.title",
+				"home.passkey.import.lossy.row",
+				"home.passkey.import.skipped.title",
+				"home.passkey.import.skipped.row",
+				"home.passkey.import.errors.locked",
+				"home.passkey.import.errors.importFailed",
+				"home.passkey.import.errors.unexpectedReport",
+				"home.passkey.import.errors.refreshFailed",
+				"home.passkey.export.title",
+				"home.passkey.export.warning",
+				"home.passkey.export.consent",
+				"home.passkey.export.export",
+				"home.passkey.export.exporting",
+				"home.passkey.export.close",
+				"home.passkey.export.success",
+				"home.passkey.export.deleteReminder",
+				"home.passkey.export.errors.locked",
+				"home.passkey.export.errors.exportFailed",
+			]),
+		);
+	});
+
+	it("defines the T18 keys that live outside the passkey subtree", () => {
+		// `home.addEntry.templates.passkey` (the template card) and
+		// `home.vault.manager.exportPasskeys` (the toolbar button) sit outside
+		// `home.passkey.*`, so the subtree parity test above cannot see them.
+		const outsideKeys = [
+			"home.addEntry.templates.passkey",
+			"home.vault.manager.exportPasskeys",
+		];
+		for (const key of outsideKeys) {
+			expect(Object.keys(enFlat), `en ${key}`).toContain(key);
+			expect(Object.keys(esFlat), `es ${key}`).toContain(key);
+			expect(enFlat[key].trim(), `en ${key}`).not.toBe("");
+			expect(esFlat[key].trim(), `es ${key}`).not.toBe("");
+		}
+	});
+
+	it("the export warning says the file is unencrypted (T18 consent copy)", () => {
+		// The consent checkbox is only informed if the warning states the two
+		// facts it is consenting to. Pin them in both locales so a translation
+		// edit cannot quietly soften the warning.
+		expect(enFlat["home.passkey.export.warning"]).toContain("UNENCRYPTED");
+		expect(esFlat["home.passkey.export.warning"]).toContain("SIN CIFRAR");
+	});
+
 	it("uses the same interpolation placeholders in both locales", () => {
 		for (const key of passkeyKeys(enFlat)) {
 			expect(placeholders(esFlat[key]), `placeholders of ${key}`).toEqual(

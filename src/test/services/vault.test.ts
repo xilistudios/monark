@@ -1193,6 +1193,172 @@ describe("VaultInstance", () => {
 		});
 	});
 
+	describe("refreshEntries (T18)", () => {
+		it("re-reads a local vault and dispatches the fresh entries", async () => {
+			const freshEntries: Entry[] = [
+				{
+					id: "imported-passkey",
+					entry_type: "passkey",
+					name: "GitHub",
+					created_at: "2026-01-02T03:04:05Z",
+					updated_at: "2026-01-02T03:04:05Z",
+					tags: [],
+					rp_id: "github.com",
+					rp_name: "github.com",
+					credential_id: "3q2-7wABC",
+					user_handle: "AQIDBA",
+					user_name: "octocat",
+					user_display_name: "The Octocat",
+					algorithm: -7,
+					sign_count: 0,
+					discoverable: true,
+					transports: ["internal"],
+					aaguid: "00000000-0000-0000-0000-000000000000",
+				},
+			];
+			mockVault.isLocked = false;
+			mockVault.volatile = {
+				entries: [],
+				credential: "test-password",
+				navigationPath: "/",
+				encryptedData: undefined,
+			};
+			mockState.vault.vaults = [mockVault];
+			vi.mocked(VaultCommands.read).mockResolvedValue({
+				entries: freshEntries,
+			} as never);
+
+			await vaultInstance.refreshEntries();
+
+			// Same read `unlock` performs, with the session credential.
+			expect(VaultCommands.read).toHaveBeenCalledWith(
+				"test-path",
+				"test-password",
+			);
+			expect(mockDispatch).toHaveBeenCalledWith(
+				vaultActions.setVaultEntries({
+					vaultId: "test-vault-id",
+					entries: freshEntries,
+				}),
+			);
+			// The credential and the locked flag are NOT touched: the caller is
+			// already unlocked (that is what makes this different from unlock()).
+			expect(vaultActions.setVaultCredential).not.toHaveBeenCalled();
+			expect(vaultActions.setVaultLocked).not.toHaveBeenCalled();
+			// A local refresh never writes.
+			expect(VaultCommands.write).not.toHaveBeenCalled();
+		});
+
+		it("refreshes a cloud vault through syncWithCloud", async () => {
+			const cloudVault = {
+				...mockVault,
+				storageType: "cloud" as const,
+				providerId: "google-drive",
+				cloudMetadata: {
+					fileId: "cloud-file-id",
+					provider: "google-drive",
+					lastSync: new Date().toISOString(),
+				},
+			};
+			const cloudVaultInstance = new VaultInstance(
+				cloudVault,
+				mockDispatch,
+				mockGetState,
+			);
+			mockState.vault.vaults = [
+				{
+					...cloudVault,
+					isLocked: false,
+					volatile: {
+						...cloudVault.volatile,
+						credential: "test-password",
+					},
+				},
+			];
+			vi.mocked(
+				CloudStorageCommands.getProviderAuthInfo,
+			).mockResolvedValue({
+				authenticated: true,
+				token_expires_at: null,
+			});
+			vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+				entries: [],
+			} as never);
+			vi.mocked(CloudStorageCommands.writeCloudVault).mockResolvedValue(
+				"cloud-file-id",
+			);
+
+			await cloudVaultInstance.refreshEntries();
+
+			// The cloud branch is syncWithCloud: re-read + union merge + push.
+			expect(CloudStorageCommands.readCloudVault).toHaveBeenCalledWith({
+				vaultId: "cloud-file-id",
+				password: "test-password",
+				providerName: "google-drive",
+			});
+			expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalled();
+			// The local read path is not used for a cloud vault.
+			expect(VaultCommands.read).not.toHaveBeenCalled();
+		});
+
+		it("throws when the vault is locked (isLocked flag set)", async () => {
+			// `isVaultLocked` is `isLocked || !credential`; locking clears the
+			// credential too (`lockVault`), so both signals hold here.
+			mockVault.isLocked = true;
+			mockVault.volatile = {
+				entries: [],
+				credential: "",
+				navigationPath: "/",
+				encryptedData: undefined,
+			};
+			mockState.vault.vaults = [mockVault];
+
+			await expect(vaultInstance.refreshEntries()).rejects.toThrow(
+				"Vault must be unlocked to refresh entries",
+			);
+			expect(VaultCommands.read).not.toHaveBeenCalled();
+			expect(mockDispatch).not.toHaveBeenCalled();
+		});
+
+		it("throws when the vault has no session credential (isLocked flag clear)", async () => {
+			// The second half of the predicate: an unlocked-looking record with
+			// no credential must still be refused.
+			mockVault.isLocked = false;
+			mockVault.volatile = {
+				entries: [],
+				credential: "",
+				navigationPath: "/",
+				encryptedData: undefined,
+			};
+			mockState.vault.vaults = [mockVault];
+
+			await expect(vaultInstance.refreshEntries()).rejects.toThrow(
+				"Vault must be unlocked to refresh entries",
+			);
+			expect(VaultCommands.read).not.toHaveBeenCalled();
+			expect(mockDispatch).not.toHaveBeenCalled();
+		});
+
+		it("wraps a read failure with context", async () => {
+			mockVault.isLocked = false;
+			mockVault.volatile = {
+				entries: [],
+				credential: "test-password",
+				navigationPath: "/",
+				encryptedData: undefined,
+			};
+			mockState.vault.vaults = [mockVault];
+			vi.mocked(VaultCommands.read).mockRejectedValue(
+				new Error("Invalid password"),
+			);
+
+			await expect(vaultInstance.refreshEntries()).rejects.toThrow(
+				"Failed to refresh vault entries: Invalid password",
+			);
+			expect(mockDispatch).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("getCloudMetadata", () => {
 		it("should return cloud metadata for cloud vault", () => {
 			const cloudVault = {

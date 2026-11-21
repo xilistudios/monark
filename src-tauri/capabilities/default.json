@@ -18,6 +18,17 @@
     "updater:allow-install",
     "updater:allow-download-and-install",
     "fs:allow-app-read",
+    {
+      "identifier": "fs:allow-write-text-file",
+      "deny": [
+        { "path": "$APPDATA/*" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOCALDATA/*" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$APPCONFIG/*" },
+        { "path": "$APPCONFIG/**" }
+      ]
+    },
     "os:default",
     "biometry:allow-authenticate",
     "biometry:allow-status",
