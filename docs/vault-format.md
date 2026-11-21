@@ -185,6 +185,27 @@ disk fails closed ([`merge.rs`](../src-tauri/src/vault/merge.rs#L231-L240)).
 Full rationale, ceremony model and threat model:
 [`docs/passkeys.md`](passkeys.md).
 
+### Passkey: provisioning path (CXF import/export)
+
+A passkey reaches a vault by exactly two routes: the registration ceremony
+(`passkey_create`) or a **CXF import** (`import_cxf`), and it leaves it only via
+`passkey_delete` or a **CXF export** (`export_cxf`). Both CXF commands go
+through the same store seam as every other passkey command
+([`passkey_import.rs`](../src-tauri/src/commands/passkey_import.rs#L100-L165),
+[`passkey_export.rs`](../src-tauri/src/commands/passkey_export.rs#L112-L142)),
+so the on-disk shape is unchanged: an imported passkey is a plain
+`Entry::Passkey` at the vault root, and an export only *reads* the vault.
+
+Two consequences for this document's format rules:
+
+* An import that brings in at least one passkey bumps the file to **1.1** like
+  any other passkey write (§1.1); an import that imports nothing does not write
+  the file at all, so the version is untouched.
+* The exported `.cxf.json` is **not** a vault file and is **not** encrypted — it
+  is a plaintext key export. See
+  [`docs/passkeys.md` §11](passkeys.md#11-cxf-importexport-f1), in particular
+  §11.8 for the threat model.
+
 ### DateTime Conversion
 
 - **Rust**: Timestamps use `DateTime<Utc>`, serialized with `.to_rfc3339()` ([`models.rs`](../src-tauri/src/models.rs#L428-L436)).
