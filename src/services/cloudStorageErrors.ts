@@ -429,3 +429,48 @@ export function isAuthFailure(error: unknown): boolean {
 		extractErrorMessage(error),
 	);
 }
+/**
+ * The fail-closed message the backend write-merge returns when an incoming view
+ * names a passkey id the stored vault file does not contain.
+ *
+ * Mirror of `restore_passkey` in `src-tauri/src/vault/merge.rs:235-239`:
+ * `"Passkey entry has no stored key material; create or import it first"`.
+ * `CommandError::Validation` serializes as `"Validation Error: {0}"`
+ * (`src-tauri/src/commands/errors.rs:28-29`), so the wire message is
+ * `"Validation Error: Passkey entry has no stored key material; create or import
+ * it first"`.
+ *
+ * **Two-sided pin.** This constant is asserted to equal the literal backend
+ * string by `src/test/services/cloudStorageErrors.test.ts` (T7), and the Rust
+ * side pins the exact message in `vault/merge.rs` and
+ * `vault/tests/cloud_merge.rs`. Change all three together — a drift here would
+ * silently disable the MAYOR-1 self-heal (the classifier would never match, and
+ * every write after a cross-device delete would keep failing with the cryptic
+ * backend error).
+ */
+export const PASSKEY_NO_KEY_MATERIAL_SIGNATURE = "no stored key material";
+
+/**
+ * True when `error` is the backend's fail-closed "this passkey id has no stored
+ * key material" rejection — i.e. the vault view being written names a passkey
+ * the cloud file no longer holds (deleted on another device, MAYOR-1).
+ *
+ * Matches on **both** parts of the wire message: the `Validation Error: ` prefix
+ * (so an auth/IO/quota message that happened to quote the phrase cannot match)
+ * and {@link PASSKEY_NO_KEY_MATERIAL_SIGNATURE}. Substring matching is brittle by
+ * nature; it is the only signal the current wire contract offers (a structured
+ * error code is a follow-up), which is why the message is pinned on both sides.
+ *
+ * Callers must treat a match as "reconcile and retry once", never as "the write
+ * succeeded": the backend still fails closed, and the fix never relaxes it.
+ *
+ * @param error - The failure (raw or `CloudStorageError` wrapper)
+ * @returns `true` when the failure is the fail-closed passkey rejection
+ */
+export function isPasskeyNoKeyMaterialError(error: unknown): boolean {
+	const message = extractErrorMessage(error);
+	return (
+		message.includes("Validation Error:") &&
+		message.includes(PASSKEY_NO_KEY_MATERIAL_SIGNATURE)
+	);
+}

@@ -116,6 +116,11 @@ export default class PasskeyCommands {
 	 * The summaries carry no secret material (no private key, no user handle).
 	 * An empty list is a valid answer, not an error.
 	 *
+	 * No production consumer yet — intentional, not dead code: this is the
+	 * account-picker surface for the F3 assertion flow (the ceremony that would
+	 * call it is not wired to a UI in F0/F1). Kept and tested so the command has
+	 * a typed front-end entry point when that flow lands.
+	 *
 	 * @param vault - Vault to query (see {@link vaultRefFor}).
 	 * @param password - Vault password, used to unlock the vault.
 	 * @param rpId - Relying party id (bare host name, exact match).

@@ -9,7 +9,6 @@ import {
 	isGroupEntry,
 	isPasskeyEntry,
 } from "../interfaces/vault.interface";
-import { findPathById } from "../utils/vaultNavigation";
 import type { Vault } from "../redux/actions/vault";
 import {
 	addVault,
@@ -21,24 +20,60 @@ import {
 	setOAuthState,
 	setProviderStatus,
 	setStorageProviders,
+	setSyncNotice,
 	setVaultCredential,
 	setVaultEntries,
 	setVaultLocked,
 	syncCloudVault,
 } from "../redux/actions/vault";
 import type { AppDispatch, RootState } from "../redux/store";
+import { findPathById } from "../utils/vaultNavigation";
+import { deleteVaultPassword, storeVaultPassword } from "./biometric";
 import { CloudStorageCommands } from "./cloudStorage";
-import { isAuthFailure } from "./cloudStorageErrors";
 import {
-	MANAGER_RETRY_POLICY,
-	NO_RETRY_POLICY,
-	getProviderAuthState,
-} from "./providerAuth";
-import { storeVaultPassword, deleteVaultPassword } from "./biometric";
+	isAuthFailure,
+	isPasskeyNoKeyMaterialError,
+} from "./cloudStorageErrors";
 import VaultCommands from "./commands";
 import PasskeyCommands, { vaultRefFor } from "./passkey";
-import { mergeVaultEntries } from "./vaultMerge";
+import {
+	getProviderAuthState,
+	MANAGER_RETRY_POLICY,
+	NO_RETRY_POLICY,
+} from "./providerAuth";
+import { mergeVaultEntries, reconcilePasskeysToCloud } from "./vaultMerge";
 import { isVaultLocked } from "./vaultState";
+
+/**
+ * Raised when a cloud write cannot be completed because the vault view names a
+ * passkey the cloud file no longer holds, and the one-shot reconciliation could
+ * not heal it (MAYOR-1, layer 2).
+ *
+ * The message is the user-facing, actionable instruction (mirrors the i18n key
+ * `home:vault.passkeyWriteBlocked`): the raw backend message is never rendered
+ * (E13c) — it travels in {@link cause} for debugging only.
+ */
+export class PasskeyWriteBlockedError extends Error {
+	/**
+	 * Underlying failure, kept for debugging (`Error.cause`).
+	 *
+	 * Declared explicitly because the project targets ES2020, whose `Error` type
+	 * has no `cause` member (same pattern as `PasskeyCeremonyError`).
+	 */
+	readonly cause?: unknown;
+
+	/**
+	 * @param message - User-facing, actionable message (never a raw payload).
+	 * @param cause - Underlying failure, kept for debugging.
+	 */
+	constructor(message: string, cause?: unknown) {
+		super(message);
+		this.name = "PasskeyWriteBlockedError";
+		if (cause !== undefined) {
+			this.cause = cause;
+		}
+	}
+}
 
 export class VaultInstance {
 	public readonly id: string;
@@ -524,7 +559,7 @@ export class VaultInstance {
 				);
 			}
 
-			await CloudStorageCommands.writeCloudVault({
+			await this._writeCloudVaultWithPasskeyRecovery({
 				vaultId: cloudFileId,
 				vaultName: vault.name,
 				password: password,
@@ -540,6 +575,99 @@ export class VaultInstance {
 		} else {
 			// Use local vault commands for local vaults
 			await VaultCommands.write(vault.path, password, vaultContent);
+		}
+	}
+
+	/**
+	 * Pushes a cloud vault, recovering **once** from the fail-closed passkey
+	 * rejection (MAYOR-1, layer 2).
+	 *
+	 * The backend write-merge refuses a view that names a passkey id the stored
+	 * cloud file no longer holds (`restore_passkey`, `merge.rs:231-240`) — the
+	 * signature of a passkey deleted on another device. Layer 1
+	 * ({@link syncWithCloud}) reconciles that away during a sync, but a Data edit
+	 * pushed *before* the first sync after the remote delete, or a delete that
+	 * lands between our cloud read and our push (TOCTOU), still hits it. This
+	 * wrapper turns that one failure into a self-heal:
+	 *
+	 * 1. re-read the cloud file (the authority) — a read failure propagates;
+	 * 2. reconcile the **current** Redux view against it, which drops only
+	 *    cloud-absent passkeys and keeps the user's just-saved Data edits;
+	 * 3. if nothing was dropped the error is not ours: re-throw it (no blind
+	 *    retry);
+	 * 4. otherwise dispatch the reconciled view + the notice and retry the write
+	 *    **directly** (never `_saveVault`, so there is no recursion). A second
+	 *    failure propagates.
+	 *
+	 * Every other failure (auth, quota, IO) is re-thrown untouched, so the D1
+	 * auth routing in `syncWithCloud` keeps working. When the recovery cannot
+	 * apply, the caller gets the actionable i18n error with the original as
+	 * `cause` — never the raw backend message (E13c).
+	 *
+	 * @param request - The exact `writeCloudVault` payload built by `_saveVault`.
+	 * @throws Error the actionable "sync this vault" error, or the original one
+	 */
+	private async _writeCloudVaultWithPasskeyRecovery(request: {
+		vaultId: string;
+		vaultName: string;
+		password: string;
+		vaultContent: { updated_at: string; hmac: string; entries: Entry[] };
+		providerName: string;
+	}): Promise<void> {
+		try {
+			await CloudStorageCommands.writeCloudVault(request);
+			return;
+		} catch (error) {
+			if (!isPasskeyNoKeyMaterialError(error)) {
+				throw error;
+			}
+
+			try {
+				const fresh = await CloudStorageCommands.readCloudVault({
+					vaultId: request.vaultId,
+					password: request.password,
+					providerName: request.providerName,
+				});
+
+				const current =
+					this.getState().vault.vaults.find((v) => v.id === this.id)?.volatile
+						?.entries ?? [];
+				const { entries: reconciled, dropped } = reconcilePasskeysToCloud(
+					current,
+					fresh.entries ?? [],
+				);
+
+				// Nothing to heal ⇒ this is not the cross-device case; a retry
+				// would send the identical payload and fail identically.
+				if (dropped.length === 0) {
+					throw error;
+				}
+
+				this.dispatch(
+					setVaultEntries({ vaultId: this.id, entries: reconciled }),
+				);
+				this.dispatch(
+					setSyncNotice({
+						vaultId: this.id,
+						passkeys: dropped.map((passkey) => ({
+							id: passkey.id,
+							name: passkey.name,
+						})),
+					}),
+				);
+
+				await CloudStorageCommands.writeCloudVault({
+					...request,
+					vaultContent: { ...request.vaultContent, entries: reconciled },
+				});
+			} catch (recoveryError) {
+				// The original fail-closed error is the interesting one when the
+				// recovery could not apply; keep it as the cause either way.
+				throw new PasskeyWriteBlockedError(
+					"A passkey in this vault no longer exists in the cloud file (it was deleted on another device). Sync this vault to refresh the view, then try again.",
+					recoveryError === error ? error : recoveryError,
+				);
+			}
 		}
 	}
 
@@ -583,13 +711,36 @@ export class VaultInstance {
 			// conflicts go to the newest `updated_at`; same-id group conflicts are
 			// cloud-authoritative for the group's own metadata (groups carry no
 			// timestamp in the vault format) while their children are unioned.
-			// See `services/vaultMerge.ts` for the rules and the documented
-			// deletion limitation.
+			// See `services/vaultMerge.ts` for the rules.
 			const merged = mergeVaultEntries(
 				vault.volatile.entries ?? [],
 				vaultContent.entries ?? [],
 			);
-			this.dispatch(setVaultEntries({ vaultId: this.id, entries: merged }));
+
+			// Layer 1 of the MAYOR-1 fix: the cloud file is the authority on which
+			// passkeys exist (key material never crosses IPC, and the backend
+			// write-merge fails closed on an id the file lacks). The union merge
+			// deliberately keeps local-only ids, so a passkey deleted on another
+			// device would otherwise survive here and make the push below fail —
+			// wedging every write on this device. Reconcile against the same fresh
+			// read before pushing: only cloud-absent passkey views are dropped
+			// (Data entries and groups are untouched), and the user is told.
+			const { entries: reconciled, dropped } = reconcilePasskeysToCloud(
+				merged,
+				vaultContent.entries ?? [],
+			);
+			this.dispatch(setVaultEntries({ vaultId: this.id, entries: reconciled }));
+			if (dropped.length > 0) {
+				this.dispatch(
+					setSyncNotice({
+						vaultId: this.id,
+						passkeys: dropped.map((passkey) => ({
+							id: passkey.id,
+							name: passkey.name,
+						})),
+					}),
+				);
+			}
 
 			// Push the merged view back so the cloud file converges with this
 			// device. The backend write-merge re-attaches passkey secrets from the

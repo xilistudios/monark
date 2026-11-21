@@ -149,7 +149,7 @@ party. Removal therefore requires the dedicated command:
   (a data entry or group is a `Validation` error, and a rejected delete leaves
   the file untouched), removes the entry and saves.
 * The frontend routes passkey deletion through it and returns **without**
-  `_saveVault()` ([`src/services/vault.ts:353-395`](../src/services/vault.ts#L353-L395)):
+  `_saveVault()` ([`src/services/vault.ts:397-449`](../src/services/vault.ts#L397-L449)):
   a full write would re-attach the passkey the command just removed.
 
 ### Limitation — a stale view that still *mentions* a deleted passkey fails hard
@@ -161,7 +161,8 @@ That is the correct direction (never resurrect, never accept key material from
 IPC), but it means a frontend holding a stale entry gets a hard error on its next
 write. The UI must refresh its state after a delete; the delete path in
 `vault.ts` already dispatches the updated entries
-([`src/services/vault.ts:365-394`](../src/services/vault.ts#L365-L394)).
+([`src/services/vault.ts:397-449`](../src/services/vault.ts#L397-L449)).
+Cross-device, this fail-hard is reconciled by sync — see §6 and §9.2.
 
 ---
 
@@ -434,7 +435,7 @@ party parsing this assertion must stop at byte 37.
 
 ---
 
-## 6. Sync: union merge, cloud-wins groups, resurrection
+## 6. Sync: union merge, cloud-wins groups, passkey reconciliation
 
 Cloud sync merges per entry id in the frontend
 ([`src/services/vaultMerge.ts`](../src/services/vaultMerge.ts), entry point
@@ -455,19 +456,34 @@ Cloud sync merges per entry id in the frontend
   [`docs/cloud-storage-architecture.md` §8.3](cloud-storage-architecture.md#83-sync-semantics-union-merge).
 * Passkey views merge like any other entry; they carry no secret material, and
   the backend write-merge re-attaches the key from the stored vault by entry id
-  (§2).
+  (§2) — but a local-only passkey is reconciled away before the push (see the
+  limitation below).
 * Deterministic order: cloud entries first, then local-only entries in local
   order.
 
-### Limitation — deletion can be resurrected
+### Limitation — deletions propagate through the cloud file, not through sync
 
-Union merge plus preserve-on-write means **a deletion does not propagate by
-itself**: a passkey deleted on device A can be resurrected by a sync from device
-B that still holds it. Deletions propagate reliably only when every device syncs
-after the delete. This is the deliberate trade — resurrection is recoverable
-(delete again), whereas silently dropping a passkey is a lockout at the relying
-party. Tombstones would fix it but would redesign sync, so they are out of scope.
-Documented at [`vaultMerge.ts:37-43`](../src/services/vaultMerge.ts#L37-L43) and
+Union merge plus preserve-on-write means a **Data-entry** deletion does not
+propagate by itself: an entry deleted on device A can be resurrected by a sync
+from device B that still holds it. This is the deliberate trade for Data entries
+— resurrection is recoverable (delete again), whereas silently dropping an entry
+is data loss. Tombstones would fix it but would redesign sync, so they are out of
+scope.
+
+**Passkeys cannot resurrect.** The write-merge fails closed on a passkey id the
+stored cloud file does not contain (`restore_passkey`,
+[`merge.rs:231-240`](../src-tauri/src/vault/merge.rs#L231-L240)): the private key
+exists only in the file and can never be re-attached from a view. The cloud file
+is therefore the authority on which passkeys exist. Since the MAYOR-1 fix,
+`syncWithCloud` reconciles the merged view against the fresh cloud read before
+pushing (`reconcilePasskeysToCloud`,
+[`vaultMerge.ts`](../src/services/vaultMerge.ts)): passkey ids the cloud lacks
+are dropped from the local view — with a user-visible notice naming them — and
+the push succeeds. A write that races a remote delete (or runs before the first
+sync after it) recovers once via the same reconciliation (`_saveVault`), or fails
+with an actionable "sync this vault" message. Dropping a view is not a deletion:
+a passkey that still exists in the cloud file re-appears on the next sync.
+Documented at [`vaultMerge.ts:37-45`](../src/services/vaultMerge.ts#L37-L45) and
 [`docs/cloud-storage-architecture.md` §8.3](cloud-storage-architecture.md#83-sync-semantics-union-merge).
 
 ---
@@ -527,7 +543,13 @@ the destructive one, so the window is most expensive there.
 See §2: `restore_passkey` refuses a view that names a passkey no longer on disk
 ([`merge.rs:231-240`](../src-tauri/src/vault/merge.rs#L231-L240)). The UI must
 refresh after a delete; the delete path already dispatches the new entry list
-([`src/services/vault.ts:365-394`](../src/services/vault.ts#L365-L394)).
+([`src/services/vault.ts:397-449`](../src/services/vault.ts#L397-L449), the
+passkey branch returns at `:449` without `_saveVault()`).
+
+Cross-device, the same fail-hard used to wedge every write on the other device
+until relock/unlock (MAYOR-1). It is now reconciled: see §6 — sync drops
+cloud-absent passkey views before pushing, and a racing write recovers once or
+fails with an actionable message.
 
 ### 9.3 Rate limiting is shared with the vault commands
 
@@ -943,7 +965,7 @@ Stated plainly, because each of these is easy to assume from the feature name:
 | **Registrable-suffix `rpId` matching** | §3.2 — exact match only. |
 | **Sign counter** | Always `0`, never incremented (§5). |
 | **Attestation** | `"none"` with a zero AAGUID (§3.1). |
-| **Tombstones / reliable delete propagation** | §6 — deletion can be resurrected by a stale sync. |
+| **Tombstones / reliable delete propagation** | §6 — Data deletions can be resurrected by a stale sync; passkey deletions are authoritative in the cloud file and reconciled on sync (no tombstones). |
 | **Optimistic concurrency on passkey writes** | §9.1. |
 | **Offline passkey operations on cloud vaults** | §7. |
 | **CXP / HPKE exchange** | §11.10 — CXF is exchanged as a plain file the user writes; there is no encrypted transport and no provider protocol. |

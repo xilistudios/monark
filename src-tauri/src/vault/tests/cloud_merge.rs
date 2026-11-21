@@ -14,7 +14,8 @@
 #[cfg(test)]
 mod tests {
     use crate::commands::errors::CommandError;
-    use crate::models::{Entry, EntryView, SecretPkcs8, Vault, VaultFile, VaultView};
+    use crate::commands::passkey::passkey_delete_with;
+    use crate::models::{Entry, EntryView, Field, SecretPkcs8, Vault, VaultFile, VaultView};
     use crate::storage::providers::CreateFileRequest;
     use crate::storage::{StorageConfig, StorageManager};
     use crate::vault::cloud_lifecycle::{
@@ -477,5 +478,206 @@ mod tests {
         );
 
         Ok(())
+    }
+    /// MAYOR-1 end-to-end: the sync → push composition across two devices.
+    ///
+    /// Device A deletes a passkey (real `passkey_delete_with`, which writes the
+    /// cloud file). Device B still holds the stale view and pushes a full-vault
+    /// write that (1) names the deleted passkey and (2) carries a legitimate
+    /// Data edit of its own.
+    ///
+    /// Step 4 is the **negative control** for the whole fail-closed contract: the
+    /// stale write must be rejected with the exact `Validation` message the
+    /// front-end classifier keys on (`PASSKEY_NO_KEY_MATERIAL_SIGNATURE`), and
+    /// the stored file must be left byte-identical — a rejected write is atomic,
+    /// so B's Data edit does not land either. Step 5 then writes the view the
+    /// front end's `reconcilePasskeysToCloud` produces (same tree minus the
+    /// cloud-absent passkey) and must succeed, with the Data edit present, the
+    /// passkey absent and the version still `1.1`.
+    ///
+    /// If a future change relaxes `restore_passkey` to accept an unknown id,
+    /// step 4 goes red — which is exactly the invariant MAYOR-1 must not break.
+    #[tokio::test]
+    async fn sync_push_after_remote_delete_fails_closed_then_reconciled_write_succeeds(
+    ) -> Result<(), CommandError> {
+        use crate::passkey::store::VaultRef;
+
+        let temp = TempDir::new().expect("temp dir");
+        isolate_cloud_cache(&temp);
+        let manager = local_manager(&temp).await;
+
+        // 1. Device A's cloud file: a group holding one passkey.
+        let disk = disk_vault();
+        let file_id = seed_cloud_vault(&manager, &disk).await?;
+
+        // 2. Device B reads the sanitized view (no key material, invariant 1).
+        let view =
+            read_cloud_vault_with(file_id.clone(), PASSWORD.to_string(), None, &manager).await?;
+        // Borrowed walk: `EntryView` implements `Drop` (zeroize), so the tree
+        // cannot be moved out of.
+        fn view_has_passkey(entries: &[EntryView], id: Uuid) -> bool {
+            entries.iter().any(|entry| match entry {
+                EntryView::Passkey(passkey) => passkey.id == id,
+                EntryView::Group { children, .. } => view_has_passkey(children, id),
+                _ => false,
+            })
+        }
+        assert!(
+            view_has_passkey(&view.entries, PASSKEY_ID),
+            "anti-vacuity: the read view must contain the passkey before the delete"
+        );
+        let serialized = serde_json::to_string(&view).expect("view serializes");
+        assert!(
+            !serialized.contains("private_key"),
+            "invariant 1: the IPC view must never carry key material"
+        );
+
+        // 3. Device A deletes the passkey through the real command.
+        passkey_delete_with(
+            &VaultRef::Cloud {
+                vault_id: file_id.clone(),
+                provider_name: None,
+            },
+            PASSWORD,
+            &PASSKEY_ID.to_string(),
+            &manager,
+        )
+        .await?;
+
+        let after_delete = read_stored_vault(&manager, &file_id).await?;
+        assert!(
+            !contains_passkey(&after_delete.entries, PASSKEY_ID),
+            "the delete must have removed the passkey from the cloud file"
+        );
+
+        // 4. Device B pushes its stale view + a legitimate Data edit → fails
+        //    closed, and the file is untouched (negative control).
+        let data_edit_id = Uuid::from_bytes([0x44; 16]);
+        let mut stale_view = view.clone();
+        stale_view.entries.push(EntryView::Data {
+            id: data_edit_id,
+            name: "Edited on B".to_string(),
+            data_type: "password".to_string(),
+            created_at: fixed_time(),
+            updated_at: fixed_time(),
+            fields: vec![Field {
+                title: "user".to_string(),
+                property: "text".to_string(),
+                value: "octocat".to_string(),
+                secret: false,
+            }],
+            tags: Vec::new(),
+        });
+
+        let before_stale_write = manager
+            .read_file(file_id.clone(), None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+
+        let stale_result = write_cloud_vault_with(
+            "cloud".to_string(),
+            PASSWORD.to_string(),
+            stale_view.clone(),
+            None,
+            None,
+            Some(file_id.clone()),
+            &manager,
+        )
+        .await;
+
+        match stale_result {
+            Err(CommandError::Validation(msg)) => {
+                // Two-sided pin: the message must be EXACTLY the one the TS
+                // classifier keys on (`PASSKEY_NO_KEY_MATERIAL_SIGNATURE` in
+                // `src/services/cloudStorageErrors.ts`, pinned by T7). An exact
+                // comparison, not `contains`: a reworded backend message must
+                // break this test, because it would silently disable the
+                // front-end self-heal.
+                assert_eq!(
+                    msg, "Passkey entry has no stored key material; create or import it first",
+                    "the fail-closed message is pinned on both sides of the IPC boundary"
+                );
+            }
+            other => panic!("expected CommandError::Validation, got {other:?}"),
+        }
+
+        let after_stale_write = manager
+            .read_file(file_id.clone(), None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+        assert_eq!(
+            before_stale_write, after_stale_write,
+            "a rejected cloud write must be atomic: B's Data edit must not land either"
+        );
+
+        // 5. Device B retries with the reconciled view (stale view minus the
+        //    cloud-absent passkey) — exactly what `reconcilePasskeysToCloud`
+        //    emits — and the write succeeds.
+        let mut reconciled_view = stale_view;
+        // `VaultView`/`EntryView` implement `Drop` (zeroize), so nothing can be
+        // moved out of them — edit the tree in place instead of rebuilding it.
+        for entry in reconciled_view.entries.iter_mut() {
+            if let EntryView::Group { children, .. } = entry {
+                children.retain(|child| match child {
+                    EntryView::Passkey(passkey) => passkey.id != PASSKEY_ID,
+                    _ => true,
+                });
+            }
+        }
+
+        write_cloud_vault_with(
+            "cloud".to_string(),
+            PASSWORD.to_string(),
+            reconciled_view,
+            None,
+            None,
+            Some(file_id.clone()),
+            &manager,
+        )
+        .await?;
+
+        let stored = read_stored_vault(&manager, &file_id).await?;
+        assert!(
+            !contains_passkey(&stored.entries, PASSKEY_ID),
+            "the reconciled write must not resurrect the deleted passkey"
+        );
+        assert!(
+            contains_data_entry(&stored.entries, data_edit_id),
+            "the reconciled write must carry B's Data edit"
+        );
+
+        // The version policy is "keep the stored version unless the merged
+        // content holds a passkey" (`version_for_content`): the seeded file is
+        // 1.0 and the reconciled write leaves no passkey behind, so it stays
+        // 1.0 — deleting the last passkey neither downgrades nor upgrades.
+        let stored_bytes = manager
+            .read_file(file_id, None)
+            .await
+            .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
+        let parsed = crate::vault::cloud_lifecycle::parse_vault_from_bytes(&stored_bytes)?;
+        assert_eq!(
+            parsed.version, "1.0",
+            "the stored version must be preserved when no passkey remains"
+        );
+
+        Ok(())
+    }
+
+    /// True when `id` names a passkey anywhere in the tree.
+    fn contains_passkey(entries: &[Entry], id: Uuid) -> bool {
+        entries.iter().any(|entry| match entry {
+            Entry::Passkey { id: passkey_id, .. } => *passkey_id == id,
+            Entry::Group { children, .. } => contains_passkey(children, id),
+            _ => false,
+        })
+    }
+
+    /// True when `id` names a Data entry anywhere in the tree.
+    fn contains_data_entry(entries: &[Entry], id: Uuid) -> bool {
+        entries.iter().any(|entry| match entry {
+            Entry::Data { id: entry_id, .. } => *entry_id == id,
+            Entry::Group { children, .. } => contains_data_entry(children, id),
+            _ => false,
+        })
     }
 }

@@ -824,8 +824,10 @@ export class VaultDetector {
 // src/services/vault.ts (syncWithCloud)
 const vaultContent = await CloudStorageCommands.readCloudVault({ ... });
 const merged = mergeVaultEntries(vault.volatile.entries ?? [], vaultContent.entries ?? []);
-dispatch(setVaultEntries({ vaultId: this.id, entries: merged })); // merged view in Redux
-await this._saveVault();                                          // push merged view + sync timestamp
+const { entries, dropped } = reconcilePasskeysToCloud(merged, vaultContent.entries ?? []);
+dispatch(setVaultEntries({ vaultId: this.id, entries }));        // reconciled view in Redux
+if (dropped.length) dispatch(setSyncNotice({ vaultId: this.id, passkeys: dropped }));
+await this._saveVault();                                         // push + sync timestamp
 ```
 
 `_saveVault()` dispatches `syncCloudVault` itself, so `syncWithCloud` does not
@@ -855,21 +857,32 @@ dispatch the sync timestamp a second time.
   caller can mutate the merged tree without writing through into the inputs.
 - Passkey views (`entry_type: "passkey"`) merge like any other entry. They carry
   no secret material: the backend write-merge re-attaches the private key from
-  the stored cloud vault by entry id.
+  the stored cloud vault by entry id. Their **existence**, however, is
+  cloud-authoritative: `reconcilePasskeysToCloud` runs after the merge and drops
+  the views the fresh cloud read does not contain (see the deletion semantics
+  below).
 
 If the write-back fails, the error propagates out of `syncWithCloud` (wrapped as
 `Failed to sync with cloud: …`). Redux keeps the merged entries, so the next
 sync retries the push; the sync timestamp is **not** updated.
 
-**Deletion limitation (accepted, deliberate).** Union merge combined with
-preserve-on-write means a deletion does not propagate by itself: an entry (in
-particular a passkey) deleted on device A can be **resurrected** by a sync from
-device B that still holds it. Deletions propagate reliably only when every device
-syncs after the delete. This is the conservative trade — resurrection is
-recoverable (delete again), whereas silently dropping a passkey is a lockout at
-the relying party. Tombstones would fix it but would redesign sync, so they are
-out of scope. Explicit passkey deletion goes through the dedicated
-`passkey_delete` command instead of a sync diff.
+**Deletion semantics (Data vs passkey).** Union merge combined with
+preserve-on-write means a **Data-entry** deletion does not propagate by itself:
+an entry deleted on device A can be resurrected by a sync from device B that
+still holds it. Deletions of Data entries propagate reliably only when every
+device syncs after the delete; resurrection is recoverable (delete again).
+Tombstones are out of scope.
+
+**Passkeys are different: they cannot resurrect.** The backend write-merge fails
+closed on a passkey id the stored cloud file lacks (no key material to
+re-attach), so the cloud file is the authority on passkey existence.
+`syncWithCloud` therefore reconciles the merged tree against the fresh cloud read
+before pushing: cloud-absent passkey views are dropped (with a notice), Data
+entries and groups are untouched. A full-vault write that hits the fail-closed
+error recovers once by re-reading and reconciling, or surfaces an actionable
+"sync this vault" error. Explicit passkey deletion still goes through the
+dedicated `passkey_delete` command; the reconciliation never deletes from the
+cloud.
 
 ## 9. Error Handling and Loading States
 

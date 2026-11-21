@@ -5,7 +5,10 @@ import type {
 	GroupEntry,
 	PasskeyEntry,
 } from "../../interfaces/vault.interface";
-import { mergeVaultEntries } from "../../services/vaultMerge";
+import {
+	mergeVaultEntries,
+	reconcilePasskeysToCloud,
+} from "../../services/vaultMerge";
 
 /**
  * Contract tests for the per-entry sync union merge (plan §2.7 / T12).
@@ -682,5 +685,202 @@ describe("mergeVaultEntries — deterministic order", () => {
 		expect(mergeVaultEntries(local, cloud)).toEqual(
 			mergeVaultEntries(local, cloud),
 		);
+	});
+});
+/**
+ * `reconcilePasskeysToCloud` — the MAYOR-1 sync policy step.
+ *
+ * The cloud file is the only authority on passkey *existence* (key material
+ * never crosses IPC and the backend write-merge fails closed on an unknown id),
+ * so a passkey view the fresh cloud read does not contain is a phantom and must
+ * not be pushed. Everything else — Data entries, groups, cloud-present
+ * passkeys — must survive untouched.
+ */
+describe("reconcilePasskeysToCloud", () => {
+	it("T2a: drops a root-level passkey the cloud file does not contain", () => {
+		const merged = [
+			passkeyEntry("phantom", "2026-01-02T00:00:00Z"),
+			dataEntry("data-1", "2026-01-02T00:00:00Z"),
+		];
+
+		const { entries, dropped } = reconcilePasskeysToCloud(merged, [
+			dataEntry("data-1", "2026-01-02T00:00:00Z"),
+		]);
+
+		expect(entries.map((entry) => entry.id)).toEqual(["data-1"]);
+		expect(dropped.map((passkey) => passkey.id)).toEqual(["phantom"]);
+	});
+
+	it("T2b: drops a nested phantom and keeps the (now empty) group", () => {
+		const merged = [
+			groupEntry("group-1", [passkeyEntry("phantom", "2026-01-02T00:00:00Z")]),
+		];
+
+		const { entries, dropped } = reconcilePasskeysToCloud(merged, []);
+
+		expect(entries).toHaveLength(1);
+		const group = entries[0] as GroupEntry;
+		expect(group.entry_type).toBe("group");
+		expect(group.id).toBe("group-1");
+		expect(group.children).toEqual([]);
+		expect(dropped.map((passkey) => passkey.id)).toEqual(["phantom"]);
+	});
+
+	it("T2c: keeps a cloud-present passkey even when the local copy is newer", () => {
+		const merged = [
+			passkeyEntry("pk", "2026-01-05T00:00:00Z", { name: "local name" }),
+		];
+		const cloud = [
+			passkeyEntry("pk", "2026-01-02T00:00:00Z", { name: "cloud name" }),
+		];
+
+		const { entries, dropped } = reconcilePasskeysToCloud(merged, cloud);
+
+		expect(dropped).toEqual([]);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({ id: "pk", name: "local name" });
+	});
+
+	it("T2d: keeps local-only Data entries and local-only groups", () => {
+		const merged = [
+			dataEntry("local-data", "2026-01-02T00:00:00Z"),
+			groupEntry("local-group", [
+				dataEntry("nested-data", "2026-01-02T00:00:00Z"),
+			]),
+		];
+
+		const { entries, dropped } = reconcilePasskeysToCloud(merged, []);
+
+		expect(dropped).toEqual([]);
+		expect(entries.map((entry) => entry.id)).toEqual([
+			"local-data",
+			"local-group",
+		]);
+		const group = entries[1] as GroupEntry;
+		expect(group.children.map((entry) => entry.id)).toEqual(["nested-data"]);
+	});
+
+	it("T2e: keeps cloud-present passkeys that are already in the merged tree", () => {
+		// Reconciliation never *adds* entries: pulling cloud-only passkeys in is
+		// the union merge's job (it runs first). What matters here is that a
+		// passkey the cloud holds is never dropped, whether it sits at the root
+		// or inside a group.
+		const cloud = [
+			passkeyEntry("cloud-pk", "2026-01-02T00:00:00Z"),
+			groupEntry("group-1", [
+				passkeyEntry("nested-cloud-pk", "2026-01-02T00:00:00Z"),
+			]),
+		];
+		const merged = mergeVaultEntries([], cloud);
+
+		const { entries, dropped } = reconcilePasskeysToCloud(merged, cloud);
+
+		expect(dropped).toEqual([]);
+		expect(entries.map((entry) => entry.id)).toEqual(["cloud-pk", "group-1"]);
+		const group = entries[1] as GroupEntry;
+		expect(group.children.map((entry) => entry.id)).toEqual([
+			"nested-cloud-pk",
+		]);
+	});
+
+	it("T2f: returns the dropped views (id + name) in tree order", () => {
+		const merged = [
+			passkeyEntry("first", "2026-01-02T00:00:00Z", { name: "First" }),
+			groupEntry("group-1", [
+				passkeyEntry("second", "2026-01-02T00:00:00Z", { name: "Second" }),
+				passkeyEntry("kept", "2026-01-02T00:00:00Z", { name: "Kept" }),
+			]),
+			passkeyEntry("third", "2026-01-02T00:00:00Z", { name: "Third" }),
+		];
+		const cloud = [passkeyEntry("kept", "2026-01-02T00:00:00Z")];
+
+		const { dropped } = reconcilePasskeysToCloud(merged, cloud);
+
+		expect(dropped.map((passkey) => [passkey.id, passkey.name])).toEqual([
+			["first", "First"],
+			["second", "Second"],
+			["third", "Third"],
+		]);
+	});
+
+	it("T2g: does not mutate the inputs and emits fresh objects", () => {
+		const merged = [
+			groupEntry("group-1", [
+				passkeyEntry("phantom", "2026-01-02T00:00:00Z"),
+				dataEntry("data-1", "2026-01-02T00:00:00Z", {
+					fields: [
+						{
+							title: "user",
+							property: "text",
+							value: "octocat",
+							secret: false,
+						},
+					],
+					tags: ["work"],
+				}),
+			]),
+			passkeyEntry("kept", "2026-01-02T00:00:00Z"),
+		];
+		const cloud = [passkeyEntry("kept", "2026-01-02T00:00:00Z")];
+		const mergedSnapshot = structuredClone(merged);
+		const cloudSnapshot = structuredClone(cloud);
+
+		const { entries } = reconcilePasskeysToCloud(merged, cloud);
+
+		// Inputs untouched.
+		expect(merged).toEqual(mergedSnapshot);
+		expect(cloud).toEqual(cloudSnapshot);
+
+		// No aliasing: mutating the result must not write through into the input.
+		const group = entries[0] as GroupEntry;
+		expect(group).not.toBe(merged[0]);
+		const data = group.children[0] as DataEntry;
+		expect(data).not.toBe((merged[0] as GroupEntry).children[1]);
+		expect(data.fields).not.toBe((merged[0] as GroupEntry).children[1]);
+		data.name = "mutated";
+		data.fields.push({
+			title: "extra",
+			property: "text",
+			value: "x",
+			secret: false,
+		});
+		data.tags.push("mutated");
+
+		const original = (merged[0] as GroupEntry).children[1] as DataEntry;
+		expect(original.name).toBe("Entry data-1");
+		expect(original.fields).toHaveLength(1);
+		expect(original.tags).toEqual(["work"]);
+	});
+
+	it("T2h: is idempotent", () => {
+		const merged = [
+			passkeyEntry("phantom", "2026-01-02T00:00:00Z"),
+			groupEntry("group-1", [
+				passkeyEntry("nested-phantom", "2026-01-02T00:00:00Z"),
+				dataEntry("data-1", "2026-01-02T00:00:00Z"),
+			]),
+		];
+		const cloud = [dataEntry("data-1", "2026-01-02T00:00:00Z")];
+
+		const once = reconcilePasskeysToCloud(merged, cloud);
+		const twice = reconcilePasskeysToCloud(once.entries, cloud);
+
+		expect(twice.entries).toEqual(once.entries);
+		expect(twice.dropped).toEqual([]);
+	});
+
+	/**
+	 * NC (negative control) for T2: the *union merge alone* still keeps the
+	 * local-only passkey. This pins that the reconciliation — not a change to
+	 * the merge's contract — is the piece doing the drop. If someone "fixes"
+	 * MAYOR-1 by making `mergeVaultEntries` drop local-only passkeys, this goes
+	 * red (and so do the merge's own union tests).
+	 */
+	it("NC: the union merge alone still keeps the local-only passkey", () => {
+		const phantom = passkeyEntry("phantom", "2026-01-02T00:00:00Z");
+
+		const merged = mergeVaultEntries([phantom], []);
+
+		expect(merged.map((entry) => entry.id)).toEqual(["phantom"]);
 	});
 });

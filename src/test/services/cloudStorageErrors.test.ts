@@ -23,6 +23,8 @@ import {
 	classifyCloudFailure,
 	isAccessTokenExpired,
 	isAuthFailure,
+	isPasskeyNoKeyMaterialError,
+	PASSKEY_NO_KEY_MATERIAL_SIGNATURE,
 } from "../../services/cloudStorageErrors";
 
 /**
@@ -386,5 +388,69 @@ describe("isAuthFailure", () => {
 		["a 403 status", { status: 403 }, false],
 	] as const)("raw error: %s ⇒ %s", (_label, error, expected) => {
 		expect(isAuthFailure(error)).toBe(expected);
+	});
+});
+/**
+ * T7 — the fail-closed passkey classifier (MAYOR-1).
+ *
+ * The backend rejects a vault view that names a passkey id the stored file does
+ * not contain (`restore_passkey`, `src-tauri/src/vault/merge.rs:235-239`). The
+ * front end keys its one-shot self-heal on that exact message, so the match has
+ * to be **precise**: matching an auth/quota/IO failure would silently retry a
+ * write that can never succeed, and missing the real one would leave the wedge
+ * in place.
+ *
+ * Two-sided pin: the literal below is the full wire message (the Rust
+ * `CommandError::Validation` prefix from `commands/errors.rs:28-29` plus the
+ * `restore_passkey` text). The Rust side pins the same string in
+ * `vault/merge.rs` and `vault/tests/cloud_merge.rs`. Change all three together.
+ */
+describe("isPasskeyNoKeyMaterialError", () => {
+	/** The exact wire message of the fail-closed rejection. */
+	const FAIL_CLOSED_MESSAGE =
+		"Validation Error: Passkey entry has no stored key material; create or import it first";
+
+	it("pins the backend signature constant", () => {
+		expect(PASSKEY_NO_KEY_MATERIAL_SIGNATURE).toBe("no stored key material");
+		expect(FAIL_CLOSED_MESSAGE).toContain(PASSKEY_NO_KEY_MATERIAL_SIGNATURE);
+	});
+
+	it("matches the exact backend message", () => {
+		expect(isPasskeyNoKeyMaterialError(new Error(FAIL_CLOSED_MESSAGE))).toBe(
+			true,
+		);
+	});
+
+	it("matches when the failure is a plain string", () => {
+		expect(isPasskeyNoKeyMaterialError(FAIL_CLOSED_MESSAGE)).toBe(true);
+	});
+
+	it("matches a message-shaped object", () => {
+		expect(isPasskeyNoKeyMaterialError({ message: FAIL_CLOSED_MESSAGE })).toBe(
+			true,
+		);
+	});
+
+	it.each([
+		["an invalid-password rejection", "Invalid Password or Corrupted Vault"],
+		["an IO failure", "Failed to update vault file"],
+		["a quota failure", "Storage quota exceeded. Please free up space."],
+		["an auth failure", "authentication failed: invalid_grant"],
+		[
+			"a Data-only Validation error",
+			"Validation Error: Duplicate entry id in vault content",
+		],
+		// Both parts of the match are load-bearing: the phrase alone (without the
+		// Validation prefix) is not the fail-closed rejection.
+		["the phrase without the Validation prefix", "no stored key material"],
+		["an empty message", ""],
+	] as const)("rejects %s", (_label, message) => {
+		expect(isPasskeyNoKeyMaterialError(new Error(message))).toBe(false);
+	});
+
+	it("rejects a non-error value", () => {
+		expect(isPasskeyNoKeyMaterialError(undefined)).toBe(false);
+		expect(isPasskeyNoKeyMaterialError(null)).toBe(false);
+		expect(isPasskeyNoKeyMaterialError(42)).toBe(false);
 	});
 });

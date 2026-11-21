@@ -41,12 +41,30 @@ export interface OAuthState {
 	isOpen: boolean;
 }
 
+/**
+ * A non-fatal notice telling the user that a sync removed passkey views from
+ * this device because the cloud file no longer holds them (MAYOR-1).
+ *
+ * Deliberately separate from `VaultState.error`: `error` is the fatal banner and
+ * reusing it would conflate "something failed" with "something was reconciled"
+ * (and could mask a real error). It is also built from our own dropped views —
+ * never from a raw backend payload — so nothing opaque reaches the UI (E13c).
+ */
+export interface SyncNotice {
+	/** The vault the reconciliation happened for. */
+	vaultId: string;
+	/** The passkey views that were dropped, so the notice can name them. */
+	passkeys: { id: string; name: string }[];
+}
+
 export interface VaultState {
 	vaults: Vault[];
 	currentVaultId: string | null;
 	loading: boolean;
 	cloudVaultsRefreshing: boolean;
 	error: string | null;
+	// Non-fatal: passkey views dropped by a sync reconciliation (MAYOR-1).
+	syncNotice: SyncNotice | null;
 	// New: Storage provider state
 	providers: StorageProvider[];
 	defaultProvider: string | null;
@@ -250,6 +268,7 @@ const initialState: VaultState = {
 	loading: false,
 	cloudVaultsRefreshing: false,
 	error: null,
+	syncNotice: null,
 	providers: [],
 	defaultProvider: null,
 	providerStatus: {},
@@ -349,6 +368,17 @@ export const vaultSlice = createSlice({
 		},
 		clearError: (state) => {
 			state.error = null;
+		},
+		/**
+		 * Record a non-fatal sync notice: passkey views were dropped from this
+		 * device's view because the cloud file no longer holds them (MAYOR-1).
+		 * Kept apart from `error` so a reconciliation never masks a real failure.
+		 */
+		setSyncNotice: (state, action: PayloadAction<SyncNotice>) => {
+			state.syncNotice = action.payload;
+		},
+		clearSyncNotice: (state) => {
+			state.syncNotice = null;
 		},
 		restoreVaultState: (state, action: PayloadAction<Partial<VaultState>>) => {
 			if (action.payload.vaults && Array.isArray(action.payload.vaults)) {
@@ -757,6 +787,8 @@ export const {
 	setLoading,
 	setError,
 	clearError,
+	setSyncNotice,
+	clearSyncNotice,
 	restoreVaultState,
 	lockVault,
 	setVaultCredential,

@@ -262,6 +262,7 @@
       "insufficientPermissions": "Insufficient permissions. Please check your cloud storage permissions.",
       "storageQuotaExceeded": "Storage quota exceeded. Please free up space.",
       "syncError": "Failed to sync the vault with cloud storage. Your local copy is unchanged; try again.",
+      "passkeyReconciled": "These passkeys were deleted on another device and have been removed from this device's view: {{names}}",
       "dismiss": "Dismiss"
     },
     "addVault": {
@@ -512,7 +513,8 @@
           "title": "No Vault Selected",
           "description": "Select a vault from the sidebar to get started"
         }
-      }
+      },
+      "passkeyWriteBlocked": "A passkey in this vault no longer exists in the cloud file (it was deleted on another device). Sync this vault to refresh the view, then try again."
     },
     "errors": {
       "missingFields": "Please fill in all fields",

@@ -8,10 +8,32 @@ import { StorageProviderType } from '../../../interfaces/cloud-storage.interface
 import { VaultManager } from '../../../services/vault';
 import { vi } from 'vitest';
 
-// Mock the translation hook
+// Mock the translation hook.
+//
+// Mirrors i18next's call shapes: `t(key, fallback)` (the component's usual form)
+// and `t(key, { defaultValue, ...vars })` (used by the passkey reconciliation
+// notice, which interpolates `{{names}}`). Returning the raw options object
+// would make React throw on it, so the mock interpolates like i18next does.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback || key,
+    t: (
+      key: string,
+      options?: string | Record<string, unknown>,
+      maybeOptions?: Record<string, unknown>,
+    ) => {
+      const fallback = typeof options === 'string' ? options : undefined;
+      const vars =
+        typeof options === 'object' && options !== null
+          ? options
+          : (maybeOptions ?? {});
+      const template =
+        typeof vars.defaultValue === 'string'
+          ? vars.defaultValue
+          : fallback || key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
+        String(vars[name] ?? ''),
+      );
+    },
   }),
 }));
 
@@ -371,6 +393,69 @@ describe('VaultSelector', () => {
     await waitFor(() => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
+  });
+
+  /**
+   * MAYOR-1: a sync that dropped passkey views (deleted on another device)
+   * leaves a non-fatal notice in Redux. It is rendered apart from the error
+   * banner and names the passkeys from our own dropped views.
+   */
+  it('renders the passkey reconciliation notice for the current vault', () => {
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+        currentVaultId: mockCloudVault.id,
+        syncNotice: {
+          vaultId: mockCloudVault.id,
+          passkeys: [
+            { id: 'pk-1', name: 'GitHub' },
+            { id: 'pk-2', name: 'Example' },
+          ],
+        },
+      },
+    });
+
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent(
+      /These passkeys were deleted on another device/,
+    );
+    expect(notice).toHaveTextContent('GitHub, Example');
+  });
+
+  it('hides the reconciliation notice for another vault', () => {
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+        currentVaultId: 'some-other-vault',
+        syncNotice: {
+          vaultId: mockCloudVault.id,
+          passkeys: [{ id: 'pk-1', name: 'GitHub' }],
+        },
+      },
+    });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('clears the reconciliation notice when dismissed', () => {
+    const { store } = renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+        currentVaultId: mockCloudVault.id,
+        syncNotice: {
+          vaultId: mockCloudVault.id,
+          passkeys: [{ id: 'pk-1', name: 'GitHub' }],
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByText('Dismiss'));
+
+    expect(store.getState().vault.syncNotice).toBeNull();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('shows error message when refresh fails', async () => {

@@ -262,6 +262,7 @@
       "insufficientPermissions": "Permisos insuficientes. Por favor verifique los permisos de su almacenamiento en la nube.",
       "storageQuotaExceeded": "Cuota de almacenamiento excedida. Por favor libere espacio.",
       "syncError": "No se pudo sincronizar la bóveda con el almacenamiento en la nube. Tu copia local no ha cambiado; inténtalo de nuevo.",
+      "passkeyReconciled": "Estas passkeys se eliminaron en otro dispositivo y se han quitado de la vista de este dispositivo: {{names}}",
       "dismiss": "Descartar"
     },
     "addVault": {
@@ -512,7 +513,8 @@
           "title": "Ninguna Bóveda Seleccionada",
           "description": "Seleccione una bóveda de la barra lateral para comenzar"
         }
-      }
+      },
+      "passkeyWriteBlocked": "Una passkey de esta bóveda ya no existe en el archivo en la nube (se eliminó en otro dispositivo). Sincroniza esta bóveda para actualizar la vista e inténtalo de nuevo."
     },
     "errors": {
       "missingFields": "Por favor complete todos los campos",

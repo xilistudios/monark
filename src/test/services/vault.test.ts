@@ -42,6 +42,7 @@ const mockVaultActions = vi.hoisted(() => ({
 	setVaultEntries: vi.fn(),
 	lockVault: vi.fn(),
 	syncCloudVault: vi.fn(),
+	setSyncNotice: vi.fn(),
 	setStorageProviders: vi.fn(),
 	addStorageProvider: vi.fn(),
 	removeStorageProvider: vi.fn(),
@@ -87,6 +88,7 @@ vi.mock("../../redux/actions/vault", () => ({
 	setVaultCredential: mockVaultActions.setVaultCredential,
 	lockVault: mockVaultActions.lockVault,
 	syncCloudVault: mockVaultActions.syncCloudVault,
+	setSyncNotice: mockVaultActions.setSyncNotice,
 	setStorageProviders: mockVaultActions.setStorageProviders,
 	removeStorageProvider: mockVaultActions.removeStorageProvider,
 	setDefaultStorageProvider: mockVaultActions.setDefaultStorageProvider,
@@ -1190,6 +1192,397 @@ describe("VaultInstance", () => {
 			await expect(vaultInstance.syncWithCloud()).rejects.toThrow(
 				"Cannot sync non-cloud vault",
 			);
+		});
+
+		/**
+		 * MAYOR-1 composition pins.
+		 *
+		 * The backend write-merge fails closed on a passkey id the stored cloud
+		 * file does not contain (a passkey deleted on another device). The sync
+		 * mock below **mirrors that contract** instead of always resolving, so
+		 * these tests exercise the real failure the fix has to survive. Without
+		 * the mirror the suite would be vacuous — the exact failure class the
+		 * close review caught in MENOR-1's consent test.
+		 */
+		describe("MAYOR-1 — cross-device passkey delete", () => {
+			/** The exact wire message of `restore_passkey` (merge.rs:235-239). */
+			const FAIL_CLOSED_MESSAGE =
+				"Validation Error: Passkey entry has no stored key material; create or import it first";
+
+			/** Recursively collects the passkey ids of a tree. */
+			function collectPasskeyIds(entries: Entry[]): Set<string> {
+				const ids = new Set<string>();
+				const walk = (nodes: Entry[]) => {
+					for (const node of nodes) {
+						if (node.entry_type === "group") {
+							walk(node.children ?? []);
+						} else if (node.entry_type === "passkey") {
+							ids.add(node.id);
+						}
+					}
+				};
+				walk(entries);
+				return ids;
+			}
+
+			/** Recursively collects the passkey views of a tree. */
+			function collectPasskeys(entries: Entry[]): Entry[] {
+				const found: Entry[] = [];
+				const walk = (nodes: Entry[]) => {
+					for (const node of nodes) {
+						if (node.entry_type === "group") {
+							walk(node.children ?? []);
+						} else if (node.entry_type === "passkey") {
+							found.push(node);
+						}
+					}
+				};
+				walk(entries);
+				return found;
+			}
+
+			/**
+			 * Makes `writeCloudVault` behave like the backend: reject a payload
+			 * that names a passkey id the cloud file (the mocked
+			 * `readCloudVault` payload) does not hold.
+			 */
+			function mirrorBackendWriteContract(cloudEntries: Entry[]) {
+				const cloudIds = collectPasskeyIds(cloudEntries);
+				vi.mocked(CloudStorageCommands.writeCloudVault).mockImplementation(
+					async ({ vaultContent }) => {
+						for (const passkey of collectPasskeys(vaultContent.entries)) {
+							if (!cloudIds.has(passkey.id)) {
+								throw new Error(FAIL_CLOSED_MESSAGE);
+							}
+						}
+						return "cloud-file-id";
+					},
+				);
+			}
+
+			function phantomPasskey(): Entry {
+				return {
+					id: "phantom-passkey",
+					entry_type: "passkey",
+					name: "GitHub (deleted elsewhere)",
+					created_at: "2026-01-01T00:00:00Z",
+					updated_at: "2026-01-02T00:00:00Z",
+					tags: [],
+					rp_id: "github.com",
+					rp_name: "GitHub",
+					credential_id: "cred-phantom",
+					user_handle: "AQIDBA",
+					user_name: "octocat",
+					user_display_name: "The Octocat",
+					algorithm: -7,
+					sign_count: 0,
+					discoverable: true,
+					transports: ["internal"],
+					aaguid: "00000000-0000-0000-0000-000000000000",
+				};
+			}
+
+			function dataEntry(id: string, name: string): Entry {
+				return {
+					id,
+					entry_type: "entry",
+					name,
+					data_type: "password",
+					created_at: "2026-01-01T00:00:00Z",
+					updated_at: "2026-01-05T00:00:00Z",
+					fields: [],
+					tags: [],
+				};
+			}
+
+			/**
+			 * The action creators are mocked, so no reducer runs: apply the
+			 * dispatched `setVaultEntries` payload to the store by hand, which is
+			 * what the real reducer would do. Returns the applied entries.
+			 */
+			function applyDispatchedEntries(): Entry[] {
+				const calls = vi.mocked(mockVaultActions.setVaultEntries).mock.calls;
+				const last = calls[calls.length - 1]?.[0] as
+					| { vaultId: string; entries: Entry[] }
+					| undefined;
+				if (!last) {
+					throw new Error("setVaultEntries was never dispatched");
+				}
+				const vault = mockState.vault.vaults[0];
+				mockState.vault.vaults = [
+					{
+						...vault,
+						volatile: { ...vault.volatile, entries: last.entries },
+					},
+				];
+				mockGetState.mockReturnValue(mockState);
+				return last.entries;
+			}
+
+			it("T3: sync reconciles the phantom away and the push succeeds", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const cloudData = dataEntry("cloud-data", "From another device");
+				const { cloudVaultInstance } = setupCloudSync([
+					phantomPasskey(),
+					localDataEdit,
+				]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [cloudData],
+				});
+				mirrorBackendWriteContract([cloudData]);
+
+				// The action creators are mocked, so no reducer runs: apply the
+				// dispatched `setVaultEntries` payload by hand, exactly what the
+				// real reducer does between the dispatch and `_saveVault`.
+				vi.mocked(mockVaultActions.setVaultEntries).mockImplementation(
+					(payload: { vaultId: string; entries: Entry[] }) => {
+						const vault = mockState.vault.vaults[0];
+						mockState.vault.vaults = [
+							{
+								...vault,
+								volatile: { ...vault.volatile, entries: payload.entries },
+							},
+						];
+						mockGetState.mockReturnValue(mockState);
+						return undefined as never;
+					},
+				);
+
+				// Without layer 1 the mirrored mock rejects the phantom and this
+				// throws `Failed to sync with cloud: …` — the red→green proof.
+				await expect(cloudVaultInstance.syncWithCloud()).resolves.toBeUndefined();
+
+				// The pushed payload carries the Data edit and no phantom.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+				const written = vi.mocked(CloudStorageCommands.writeCloudVault).mock
+					.calls[0][0] as { vaultContent: { entries: Entry[] } };
+				const writtenIds = written.vaultContent.entries.map(
+					(entry) => entry.id,
+				);
+				expect(writtenIds).toContain("local-data");
+				expect(writtenIds).not.toContain("phantom-passkey");
+
+				// Redux got the reconciled tree (no phantom).
+				const dispatched = vi.mocked(mockVaultActions.setVaultEntries).mock
+					.calls[0][0] as { entries: Entry[] };
+				expect(dispatched.entries.map((entry) => entry.id)).not.toContain(
+					"phantom-passkey",
+				);
+				expect(dispatched.entries.map((entry) => entry.id)).toContain(
+					"local-data",
+				);
+
+				// ...and the user is told which passkey vanished from the view.
+				expect(mockVaultActions.setSyncNotice).toHaveBeenCalledTimes(1);
+				expect(mockVaultActions.setSyncNotice).toHaveBeenCalledWith({
+					vaultId: "test-vault-id",
+					passkeys: [
+						{ id: "phantom-passkey", name: "GitHub (deleted elsewhere)" },
+					],
+				});
+			});
+
+			it("T3-NC: the mirrored write mock really rejects a phantom (anti-vacuity)", async () => {
+				const cloudData = dataEntry("cloud-data", "From another device");
+				mirrorBackendWriteContract([cloudData]);
+
+				await expect(
+					CloudStorageCommands.writeCloudVault({
+						vaultId: "cloud-file-id",
+						vaultName: "Test Vault",
+						password: "test-password",
+						vaultContent: {
+							updated_at: "2026-01-05T00:00:00Z",
+							hmac: "",
+							entries: [phantomPasskey()],
+						},
+						providerName: "google-drive",
+					}),
+				).rejects.toThrow(FAIL_CLOSED_MESSAGE);
+			});
+
+			it("T6: does not over-drop — a cloud-present passkey is kept", async () => {
+				const keptPasskey = phantomPasskey();
+				const { cloudVaultInstance } = setupCloudSync([keptPasskey]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [keptPasskey],
+				});
+				mirrorBackendWriteContract([keptPasskey]);
+
+				await expect(cloudVaultInstance.syncWithCloud()).resolves.toBeUndefined();
+
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+				const written = vi.mocked(CloudStorageCommands.writeCloudVault).mock
+					.calls[0][0] as { vaultContent: { entries: Entry[] } };
+				expect(written.vaultContent.entries.map((entry) => entry.id)).toContain(
+					"phantom-passkey",
+				);
+				expect(mockVaultActions.setSyncNotice).not.toHaveBeenCalled();
+			});
+
+			it("T4: a Data edit before the first sync recovers once (layer 2)", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const cloudData = dataEntry("cloud-data", "From another device");
+				const { cloudVaultInstance } = setupCloudSync([
+					phantomPasskey(),
+					localDataEdit,
+				]);
+
+				// The cloud file lost the passkey (device A deleted it) and holds
+				// a Data entry of its own.
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [cloudData],
+				});
+				// First write fails closed (the phantom is in the payload), the
+				// retry succeeds because layer 2 reconciled it away.
+				vi.mocked(CloudStorageCommands.writeCloudVault)
+					.mockRejectedValueOnce(new Error(FAIL_CLOSED_MESSAGE))
+					.mockResolvedValueOnce("cloud-file-id");
+
+				// `updateEntry` dispatches first; mirror the reducer so the
+				// recovery re-reads the Redux view the user actually has.
+				vi.mocked(mockVaultActions.setVaultEntries).mockImplementation(
+					(payload: { vaultId: string; entries: Entry[] }) => {
+						const vault = mockState.vault.vaults[0];
+						mockState.vault.vaults = [
+							{
+								...vault,
+								volatile: { ...vault.volatile, entries: payload.entries },
+							},
+						];
+						mockGetState.mockReturnValue(mockState);
+						return undefined as never;
+					},
+				);
+
+				await expect(
+					cloudVaultInstance.updateEntry(["local-data"], {
+						name: "Edited offline (renamed)",
+					}),
+				).resolves.toBeUndefined();
+
+				// Exactly two writes: the failed one and the single retry.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(2);
+				const retry = vi.mocked(CloudStorageCommands.writeCloudVault).mock
+					.calls[1][0] as { vaultContent: { entries: Entry[] } };
+				const retryIds = retry.vaultContent.entries.map((entry) => entry.id);
+				expect(retryIds).toContain("local-data");
+				expect(retryIds).not.toContain("phantom-passkey");
+				const retried = retry.vaultContent.entries.find(
+					(entry) => entry.id === "local-data",
+				);
+				expect(retried?.name).toBe("Edited offline (renamed)");
+
+				// Redux reconciled + the notice dispatched + the sync timestamp.
+				const reconciled = applyDispatchedEntries();
+				expect(reconciled.map((entry) => entry.id)).not.toContain(
+					"phantom-passkey",
+				);
+				expect(mockVaultActions.setSyncNotice).toHaveBeenCalledWith({
+					vaultId: "test-vault-id",
+					passkeys: [
+						{ id: "phantom-passkey", name: "GitHub (deleted elsewhere)" },
+					],
+				});
+				expect(vaultActions.syncCloudVault).toHaveBeenCalledTimes(1);
+			});
+
+			it("T5a: a failing retry surfaces the actionable error with the cause", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const { cloudVaultInstance } = setupCloudSync([
+					phantomPasskey(),
+					localDataEdit,
+				]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [],
+				});
+				const original = new Error(FAIL_CLOSED_MESSAGE);
+				const retryFailure = new Error("quota exceeded");
+				vi.mocked(CloudStorageCommands.writeCloudVault)
+					.mockRejectedValueOnce(original)
+					.mockRejectedValueOnce(retryFailure);
+
+				const failure = await cloudVaultInstance
+					.updateEntry(["local-data"], { name: "renamed" })
+					.catch((error: unknown) => error);
+
+				expect(failure).toBeInstanceOf(Error);
+				const error = failure as Error;
+				expect(error.message).toContain(
+					"A passkey in this vault no longer exists in the cloud file",
+				);
+				expect(error.message).toContain("Sync this vault");
+				// The raw backend text never reaches the user-facing message.
+				expect(error.message).not.toContain("no stored key material");
+				expect(error.cause).toBe(retryFailure);
+				// No third call: exactly one recovery attempt.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(2);
+			});
+
+			it("T5b: nothing to reconcile ⇒ the original error propagates, no retry", async () => {
+				// The vault holds no passkey at all, yet the backend rejected the
+				// write: not the cross-device case, so a blind retry is pointless.
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const { cloudVaultInstance } = setupCloudSync([localDataEdit]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [localDataEdit],
+				});
+				vi.mocked(CloudStorageCommands.writeCloudVault).mockRejectedValue(
+					new Error(FAIL_CLOSED_MESSAGE),
+				);
+
+				const failure = await cloudVaultInstance
+					.updateEntry(["local-data"], { name: "renamed" })
+					.catch((error: unknown) => error);
+
+				const error = failure as Error;
+				expect(error.message).toContain(
+					"A passkey in this vault no longer exists in the cloud file",
+				);
+				expect((error.cause as Error).message).toBe(FAIL_CLOSED_MESSAGE);
+				// One write, one read (the recovery re-read), no retry.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+				expect(CloudStorageCommands.readCloudVault).toHaveBeenCalledTimes(1);
+				expect(mockVaultActions.setSyncNotice).not.toHaveBeenCalled();
+			});
+
+			it("T5c: an auth-shaped rejection is never retried by layer 2", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const { cloudVaultInstance } = setupCloudSync([localDataEdit]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [],
+				});
+				vi.mocked(CloudStorageCommands.writeCloudVault).mockRejectedValue(
+					new Error("authentication failed: invalid_grant"),
+				);
+
+				await expect(
+					cloudVaultInstance.updateEntry(["local-data"], { name: "renamed" }),
+				).rejects.toThrow("authentication failed: invalid_grant");
+
+				// D1 routing untouched: the original error propagates verbatim and
+				// layer 2 neither re-reads nor retries.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+				expect(CloudStorageCommands.readCloudVault).not.toHaveBeenCalled();
+				expect(mockVaultActions.setSyncNotice).not.toHaveBeenCalled();
+			});
 		});
 	});
 

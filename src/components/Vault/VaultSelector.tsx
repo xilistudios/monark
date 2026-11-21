@@ -3,6 +3,7 @@ import { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import {
+	clearSyncNotice,
 	isCloudVault,
 	setCurrentVault,
 	updateLastAccessed,
@@ -32,6 +33,10 @@ const VaultSelector = ({
 		(state: RootState) => state.vault.cloudVaultsRefreshing,
 	);
 	const error = useSelector((state: RootState) => state.vault.error);
+	// Non-fatal reconciliation notice (MAYOR-1): a sync dropped passkey views
+	// because the cloud file no longer holds them. Built from our own dropped
+	// views (id + name), never from a raw backend payload (E13c).
+	const syncNotice = useSelector((state: RootState) => state.vault.syncNotice);
 	const providers = useSelector((state: RootState) => state.vault.providers);
 	const providerStatus = useSelector(
 		(state: RootState) => state.vault.providerStatus,
@@ -180,6 +185,30 @@ const VaultSelector = ({
 						type="button"
 						className="btn btn-ghost btn-xs"
 						onClick={() => setSyncError(null)}
+					>
+						{t("vaultSelector.dismiss", "Dismiss")}
+					</button>
+				</div>
+			)}
+
+			{/* MAYOR-1: a sync removed passkey views the cloud file no longer
+			    holds (deleted on another device). Non-fatal, so it lives apart
+			    from the error banner and names the passkeys from our own view. */}
+			{syncNotice && syncNotice.vaultId === currentVaultId && (
+				<div className="alert alert-info mx-2 mb-2" role="status">
+					<span>
+						{t("vaultSelector.passkeyReconciled", {
+							defaultValue:
+								"These passkeys were deleted on another device and have been removed from this device's view: {{names}}",
+							names: syncNotice.passkeys
+								.map((passkey) => passkey.name)
+								.join(", "),
+						})}
+					</span>
+					<button
+						type="button"
+						className="btn btn-ghost btn-xs"
+						onClick={() => dispatch(clearSyncNotice())}
 					>
 						{t("vaultSelector.dismiss", "Dismiss")}
 					</button>

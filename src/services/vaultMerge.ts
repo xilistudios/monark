@@ -32,15 +32,18 @@
  * - Passkey views (`entry_type: "passkey"`) merge like any other entry. They
  *   carry no secret material — the backend write-merge re-attaches the private
  *   key from the stored vault by entry id — so nothing here needs to special
- *   case them.
+ *   case them. Their *existence*, however, is cloud-authoritative: see
+ *   {@link reconcilePasskeysToCloud}, which `syncWithCloud` applies after this
+ *   merge.
  *
- * Deletion limitation (documented, accepted — plan §2.7):
- * union merge + preserve-on-write means a passkey deleted on device A can be
- * resurrected by a sync from device B that still holds it. Deletions propagate
- * reliably only when all devices sync after the delete. This is the
- * conservative trade: resurrection is recoverable (delete again); silent loss
- * of a passkey is a lockout at the RP. Tombstones are explicitly out of scope
- * (they would redesign sync).
+ * Deletion semantics (documented — plan §2.7, MAYOR-1 fix):
+ * union merge + preserve-on-write lets a **Data entry** deleted on device A be
+ * resurrected by a sync from device B that still holds it (recoverable: delete
+ * again). **Passkeys cannot resurrect**: the backend write-merge fails closed on
+ * a passkey id the cloud file lacks, because key material lives only in the
+ * file. `syncWithCloud` therefore applies {@link reconcilePasskeysToCloud} after
+ * this merge, dropping cloud-absent passkey views (with a notice) before the
+ * push. Tombstones are explicitly out of scope.
  *
  * @module services/vaultMerge
  */
@@ -52,7 +55,11 @@ import type {
 	GroupEntry,
 	PasskeyEntry,
 } from "../interfaces/vault.interface";
-import { isDataEntry, isGroupEntry } from "../interfaces/vault.interface";
+import {
+	isDataEntry,
+	isGroupEntry,
+	isPasskeyEntry,
+} from "../interfaces/vault.interface";
 
 /**
  * The entry kinds that carry `updated_at` on the wire (data entries and passkey
@@ -248,4 +255,109 @@ export function mergeVaultEntries(local: Entry[], cloud: Entry[]): Entry[] {
 	}
 
 	return merged;
+}
+/**
+ * Result of {@link reconcilePasskeysToCloud}: the reconciled tree plus the
+ * passkey views that were removed from it.
+ */
+export interface PasskeyReconciliation {
+	/** The reconciled tree, made of fresh objects (no aliasing into the inputs). */
+	entries: Entry[];
+	/** The cloud-absent passkey views that were dropped, in tree order. */
+	dropped: PasskeyEntry[];
+}
+
+/**
+ * Collects the ids of every passkey view in a tree, recursively.
+ *
+ * Used as the "authority set": the cloud file is the only place a passkey's key
+ * material lives, so it is the only authority on which passkey ids exist (see
+ * {@link reconcilePasskeysToCloud}).
+ */
+function collectPasskeyIds(entries: Entry[], into: Set<string>): void {
+	for (const entry of entries) {
+		if (isGroupEntry(entry)) {
+			collectPasskeyIds(
+				Array.isArray(entry.children) ? entry.children : [],
+				into,
+			);
+			continue;
+		}
+
+		if (isPasskeyEntry(entry)) {
+			into.add(entry.id);
+		}
+	}
+}
+
+/**
+ * Reconciles a merged view against the cloud file it will be pushed to.
+ *
+ * The cloud file is the **only** authority on which passkeys exist: key material
+ * never crosses IPC, and the backend write-merge refuses to fabricate it
+ * (`restore_passkey` fails closed on an id the stored file lacks). A passkey id
+ * the fresh cloud read does not contain is therefore already unwritable — a
+ * phantom left behind by a delete on another device (MAYOR-1) or by a clobbering
+ * concurrent write — not pending local data. This function removes exactly those
+ * views so the push can succeed.
+ *
+ * Rules:
+ * - a passkey node whose id is absent from `cloud` is **omitted** and reported
+ *   in `dropped` (the original view, so the caller can name it to the user);
+ * - a **group is always kept**, even when it becomes empty, and its children are
+ *   reconciled recursively (groups are cloud-authoritative metadata and may hold
+ *   Data children — never drop a group);
+ * - everything else (Data entries, cloud-present passkeys) is kept as-is.
+ *
+ * Unlike {@link mergeVaultEntries} this is a **sync policy** step, not a merge
+ * rule: the union merge's contract (keep local-only ids) is unchanged, which is
+ * what makes the two independently testable.
+ *
+ * Pure and deterministic: neither input is mutated, every emitted entry is a
+ * fresh deep copy (via `cloneEntry`), and the output keeps the input order minus
+ * the dropped nodes. Dropping a view is **not** a deletion — nothing is written
+ * and no tombstone is created; a passkey that still exists in the cloud file
+ * re-appears on the next sync through the union merge.
+ *
+ * @param merged - The tree about to be pushed (usually the union merge result).
+ * @param cloud - The entries just read from the cloud file (the authority).
+ * @returns The reconciled tree and the dropped passkey views, in tree order.
+ */
+export function reconcilePasskeysToCloud(
+	merged: Entry[],
+	cloud: Entry[],
+): PasskeyReconciliation {
+	const cloudPasskeyIds = new Set<string>();
+	collectPasskeyIds(cloud, cloudPasskeyIds);
+
+	const dropped: PasskeyEntry[] = [];
+
+	const reconcile = (entries: Entry[]): Entry[] => {
+		const kept: Entry[] = [];
+
+		for (const entry of entries) {
+			if (isGroupEntry(entry)) {
+				// Groups are never dropped: they are cloud-authoritative metadata
+				// and may carry Data children that must survive the reconciliation.
+				kept.push({
+					...entry,
+					children: reconcile(
+						Array.isArray(entry.children) ? entry.children : [],
+					),
+				});
+				continue;
+			}
+
+			if (isPasskeyEntry(entry) && !cloudPasskeyIds.has(entry.id)) {
+				dropped.push(entry);
+				continue;
+			}
+
+			kept.push(cloneEntry(entry));
+		}
+
+		return kept;
+	};
+
+	return { entries: reconcile(merged), dropped };
 }
