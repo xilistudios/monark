@@ -304,10 +304,14 @@ export async function assertPasskeyCeremony(
 /**
  * Renders a backend rejection for the user.
  *
- * The Rust `CommandError` enum serializes to a string (`"Validation Error: …"`,
- * `"Invalid Password or Corrupted Vault"`), so a string is passed through
- * unchanged; an `Error` contributes its message. Anything else becomes a
- * generic sentence rather than `[object Object]`.
+ * The Rust `CommandError` enum derives `Serialize` with no serde attribute
+ * (`src-tauri/src/commands/errors.rs:8-32`), so a raw IPC rejection is the serde
+ * enum **object** (`{"Validation":"…"}`, `{"Authentication":null}`) — the
+ * `#[error("Validation Error: …")]` strings are the `Display` impl and are not
+ * on the wire. The command wrappers in `./passkey` do not unwrap it, so this
+ * helper sees the object and falls back to the generic sentence instead of
+ * rendering `[object Object]`; a `Display` string (or an `Error` built from one)
+ * is still passed through unchanged.
  */
 function describeFailure(error: unknown): string {
 	if (typeof error === "string" && error.length > 0) {

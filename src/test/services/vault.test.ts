@@ -13,8 +13,14 @@ import type { Vault } from "../../redux/actions/vault";
 import * as vaultActions from "../../redux/actions/vault";
 import type { AppDispatch, RootState } from "../../redux/store";
 import { CloudStorageCommands } from "../../services/cloudStorage";
+import { isPasskeyNoKeyMaterialError } from "../../services/cloudStorageErrors";
 import VaultCommands from "../../services/commands";
-import { VaultInstance, VaultManager } from "../../services/vault";
+import {
+	PASSKEY_WRITE_BLOCKED_KEY,
+	PasskeyWriteBlockedError,
+	VaultInstance,
+	VaultManager,
+} from "../../services/vault";
 
 // Mock the dependencies
 const mockVaultCommands = vi.hoisted(() => ({
@@ -43,6 +49,7 @@ const mockVaultActions = vi.hoisted(() => ({
 	lockVault: vi.fn(),
 	syncCloudVault: vi.fn(),
 	setSyncNotice: vi.fn(),
+	clearSyncNotice: vi.fn(),
 	setStorageProviders: vi.fn(),
 	addStorageProvider: vi.fn(),
 	removeStorageProvider: vi.fn(),
@@ -58,9 +65,19 @@ const mockVaultActions = vi.hoisted(() => ({
 vi.mock("../../services/commands", () => ({
 	default: mockVaultCommands,
 }));
-vi.mock("../../services/cloudStorage", () => ({
-	CloudStorageCommands: mockCloudStorageCommands,
-}));
+vi.mock("../../services/cloudStorage", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("../../services/cloudStorage")>();
+	return {
+		// The commands are mocked, but `handleError` is NOT: the MAYOR-1 wire
+		// mocks must build the exact `CloudStorageError` production throws, so
+		// the real wrapper (pretty-printed JSON message + keyword ladder) runs.
+		CloudStorageCommands: {
+			...mockCloudStorageCommands,
+			handleError: actual.CloudStorageCommands.handleError,
+		},
+	};
+});
 // T13: `deleteEntry` routes passkeys through `passkey_delete`. The module is
 // mocked with the real `vaultRefFor` so the assertions can check the exact
 // wire ref the delete is addressed to.
@@ -78,6 +95,16 @@ vi.mock("../../services/passkey", async (importOriginal) => {
 		vaultRefFor: actual.vaultRefFor,
 	};
 });
+// `vault.ts` now imports the configured i18next instance (MENOR-2: the
+// actionable message is localised). The real `src/i18n` module pulls in the
+// Redux store, so it is replaced by a fake that mirrors the `t(key, opts)` shape
+// (same pattern as `passkeyCeremony.test.ts`).
+const mockI18n = vi.hoisted(() => ({
+	t: vi.fn((key: string, options?: { defaultValue?: string }) =>
+		options?.defaultValue !== undefined ? options.defaultValue : key,
+	),
+}));
+vi.mock("../../i18n", () => ({ default: mockI18n }));
 vi.mock("../../redux/actions/vault", () => ({
 	// Every name vault.ts imports must be present here: vitest replaces a name
 	// missing from the factory result with a stub that THROWS when called
@@ -89,6 +116,7 @@ vi.mock("../../redux/actions/vault", () => ({
 	lockVault: mockVaultActions.lockVault,
 	syncCloudVault: mockVaultActions.syncCloudVault,
 	setSyncNotice: mockVaultActions.setSyncNotice,
+	clearSyncNotice: mockVaultActions.clearSyncNotice,
 	setStorageProviders: mockVaultActions.setStorageProviders,
 	removeStorageProvider: mockVaultActions.removeStorageProvider,
 	setDefaultStorageProvider: mockVaultActions.setDefaultStorageProvider,
@@ -1205,9 +1233,34 @@ describe("VaultInstance", () => {
 		 * close review caught in MENOR-1's consent test.
 		 */
 		describe("MAYOR-1 — cross-device passkey delete", () => {
-			/** The exact wire message of `restore_passkey` (merge.rs:235-239). */
-			const FAIL_CLOSED_MESSAGE =
-				"Validation Error: Passkey entry has no stored key material; create or import it first";
+			/**
+			 * The exact `restore_passkey` payload (`src-tauri/src/vault/merge.rs:237`).
+			 *
+			 * This is the **real wire value**: `CommandError` derives `Serialize`
+			 * with no serde attribute (`commands/errors.rs:8-32`), so tauri sends
+			 * the serde enum object `{ Validation: "<this text>" }`. The
+			 * `#[error("Validation Error: {0}")]` string is the `Display` impl and
+			 * never crosses IPC — mocking it (as this suite used to) made layer 2
+			 * look green over a shape that cannot occur.
+			 */
+			const FAIL_CLOSED_TEXT =
+				"Passkey entry has no stored key material; create or import it first";
+
+			/** The raw IPC rejection: the externally-tagged serde enum. */
+			const FAIL_CLOSED_WIRE = { Validation: FAIL_CLOSED_TEXT } as const;
+
+			/**
+			 * The `CloudStorageError` the REAL `CloudStorageCommands.handleError`
+			 * builds from {@link FAIL_CLOSED_WIRE} — i.e. what
+			 * `CloudStorageCommands.writeCloudVault` actually throws, whose
+			 * `.message` is the pretty-printed enum.
+			 */
+			const failClosedWrapped = () =>
+				(
+					CloudStorageCommands as unknown as {
+						handleError: (error: unknown, fallback: string) => unknown;
+					}
+				).handleError(FAIL_CLOSED_WIRE, "Failed to write cloud vault");
 
 			/** Recursively collects the passkey ids of a tree. */
 			function collectPasskeyIds(entries: Entry[]): Set<string> {
@@ -1252,7 +1305,9 @@ describe("VaultInstance", () => {
 					async ({ vaultContent }) => {
 						for (const passkey of collectPasskeys(vaultContent.entries)) {
 							if (!cloudIds.has(passkey.id)) {
-								throw new Error(FAIL_CLOSED_MESSAGE);
+								// The real IPC rejection value: the serde enum object,
+								// exactly what `invoke` rejects with.
+								throw FAIL_CLOSED_WIRE;
 							}
 						}
 						return "cloud-file-id";
@@ -1401,7 +1456,7 @@ describe("VaultInstance", () => {
 						},
 						providerName: "google-drive",
 					}),
-				).rejects.toThrow(FAIL_CLOSED_MESSAGE);
+				).rejects.toEqual(FAIL_CLOSED_WIRE);
 			});
 
 			it("T6: does not over-drop — a cloud-present passkey is kept", async () => {
@@ -1424,6 +1479,37 @@ describe("VaultInstance", () => {
 					"phantom-passkey",
 				);
 				expect(mockVaultActions.setSyncNotice).not.toHaveBeenCalled();
+				// NIT-2: a drop-free sync dismisses a stale banner.
+				expect(mockVaultActions.clearSyncNotice).toHaveBeenCalledTimes(1);
+			});
+
+			it("NIT-2: a drop-free sync clears a stale notice, a dropping one does not", async () => {
+				const keptPasskey = phantomPasskey();
+				const { cloudVaultInstance } = setupCloudSync([keptPasskey]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [keptPasskey],
+				});
+				mirrorBackendWriteContract([keptPasskey]);
+
+				await expect(cloudVaultInstance.syncWithCloud()).resolves.toBeUndefined();
+				expect(mockVaultActions.clearSyncNotice).toHaveBeenCalledTimes(1);
+
+				// Now the cloud loses the passkey: the notice is SET, not cleared.
+				vi.mocked(mockVaultActions.clearSyncNotice).mockClear();
+				vi.mocked(mockVaultActions.setSyncNotice).mockClear();
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-05T00:00:00Z",
+					hmac: "",
+					entries: [],
+				});
+				mirrorBackendWriteContract([]);
+
+				await expect(cloudVaultInstance.syncWithCloud()).resolves.toBeUndefined();
+				expect(mockVaultActions.setSyncNotice).toHaveBeenCalledTimes(1);
+				expect(mockVaultActions.clearSyncNotice).not.toHaveBeenCalled();
 			});
 
 			it("T4: a Data edit before the first sync recovers once (layer 2)", async () => {
@@ -1441,10 +1527,12 @@ describe("VaultInstance", () => {
 					hmac: "",
 					entries: [cloudData],
 				});
-				// First write fails closed (the phantom is in the payload), the
-				// retry succeeds because layer 2 reconciled it away.
+				// First write fails closed (the phantom is in the payload) with the
+				// error the REAL `handleError` builds from the real wire envelope;
+				// the retry succeeds because layer 2 reconciled it away.
+				const wireFailure = failClosedWrapped();
 				vi.mocked(CloudStorageCommands.writeCloudVault)
-					.mockRejectedValueOnce(new Error(FAIL_CLOSED_MESSAGE))
+					.mockRejectedValueOnce(wireFailure)
 					.mockResolvedValueOnce("cloud-file-id");
 
 				// `updateEntry` dispatches first; mirror the reducer so the
@@ -1507,7 +1595,7 @@ describe("VaultInstance", () => {
 					hmac: "",
 					entries: [],
 				});
-				const original = new Error(FAIL_CLOSED_MESSAGE);
+				const original = failClosedWrapped();
 				const retryFailure = new Error("quota exceeded");
 				vi.mocked(CloudStorageCommands.writeCloudVault)
 					.mockRejectedValueOnce(original)
@@ -1517,10 +1605,15 @@ describe("VaultInstance", () => {
 					.updateEntry(["local-data"], { name: "renamed" })
 					.catch((error: unknown) => error);
 
-				expect(failure).toBeInstanceOf(Error);
+				expect(failure).toBeInstanceOf(PasskeyWriteBlockedError);
 				const error = failure as Error;
+				// MENOR-2: the message is read from the i18n key at throw time.
+				expect(mockI18n.t).toHaveBeenCalledWith(
+					PASSKEY_WRITE_BLOCKED_KEY,
+					expect.objectContaining({ defaultValue: expect.any(String) }),
+				);
 				expect(error.message).toContain(
-					"A passkey in this vault no longer exists in the cloud file",
+					"A passkey in this vault is not present in the cloud copy",
 				);
 				expect(error.message).toContain("Sync this vault");
 				// The raw backend text never reaches the user-facing message.
@@ -1541,19 +1634,26 @@ describe("VaultInstance", () => {
 					hmac: "",
 					entries: [localDataEdit],
 				});
+				const wireFailure = failClosedWrapped();
 				vi.mocked(CloudStorageCommands.writeCloudVault).mockRejectedValue(
-					new Error(FAIL_CLOSED_MESSAGE),
+					wireFailure,
 				);
 
 				const failure = await cloudVaultInstance
 					.updateEntry(["local-data"], { name: "renamed" })
 					.catch((error: unknown) => error);
 
+				expect(failure).toBeInstanceOf(PasskeyWriteBlockedError);
 				const error = failure as Error;
+				// NIT-1: the unhealable branch maps to the SAME actionable message,
+				// never the raw pretty-printed enum.
 				expect(error.message).toContain(
-					"A passkey in this vault no longer exists in the cloud file",
+					"A passkey in this vault is not present in the cloud copy",
 				);
-				expect((error.cause as Error).message).toBe(FAIL_CLOSED_MESSAGE);
+				expect(error.message).not.toContain("no stored key material");
+				expect(error.message).not.toContain('"Validation"');
+				// The original fail-closed failure travels as the cause, verbatim.
+				expect(error.cause).toBe(wireFailure);
 				// One write, one read (the recovery re-read), no retry.
 				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
 				expect(CloudStorageCommands.readCloudVault).toHaveBeenCalledTimes(1);
@@ -1579,6 +1679,161 @@ describe("VaultInstance", () => {
 
 				// D1 routing untouched: the original error propagates verbatim and
 				// layer 2 neither re-reads nor retries.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+				expect(CloudStorageCommands.readCloudVault).not.toHaveBeenCalled();
+				expect(mockVaultActions.setSyncNotice).not.toHaveBeenCalled();
+			});
+
+			/**
+			 * FAITHFUL WIRE MOCKS (MAJOR-1).
+			 *
+			 * The tests above used to reject with `new Error("Validation Error: …")`
+			 * — the `Display` string, which **never crosses IPC**. These pin the
+			 * real wire instead: the serde enum object `{ Validation: "…" }` run
+			 * through the REAL `CloudStorageCommands.handleError`, i.e. the exact
+			 * `CloudStorageError` `writeCloudVault` throws in production. Reverting
+			 * the classifier to the `"Validation Error:"`-only match turns both RED.
+			 */
+			it("T7-wire: the real IPC envelope is classified and layer 1 reconciles", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const cloudData = dataEntry("cloud-data", "From another device");
+				const { cloudVaultInstance } = setupCloudSync([
+					phantomPasskey(),
+					localDataEdit,
+				]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [cloudData],
+				});
+				mirrorBackendWriteContract([cloudData]);
+
+				vi.mocked(mockVaultActions.setVaultEntries).mockImplementation(
+					(payload: { vaultId: string; entries: Entry[] }) => {
+						const vault = mockState.vault.vaults[0];
+						mockState.vault.vaults = [
+							{
+								...vault,
+								volatile: { ...vault.volatile, entries: payload.entries },
+							},
+						];
+						mockGetState.mockReturnValue(mockState);
+						return undefined as never;
+					},
+				);
+
+				await expect(cloudVaultInstance.syncWithCloud()).resolves.toBeUndefined();
+
+				// The mock really rejected with the wire shape (anti-vacuity)...
+				const wireFailure = failClosedWrapped() as { message: string };
+				expect(wireFailure.message).toContain('"Validation"');
+				expect(wireFailure.message).not.toContain("Validation Error:");
+				// ...and the classifier reads it.
+				expect(isPasskeyNoKeyMaterialError(wireFailure)).toBe(true);
+
+				// Layer 1 dropped the phantom before pushing: one write, no phantom.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
+				const written = vi.mocked(CloudStorageCommands.writeCloudVault).mock
+					.calls[0][0] as { vaultContent: { entries: Entry[] } };
+				expect(written.vaultContent.entries.map((entry) => entry.id)).toContain(
+					"local-data",
+				);
+				expect(
+					written.vaultContent.entries.map((entry) => entry.id),
+				).not.toContain("phantom-passkey");
+				expect(mockVaultActions.setSyncNotice).toHaveBeenCalledWith({
+					vaultId: "test-vault-id",
+					passkeys: [
+						{ id: "phantom-passkey", name: "GitHub (deleted elsewhere)" },
+					],
+				});
+			});
+
+			it("T4-wire: the real IPC envelope drives layer 2 to reconcile and retry", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const cloudData = dataEntry("cloud-data", "From another device");
+				const { cloudVaultInstance } = setupCloudSync([
+					phantomPasskey(),
+					localDataEdit,
+				]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [cloudData],
+				});
+
+				// The first write rejects with the REAL wire value...
+				const wireFailure = failClosedWrapped() as { message: string };
+				expect(wireFailure.message).toContain('"Validation"');
+				expect(wireFailure.message).not.toContain("Validation Error:");
+				expect(isPasskeyNoKeyMaterialError(wireFailure)).toBe(true);
+				vi.mocked(CloudStorageCommands.writeCloudVault)
+					.mockRejectedValueOnce(wireFailure)
+					.mockResolvedValueOnce("cloud-file-id");
+
+				vi.mocked(mockVaultActions.setVaultEntries).mockImplementation(
+					(payload: { vaultId: string; entries: Entry[] }) => {
+						const vault = mockState.vault.vaults[0];
+						mockState.vault.vaults = [
+							{
+								...vault,
+								volatile: { ...vault.volatile, entries: payload.entries },
+							},
+						];
+						mockGetState.mockReturnValue(mockState);
+						return undefined as never;
+					},
+				);
+
+				await expect(
+					cloudVaultInstance.updateEntry(["local-data"], {
+						name: "Edited offline (renamed)",
+					}),
+				).resolves.toBeUndefined();
+
+				// Exactly two writes: the failed one and the single healed retry.
+				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(2);
+				const retry = vi.mocked(CloudStorageCommands.writeCloudVault).mock
+					.calls[1][0] as { vaultContent: { entries: Entry[] } };
+				const retryIds = retry.vaultContent.entries.map((entry) => entry.id);
+				expect(retryIds).toContain("local-data");
+				expect(retryIds).not.toContain("phantom-passkey");
+				expect(mockVaultActions.setSyncNotice).toHaveBeenCalledWith({
+					vaultId: "test-vault-id",
+					passkeys: [
+						{ id: "phantom-passkey", name: "GitHub (deleted elsewhere)" },
+					],
+				});
+			});
+
+			it("T7-wire-NC: an auth envelope never reaches layer 2", async () => {
+				const localDataEdit = dataEntry("local-data", "Edited offline");
+				const { cloudVaultInstance } = setupCloudSync([localDataEdit]);
+
+				vi.mocked(CloudStorageCommands.readCloudVault).mockResolvedValue({
+					updated_at: "2026-01-04T00:00:00Z",
+					hmac: "",
+					entries: [],
+				});
+				// A real `CommandError::Authentication` envelope, wrapped by the real
+				// handleError: same JSON-blob shape, different variant.
+				const authFailure = (
+					CloudStorageCommands as unknown as {
+						handleError: (error: unknown, fallback: string) => unknown;
+					}
+				).handleError({ Authentication: null }, "Failed to write cloud vault");
+				expect(isPasskeyNoKeyMaterialError(authFailure)).toBe(false);
+				vi.mocked(CloudStorageCommands.writeCloudVault).mockRejectedValue(
+					authFailure,
+				);
+
+				await expect(
+					cloudVaultInstance.updateEntry(["local-data"], { name: "renamed" }),
+				).rejects.toBe(authFailure);
+
+				// Not our failure: no re-read, no retry, no notice.
 				expect(CloudStorageCommands.writeCloudVault).toHaveBeenCalledTimes(1);
 				expect(CloudStorageCommands.readCloudVault).not.toHaveBeenCalled();
 				expect(mockVaultActions.setSyncNotice).not.toHaveBeenCalled();

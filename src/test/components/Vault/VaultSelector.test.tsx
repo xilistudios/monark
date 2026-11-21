@@ -396,7 +396,8 @@ describe('VaultSelector', () => {
   });
 
   /**
-   * MAYOR-1: a sync that dropped passkey views (deleted on another device)
+   * MAYOR-1: a sync that dropped passkey views (absent from the cloud copy this
+   * device could read — deleted on another device, or a stale offline cache)
    * leaves a non-fatal notice in Redux. It is rendered apart from the error
    * banner and names the passkeys from our own dropped views.
    */
@@ -417,9 +418,11 @@ describe('VaultSelector', () => {
     });
 
     const notice = screen.getByRole('status');
+    // NIT-3: the wording does not assert a deletion it cannot know about.
     expect(notice).toHaveTextContent(
-      /These passkeys were deleted on another device/,
+      /These passkeys are not present in the cloud copy this device could read/,
     );
+    expect(notice).toHaveTextContent(/may have been deleted on another device/);
     expect(notice).toHaveTextContent('GitHub, Example');
   });
 

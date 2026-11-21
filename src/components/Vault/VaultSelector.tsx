@@ -191,15 +191,17 @@ const VaultSelector = ({
 				</div>
 			)}
 
-			{/* MAYOR-1: a sync removed passkey views the cloud file no longer
-			    holds (deleted on another device). Non-fatal, so it lives apart
-			    from the error banner and names the passkeys from our own view. */}
+			{/* MAYOR-1: a sync removed passkey views the cloud copy this device
+			    could read does not hold (deleted on another device — or a stale
+			    offline cache, see docs/passkeys.md §6). Non-fatal, so it lives
+			    apart from the error banner and names the passkeys from our own
+			    view. */}
 			{syncNotice && syncNotice.vaultId === currentVaultId && (
 				<div className="alert alert-info mx-2 mb-2" role="status">
 					<span>
 						{t("vaultSelector.passkeyReconciled", {
 							defaultValue:
-								"These passkeys were deleted on another device and have been removed from this device's view: {{names}}",
+								"These passkeys are not present in the cloud copy this device could read (they may have been deleted on another device) and have been removed from this device's view: {{names}}",
 							names: syncNotice.passkeys
 								.map((passkey) => passkey.name)
 								.join(", "),

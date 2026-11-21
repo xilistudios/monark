@@ -12,6 +12,7 @@ import {
 import type { Vault } from "../redux/actions/vault";
 import {
 	addVault,
+	clearSyncNotice,
 	lockVault,
 	removeStorageProvider,
 	setCloudVaults,
@@ -44,14 +45,58 @@ import {
 import { mergeVaultEntries, reconcilePasskeysToCloud } from "./vaultMerge";
 import { isVaultLocked } from "./vaultState";
 
+/** i18n key of the actionable "sync this vault" message (namespace `home`). */
+export const PASSKEY_WRITE_BLOCKED_KEY = "home:vault.passkeyWriteBlocked";
+
+/**
+ * The configured i18next instance, resolved on demand.
+ *
+ * Deliberately a dynamic import: `src/i18n` imports the Redux store, so a static
+ * import here would make every consumer of this module (and every test that
+ * mocks the store) load it. The bundler caches the module after the first call,
+ * so the cost is one promise per process.
+ *
+ * @returns The shared i18next instance
+ */
+async function getI18n(): Promise<typeof import("../i18n").default> {
+	const module = await import("../i18n");
+	return module.default;
+}
+
+/**
+ * The localised, actionable message of {@link PasskeyWriteBlockedError}.
+ *
+ * The configured i18next instance (`src/i18n`) is imported **lazily**, inside
+ * the function: a static import would pull the Redux store into every module
+ * that touches `vault.ts` (and break suites that mock the store). The lookup
+ * runs at throw time, so a runtime language switch is honoured.
+ *
+ * The English literal is the i18next fallback for a missing key;
+ * `src/i18n/locales/{en,es}.json` both carry `vault.passkeyWriteBlocked`.
+ *
+ * @returns The user-facing message in the active language
+ */
+async function passkeyWriteBlockedMessage(): Promise<string> {
+	const i18n = await getI18n();
+	return i18n.t(PASSKEY_WRITE_BLOCKED_KEY, {
+		defaultValue:
+			"A passkey in this vault is not present in the cloud copy this device could read (it may have been deleted on another device). Sync this vault to refresh the view, then try again.",
+	});
+}
+
 /**
  * Raised when a cloud write cannot be completed because the vault view names a
  * passkey the cloud file no longer holds, and the one-shot reconciliation could
  * not heal it (MAYOR-1, layer 2).
  *
- * The message is the user-facing, actionable instruction (mirrors the i18n key
- * `home:vault.passkeyWriteBlocked`): the raw backend message is never rendered
- * (E13c) — it travels in {@link cause} for debugging only.
+ * The message is the user-facing, actionable instruction, localised from the
+ * `home:vault.passkeyWriteBlocked` key (see {@link PASSKEY_WRITE_BLOCKED_KEY}):
+ * the raw backend message is never rendered (E13c) — it travels in {@link cause}
+ * for debugging only.
+ *
+ * The wording deliberately says "not present in the cloud copy this device could
+ * read" rather than "deleted on another device": the cloud read can also be a
+ * stale offline cache (`docs/passkeys.md` §6), in which case nothing was deleted.
  */
 export class PasskeyWriteBlockedError extends Error {
 	/**
@@ -638,9 +683,14 @@ export class VaultInstance {
 				);
 
 				// Nothing to heal ⇒ this is not the cross-device case; a retry
-				// would send the identical payload and fail identically.
+				// would send the identical payload and fail identically. The user
+				// still gets the actionable message (same situation from their
+				// point of view, just unhealable) instead of the raw JSON blob.
 				if (dropped.length === 0) {
-					throw error;
+					throw new PasskeyWriteBlockedError(
+						await passkeyWriteBlockedMessage(),
+						error,
+					);
 				}
 
 				this.dispatch(
@@ -661,10 +711,14 @@ export class VaultInstance {
 					vaultContent: { ...request.vaultContent, entries: reconciled },
 				});
 			} catch (recoveryError) {
+				// Already mapped above (the unhealable branch): do not re-wrap.
+				if (recoveryError instanceof PasskeyWriteBlockedError) {
+					throw recoveryError;
+				}
 				// The original fail-closed error is the interesting one when the
 				// recovery could not apply; keep it as the cause either way.
 				throw new PasskeyWriteBlockedError(
-					"A passkey in this vault no longer exists in the cloud file (it was deleted on another device). Sync this vault to refresh the view, then try again.",
+					await passkeyWriteBlockedMessage(),
 					recoveryError === error ? error : recoveryError,
 				);
 			}
@@ -740,6 +794,10 @@ export class VaultInstance {
 						})),
 					}),
 				);
+			} else {
+				// Symmetric with layer 2: a drop-free sync dismisses a stale
+				// banner instead of leaving it up until the user closes it.
+				this.dispatch(clearSyncNotice());
 			}
 
 			// Push the merged view back so the cloud file converges with this

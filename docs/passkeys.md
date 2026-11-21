@@ -111,7 +111,7 @@ The frontend never holds key material, so a full-vault write
 (`write_vault`) receives a `VaultView` with passkeys that have no `private_key`.
 The backend rebuilds a complete disk vault from it in
 [`vault/merge.rs`](../src-tauri/src/vault/merge.rs), called from
-`update_existing_vault` ([`src-tauri/src/vault/lifecycle.rs:236`](../src-tauri/src/vault/lifecycle.rs#L236)).
+`update_existing_vault` ([`src-tauri/src/vault/lifecycle.rs:243`](../src-tauri/src/vault/lifecycle.rs#L243)).
 
 [`merge_vault_view`](../src-tauri/src/vault/merge.rs#L81) runs four steps:
 
@@ -149,7 +149,7 @@ party. Removal therefore requires the dedicated command:
   (a data entry or group is a `Validation` error, and a rejected delete leaves
   the file untouched), removes the entry and saves.
 * The frontend routes passkey deletion through it and returns **without**
-  `_saveVault()` ([`src/services/vault.ts:397-449`](../src/services/vault.ts#L397-L449)):
+  `_saveVault()` ([`src/services/vault.ts:477-529`](../src/services/vault.ts#L477-L529)):
   a full write would re-attach the passkey the command just removed.
 
 ### Limitation — a stale view that still *mentions* a deleted passkey fails hard
@@ -161,7 +161,7 @@ That is the correct direction (never resurrect, never accept key material from
 IPC), but it means a frontend holding a stale entry gets a hard error on its next
 write. The UI must refresh its state after a delete; the delete path in
 `vault.ts` already dispatches the updated entries
-([`src/services/vault.ts:397-449`](../src/services/vault.ts#L397-L449)).
+([`src/services/vault.ts:477-529`](../src/services/vault.ts#L477-L529)).
 Cross-device, this fail-hard is reconciled by sync — see §6 and §9.2.
 
 ---
@@ -439,17 +439,17 @@ party parsing this assertion must stop at byte 37.
 
 Cloud sync merges per entry id in the frontend
 ([`src/services/vaultMerge.ts`](../src/services/vaultMerge.ts), entry point
-[`mergeVaultEntries`, `vaultMerge.ts:213`](../src/services/vaultMerge.ts#L213)):
+[`mergeVaultEntries`, `vaultMerge.ts:220`](../src/services/vaultMerge.ts#L220)):
 
 * **Union by entry id**, recursive through groups.
 * Same id, **data or passkey entry** → the copy with the **newest `updated_at`
-  wins wholesale** ([`isNewer`, `vaultMerge.ts:80-92`](../src/services/vaultMerge.ts#L80-L92)).
+  wins wholesale** ([`isNewer`, `vaultMerge.ts:87-99`](../src/services/vaultMerge.ts#L87-L99)).
   No field-level merge.
 * Same id, **group** → the group's own metadata (`name`, `data_type`) is
   **cloud-authoritative**; its children are still merged recursively
-  ([`mergeGroupPair`, `vaultMerge.ts:108-118`](../src/services/vaultMerge.ts#L108-L118)).
+  ([`mergeGroupPair`, `vaultMerge.ts:115-121`](../src/services/vaultMerge.ts#L115-L121)).
   This is forced by the vault format, not a preference: `Entry::Group` carries no
-  timestamps ([`models.rs:61-67`](../src-tauri/src/models.rs#L61-L67)), so
+  timestamps ([`models.rs:61-68`](../src-tauri/src/models.rs#L61-L68)), so
   "newest wins" is inert for groups. **Consequence:** a group renamed locally is
   reverted by the next sync — and, because the merged view is pushed back,
   reverted for every device. Documented in
@@ -483,8 +483,20 @@ the push succeeds. A write that races a remote delete (or runs before the first
 sync after it) recovers once via the same reconciliation (`_saveVault`), or fails
 with an actionable "sync this vault" message. Dropping a view is not a deletion:
 a passkey that still exists in the cloud file re-appears on the next sync.
-Documented at [`vaultMerge.ts:37-45`](../src/services/vaultMerge.ts#L37-L45) and
+Documented at [`vaultMerge.ts:39-46`](../src/services/vaultMerge.ts#L39-L46) and
 [`docs/cloud-storage-architecture.md` §8.3](cloud-storage-architecture.md#83-sync-semantics-union-merge).
+
+**A stale offline cache can cause the same drop.** `read_cloud_vault` falls back
+to the locally cached copy of the vault file when the provider read fails in a
+network, auth or HTTP-status way
+([`cloud_lifecycle.rs:278-286`](../src-tauri/src/vault/cloud_lifecycle.rs#L278-L286),
+[`storage/error.rs:127-140`](../src-tauri/src/storage/error.rs#L127-L140)).
+A cache that predates a passkey created on another device therefore makes the
+reconciliation drop that passkey view — the notice says the passkey is *not
+present in the cloud copy this device could read*, not that it was deleted. This
+is temporary and self-correcting: the passkey returns on the next successful
+sync (the union merge re-adds it), and the cloud file is **never** touched
+(preserve-on-write, §2).
 
 ---
 
@@ -543,8 +555,8 @@ the destructive one, so the window is most expensive there.
 See §2: `restore_passkey` refuses a view that names a passkey no longer on disk
 ([`merge.rs:231-240`](../src-tauri/src/vault/merge.rs#L231-L240)). The UI must
 refresh after a delete; the delete path already dispatches the new entry list
-([`src/services/vault.ts:397-449`](../src/services/vault.ts#L397-L449), the
-passkey branch returns at `:449` without `_saveVault()`).
+([`src/services/vault.ts:477-529`](../src/services/vault.ts#L477-L529), the
+passkey branch returns at `:529` without `_saveVault()`).
 
 Cross-device, the same fail-hard used to wedge every write on the other device
 until relock/unlock (MAYOR-1). It is now reconciled: see §6 — sync drops
@@ -671,10 +683,10 @@ claim.
 | Piece | State | Anchor |
 |---|---|---|
 | CXF serde types + strict per-credential validator | **shipped** (T15) | [`src-tauri/src/passkey/cxf.rs`](../src-tauri/src/passkey/cxf.rs) |
-| `import_cxf` command + `PasskeyCommands.importCxf` wrapper | **shipped** (T16) | [`commands/passkey_import.rs:85-97`](../src-tauri/src/commands/passkey_import.rs#L85-L97), [`src/services/passkey.ts:175-188`](../src/services/passkey.ts#L175-L188) |
-| `export_cxf` command + `PasskeyCommands.exportCxf` wrapper | **shipped** (T17) | [`commands/passkey_export.rs:98-108`](../src-tauri/src/commands/passkey_export.rs#L98-L108), [`src/services/passkey.ts:205-212`](../src/services/passkey.ts#L205-L212) |
-| Import UI (passkey template card → import modal) | **shipped** (T18) | [`AddEntryModal.tsx:192-196`](../src/components/Vault/Modals/AddEntryModal.tsx#L192-L196), [`PasskeyImportModal.tsx`](../src/components/Vault/Modals/PasskeyImportModal.tsx) |
-| Export UI (toolbar button + consent modal) | **shipped** (T18) | [`VaultToolbar.tsx:143-148`](../src/components/Vault/VaultToolbar.tsx#L143-L148), [`PasskeyExportModal.tsx`](../src/components/Vault/Modals/PasskeyExportModal.tsx) |
+| `import_cxf` command + `PasskeyCommands.importCxf` wrapper | **shipped** (T16) | [`commands/passkey_import.rs:85-97`](../src-tauri/src/commands/passkey_import.rs#L85-L97), [`src/services/passkey.ts:180-191`](../src/services/passkey.ts#L180-L191) |
+| `export_cxf` command + `PasskeyCommands.exportCxf` wrapper | **shipped** (T17) | [`commands/passkey_export.rs:98-108`](../src-tauri/src/commands/passkey_export.rs#L98-L108), [`src/services/passkey.ts:210-217`](../src/services/passkey.ts#L210-L217) |
+| Import UI (passkey template card → import modal) | **shipped** (T18) | [`AddEntryModal.tsx:191-197`](../src/components/Vault/Modals/AddEntryModal.tsx#L191-L197), [`PasskeyImportModal.tsx`](../src/components/Vault/Modals/PasskeyImportModal.tsx) |
+| Export UI (toolbar button + consent modal) | **shipped** (T18) | [`VaultToolbar.tsx:143-152`](../src/components/Vault/VaultToolbar.tsx#L143-L152), [`PasskeyExportModal.tsx`](../src/components/Vault/Modals/PasskeyExportModal.tsx) |
 
 Both commands are registered in the invoke handler
 ([`lib.rs:291-292`](../src-tauri/src/lib.rs#L291-L292)).
@@ -863,17 +875,17 @@ because the user consented.
 **The UI collects informed consent.** The export modal shows the plaintext
 warning unconditionally, keeps the Export button disabled until the
 acknowledgement checkbox is ticked, and only then calls
-`exportCxf(..., true)` ([`PasskeyExportModal.tsx:171`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L171),
-[`PasskeyExportModal.tsx:209`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L209),
-[`PasskeyExportModal.tsx:124-128`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L124-L128)).
+`exportCxf(..., true)` ([`PasskeyExportModal.tsx:180-194`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L180-L194),
+[`PasskeyExportModal.tsx:214-219`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L214-L219),
+[`PasskeyExportModal.tsx:133-137`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L133-L137)).
 The warning copy is *"This file contains your passkeys' private keys
 UNENCRYPTED. Anyone with the file can sign in as you. Store it securely and
 delete it after use."*
-([`i18n/locales/en.json:665`](../src/i18n/locales/en.json#L665)). The save dialog
+([`i18n/locales/en.json:667`](../src/i18n/locales/en.json#L667)). The save dialog
 runs **before** the export call, so a cancelled dialog never even produces the
-plaintext document ([`PasskeyExportModal.tsx:114-121`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L114-L121)).
+plaintext document ([`PasskeyExportModal.tsx:123-130`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L123-L130)).
 The acknowledgement covers one export only: a second export requires a fresh
-consent ([`PasskeyExportModal.tsx:130-133`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L130-L133)).
+consent ([`PasskeyExportModal.tsx:140-142`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L140-L142)).
 
 **Export is read-only.** The module has no `save_vault` call; the vault file is
 byte-identical afterwards (`export_cxf_is_read_only`,
@@ -911,8 +923,8 @@ Treat it as **equivalent to the vault password for the passkeys it contains**:
   export means re-registering each affected passkey at its RP.
 * Monark does not encrypt the file, does not upload it anywhere, and does not
   delete it: the user picks the destination and is reminded to delete it after
-  use ([`PasskeyExportModal.tsx:171-176`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L171-L176),
-  `passkey.export.deleteReminder` in [`i18n/locales/en.json:671`](../src/i18n/locales/en.json#L671)).
+  use ([`PasskeyExportModal.tsx:196-202`](../src/components/Vault/Modals/PasskeyExportModal.tsx#L196-L202),
+  `passkey.export.deleteReminder` in [`i18n/locales/en.json:672`](../src/i18n/locales/en.json#L672)).
 * The command never logs the document and never puts it in an error message
   ([`passkey_export.rs:31-37`](../src-tauri/src/commands/passkey_export.rs#L31-L37)).
 

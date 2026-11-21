@@ -429,16 +429,159 @@ export function isAuthFailure(error: unknown): boolean {
 		extractErrorMessage(error),
 	);
 }
+
+/**
+ * The variant names of `CommandError` (`src-tauri/src/commands/errors.rs:8-32`),
+ * i.e. the keys of the enum's **serde wire form**.
+ *
+ * `CommandError` derives `Serialize` with **no serde attribute**, so tauri sends
+ * the externally-tagged enum object `{"<Variant>": <payload>}` — e.g.
+ * `{"Validation":"Passkey entry has no stored key material; …"}` for
+ * `Validation(String)`, and `{"Authentication":null}` for the unit variant
+ * `Authentication`. The `#[error("…")]` strings are the `Display` impl and are
+ * **not** part of the wire (see {@link extractCommandErrorVariant}).
+ *
+ * Kept as a frozen list so a variant that is not in it can never be mistaken for
+ * a known one (the extractor only trusts a **single** known key).
+ */
+const COMMAND_ERROR_VARIANTS: readonly string[] = Object.freeze([
+	"Io",
+	"Crypto",
+	"Serialization",
+	"State",
+	"Authentication",
+	"VaultLocked",
+	"VaultAlreadyUnlocked",
+	"UnsupportedVersion",
+	"NotFound",
+	"Validation",
+	"Base64Decode",
+	"InvalidGroupId",
+	"Internal",
+]);
+
+/**
+ * Read the `CommandError` variant name out of a backend failure, structurally.
+ *
+ * The real wire shape is the serde enum object (see
+ * {@link COMMAND_ERROR_VARIANTS}); `CloudStorageCommands.handleError`
+ * (`src/services/cloudStorage.ts:684-724`) then wraps it into a
+ * `CloudStorageError` whose `message` is the **pretty-printed JSON** of that
+ * object (its object branch falls back to `JSON.stringify(error, null, 2)`).
+ * So the variant is recovered from, in order:
+ *
+ * 1. the raw wire object — `error.Validation !== undefined` ⇒ `"Validation"`
+ *    (exactly one known variant key must be present, otherwise `null`);
+ * 2. the wrapped `CloudStorageError` — `JSON.parse(message)` yielding the same
+ *    single-known-key object (also tried on `originalError`);
+ * 3. the legacy **`Display`** string form (`"Validation Error: …"`,
+ *    `"Invalid Password or Corrupted Vault"`, …), accepted only so callers that
+ *    still hand over a `Display` string keep working. It is *not* what the IPC
+ *    boundary sends.
+ *
+ * Returns `null` when the failure carries no recognisable variant.
+ *
+ * @param error - The failure (raw wire object, `CloudStorageError` wrapper, or
+ *   `Display` string)
+ * @returns The `CommandError` variant name, or `null`
+ */
+export function extractCommandErrorVariant(error: unknown): string | null {
+	const fromEnvelope = (value: unknown): string | null => {
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			return null;
+		}
+		const present = COMMAND_ERROR_VARIANTS.filter(
+			(variant) => (value as Record<string, unknown>)[variant] !== undefined,
+		);
+		return present.length === 1 ? present[0] : null;
+	};
+
+	// 1. The raw wire object (`{"Validation": "…"}`).
+	const raw = fromEnvelope(error);
+	if (raw) {
+		return raw;
+	}
+
+	// 2. The wrapped `CloudStorageError`: parse the pretty-printed JSON message
+	//    (and `originalError`, which `handleError` fills from the same object).
+	if (error && typeof error === "object") {
+		const { message, originalError } = error as {
+			message?: unknown;
+			originalError?: unknown;
+		};
+		for (const candidate of [message, originalError]) {
+			if (typeof candidate !== "string" || !candidate.trim().startsWith("{")) {
+				continue;
+			}
+			try {
+				const parsed = fromEnvelope(JSON.parse(candidate));
+				if (parsed) {
+					return parsed;
+				}
+			} catch {
+				// Not JSON: fall through to the Display form below.
+			}
+		}
+	}
+
+	// 3. Legacy `Display` form (`#[error("…")]`), never the wire.
+	const message = extractErrorMessage(error);
+	if (message.startsWith("Validation Error:")) {
+		return "Validation";
+	}
+	if (message.includes("Invalid Password or Corrupted Vault")) {
+		return "Authentication";
+	}
+	if (message.startsWith("IO Error:")) {
+		return "Io";
+	}
+	if (message.startsWith("Crypto Error:")) {
+		return "Crypto";
+	}
+	if (message.startsWith("Serialization Error:")) {
+		return "Serialization";
+	}
+	if (message.startsWith("State Error:")) {
+		return "State";
+	}
+	if (message.startsWith("Unsupported Vault Version:")) {
+		return "UnsupportedVersion";
+	}
+	if (message.startsWith("Not Found:")) {
+		return "NotFound";
+	}
+	if (message.startsWith("Base64 Decode Error:")) {
+		return "Base64Decode";
+	}
+	if (message === "Vault Locked") {
+		return "VaultLocked";
+	}
+	if (message === "Vault Already Unlocked") {
+		return "VaultAlreadyUnlocked";
+	}
+	if (message === "Invalid Group ID provided") {
+		return "InvalidGroupId";
+	}
+	if (message.startsWith("Internal Error:")) {
+		return "Internal";
+	}
+	return null;
+}
+
 /**
  * The fail-closed message the backend write-merge returns when an incoming view
  * names a passkey id the stored vault file does not contain.
  *
- * Mirror of `restore_passkey` in `src-tauri/src/vault/merge.rs:235-239`:
+ * Mirror of `restore_passkey` in `src-tauri/src/vault/merge.rs:231-240`:
  * `"Passkey entry has no stored key material; create or import it first"`.
- * `CommandError::Validation` serializes as `"Validation Error: {0}"`
- * (`src-tauri/src/commands/errors.rs:28-29`), so the wire message is
- * `"Validation Error: Passkey entry has no stored key material; create or import
- * it first"`.
+ *
+ * **The wire is NOT the `Display` string.** `CommandError` derives `Serialize`
+ * with no serde attribute (`src-tauri/src/commands/errors.rs:8-32`), so tauri
+ * sends the serde enum object
+ * `{"Validation":"Passkey entry has no stored key material; create or import it first"}`.
+ * `"Validation Error: {0}"` is the `#[error(...)]` `Display` text only and never
+ * crosses the IPC boundary; `handleError` turns the object into the
+ * pretty-printed JSON string. See {@link extractCommandErrorVariant}.
  *
  * **Two-sided pin.** This constant is asserted to equal the literal backend
  * string by `src/test/services/cloudStorageErrors.test.ts` (T7), and the Rust
@@ -451,13 +594,40 @@ export function isAuthFailure(error: unknown): boolean {
 export const PASSKEY_NO_KEY_MATERIAL_SIGNATURE = "no stored key material";
 
 /**
+ * Every text a failure carries, joined — the search space for the signature.
+ *
+ * {@link extractErrorMessage} alone is not enough for the real wire shape: the
+ * raw serde envelope `{"Validation": "…"}` has no `message` member (so
+ * `extractErrorMessage` yields `""`), and the wrapped `CloudStorageError` puts
+ * the payload inside a JSON string. This joins the extracted message with the
+ * JSON serialisation of the failure, so the signature is found in either shape.
+ *
+ * @param error - The failure (raw wire object, wrapper, or string)
+ * @returns The concatenated text (never throws)
+ */
+function failureText(error: unknown): string {
+	const parts = [extractErrorMessage(error)];
+	try {
+		const serialised = JSON.stringify(error);
+		if (typeof serialised === "string") {
+			parts.push(serialised);
+		}
+	} catch {
+		// Circular / non-serialisable: the extracted message is all we have.
+	}
+	return parts.join("\n");
+}
+
+/**
  * True when `error` is the backend's fail-closed "this passkey id has no stored
  * key material" rejection — i.e. the vault view being written names a passkey
  * the cloud file no longer holds (deleted on another device, MAYOR-1).
  *
- * Matches on **both** parts of the wire message: the `Validation Error: ` prefix
- * (so an auth/IO/quota message that happened to quote the phrase cannot match)
- * and {@link PASSKEY_NO_KEY_MATERIAL_SIGNATURE}. Substring matching is brittle by
+ * Matches on **both** parts of the failure: the `CommandError` variant must be
+ * `Validation` (read structurally from the real serde envelope by
+ * {@link extractCommandErrorVariant}, so an auth/IO/quota failure that happened
+ * to quote the phrase cannot match) **and** the message must carry
+ * {@link PASSKEY_NO_KEY_MATERIAL_SIGNATURE}. The signature match is brittle by
  * nature; it is the only signal the current wire contract offers (a structured
  * error code is a follow-up), which is why the message is pinned on both sides.
  *
@@ -468,9 +638,9 @@ export const PASSKEY_NO_KEY_MATERIAL_SIGNATURE = "no stored key material";
  * @returns `true` when the failure is the fail-closed passkey rejection
  */
 export function isPasskeyNoKeyMaterialError(error: unknown): boolean {
-	const message = extractErrorMessage(error);
-	return (
-		message.includes("Validation Error:") &&
-		message.includes(PASSKEY_NO_KEY_MATERIAL_SIGNATURE)
-	);
+	if (extractCommandErrorVariant(error) !== "Validation") {
+		return false;
+	}
+
+	return failureText(error).includes(PASSKEY_NO_KEY_MATERIAL_SIGNATURE);
 }
