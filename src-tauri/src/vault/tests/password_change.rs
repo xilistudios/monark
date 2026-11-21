@@ -12,6 +12,9 @@
 //!   skipped, the old password would still unlock the vault.
 //! - `change_vault_password_leaves_vault_blob_untouched` — if the command
 //!   re-encrypted the blob (or bumped `updated_at`), the ciphertext would change.
+//! - `change_vault_password_rejects_unsupported_version` — if the
+//!   `version::check_version` gate were dropped (close review NIT-2), a future
+//!   format would be silently rewritten by today's serializer.
 
 #[cfg(test)]
 mod tests {
@@ -260,6 +263,64 @@ mod tests {
         assert_eq!(after.argon2_params.memory_cost_kib, 65_536);
         assert_eq!(after.argon2_params.iterations, 3);
         assert_eq!(after.argon2_params.parallelism, 4);
+
+        Ok(())
+    }
+
+    /// Review NIT-2: `change_vault_password` must refuse a vault whose format
+    /// this build cannot read, exactly like every other read-modify-write path
+    /// (rule E14b: a future format must not be silently rewritten by today's
+    /// serializer).
+    ///
+    /// Negative control: with the `version::check_version` call removed from
+    /// `change_vault_password`, the command succeeds, rewrites the envelope
+    /// with today's serializer and this test fails on the first assertion.
+    #[test]
+    fn change_vault_password_rejects_unsupported_version() -> Result<(), CommandError> {
+        let dir = tempdir().expect("temp dir");
+        let file_path = create_vault(&dir)?;
+
+        // Stamp the file with a format this build cannot read, keeping the
+        // rest of the envelope (and therefore the password) intact.
+        let mut vault_file = io::vault::read_vault(file_path.clone())?;
+        vault_file.version = "9.9".to_string();
+        io::vault::write_vault(file_path.clone(), &vault_file)?;
+        let before =
+            std::fs::read(&file_path).map_err(|_e| CommandError::Io("read failed".to_string()))?;
+
+        match lifecycle::change_vault_password(
+            file_path.clone(),
+            OLD_PASSWORD.to_string(),
+            NEW_PASSWORD.to_string(),
+        ) {
+            Err(CommandError::UnsupportedVersion(reported)) => {
+                assert_eq!(reported, "9.9", "the offending version must be echoed");
+            }
+            other => panic!("expected UnsupportedVersion, got {other:?}"),
+        }
+
+        // Nothing was rewritten: the file is byte-identical.
+        let after =
+            std::fs::read(&file_path).map_err(|_e| CommandError::Io("read failed".to_string()))?;
+        assert_eq!(
+            before, after,
+            "a refused version must not rewrite the vault file"
+        );
+
+        // Negative control: the very same content is accepted once the version
+        // is supported, so the rejection is about the version and nothing else.
+        let mut vault_file = io::vault::read_vault(file_path.clone())?;
+        vault_file.version = crate::vault::version::CURRENT_VAULT_VERSION.to_string();
+        io::vault::write_vault(file_path.clone(), &vault_file)?;
+        lifecycle::change_vault_password(
+            file_path.clone(),
+            OLD_PASSWORD.to_string(),
+            NEW_PASSWORD.to_string(),
+        )?;
+        assert!(
+            lifecycle::read_vault(file_path, NEW_PASSWORD.to_string()).is_ok(),
+            "the same vault must re-wrap once the version is supported"
+        );
 
         Ok(())
     }

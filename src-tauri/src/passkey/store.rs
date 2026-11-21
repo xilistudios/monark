@@ -207,13 +207,11 @@ async fn load_cloud_vault(
         .map_err(|_e| CommandError::Io("Failed to read vault file".to_string()))?;
 
     // Refresh the offline copy with the bytes we just fetched (encrypted
-    // envelope only). Failure is non-fatal, like in `read_cloud_vault`.
-    if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, vault_id, &vault_data) {
-        println!(
-            "[passkey::store] Failed to cache vault '{}' locally: {}",
-            vault_id, cache_err
-        );
-    }
+    // envelope only). Failure is non-fatal, like in `read_cloud_vault`: the
+    // cache is an optimisation, not the source of truth. The error is dropped
+    // on purpose (review NIT-1): this module must not grow a log line that a
+    // future edit could point at key material.
+    let _ = cache_vault_bytes(&provider_cache_key, vault_id, &vault_data);
 
     let vault_file = parse_vault_from_bytes(&vault_data)?;
     version::check_version(&vault_file.version)?;
@@ -253,13 +251,9 @@ async fn save_cloud_vault(
         .await
         .map_err(|_e| CommandError::Io("Failed to update vault file".to_string()))?;
 
-    // The cache holds the encrypted envelope only, never plaintext.
-    if let Err(cache_err) = cache_vault_bytes(&provider_cache_key, vault_id, &cached_bytes) {
-        println!(
-            "[passkey::store] Failed to update cached vault '{}' locally: {}",
-            vault_id, cache_err
-        );
-    }
+    // The cache holds the encrypted envelope only, never plaintext. As above,
+    // a cache failure is non-fatal and deliberately silent (review NIT-1).
+    let _ = cache_vault_bytes(&provider_cache_key, vault_id, &cached_bytes);
 
     Ok(())
 }

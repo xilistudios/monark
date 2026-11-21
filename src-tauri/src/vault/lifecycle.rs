@@ -149,6 +149,13 @@ pub fn change_vault_password(
 
     crate::vault::rate_limit::check_attempts(&canonical_str)?;
     let mut vault_file = io::vault::read_vault(canonical_str.clone())?;
+    // Refuse to touch a format this build cannot read (review NIT-2, rule
+    // E14b): the re-wrap rewrites `argon2_params`/`credentials` with today's
+    // serializer, so a future format must not be silently rewritten by it.
+    // The check runs before the rate-limit accounting of the password, exactly
+    // like the read and update paths (`lifecycle.rs`, `cloud_lifecycle.rs`,
+    // `passkey/store.rs`).
+    version::check_version(&vault_file.version)?;
 
     // Prove the old password before touching anything: a wrong password is a
     // failed attempt, a right one clears the counter. The unwrap is repeated

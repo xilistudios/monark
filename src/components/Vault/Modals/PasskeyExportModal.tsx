@@ -26,8 +26,10 @@ export const DEFAULT_EXPORT_FILE_NAME = "monark-passkeys.cxf.json";
  * — a hard gate in Rust, checked before the vault is even opened — and this
  * modal is where that consent is *informed*: the warning is always visible, the
  * Export button is **disabled** until the acknowledgement checkbox is ticked,
- * and `exportCxf(..., true)` is only called from the click handler of that
- * enabled button.
+ * and `handleExport` itself returns early while `consent` is false, so the
+ * command can only be reached through a consented click. The `disabled`
+ * attribute is the affordance; the guard inside the handler is the gate (a
+ * future markup change cannot make the export unconditional).
  *
  * ## Flow
  *
@@ -88,6 +90,13 @@ export function PasskeyExportModal() {
 	};
 
 	const handleExport = async (): Promise<void> => {
+		// Consent is a handler-level gate, not just the button's `disabled`
+		// attribute (review MENOR-1): a future refactor of the markup must not
+		// be able to make the export unconditional. The backend refuses
+		// `consent !== true` too, so this is the UI half of the same rule.
+		if (!consent) {
+			return;
+		}
 		// Re-entrancy: `setLoading(true)` is a state update, so two clicks in the
 		// same tick would both get past it and open two save dialogs.
 		if (loading) {

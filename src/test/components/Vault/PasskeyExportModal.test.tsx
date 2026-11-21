@@ -16,7 +16,11 @@
  *    never produces one, so a console assertion there cannot catch a leak);
  * 6. the success message carries the reminder to delete the file;
  * 7. the handler-level consent guard (not just the `disabled` attribute) and
- *    the mid-flight close guard are both pinned by their own tests.
+ *    the mid-flight close guard are both pinned by their own tests. The
+ *    consent one invokes the rendered `onClick` prop directly with the
+ *    checkbox unticked: stripping `disabled` and clicking does NOT reach the
+ *    handler (React re-applies the prop before the event), so that approach
+ *    would pin the attribute instead of the guard (close review MENOR-1).
  *
  * Mocks are registered before the module under test is imported (vitest hoists
  * `vi.mock` above the imports). `waitFor` from Testing Library is unreliable
@@ -24,7 +28,7 @@
  */
 
 import { configureStore } from "@reduxjs/toolkit";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { I18nextProvider } from "react-i18next";
 import { Provider } from "react-redux";
@@ -380,22 +384,48 @@ describe("PasskeyExportModal", () => {
 		expect(logged).not.toContain(SESSION_PASSWORD);
 	});
 
-	it("refuses to export when the handler is reached without consent (guard NC)", async () => {
+	it("refuses to export when the handler runs without consent (guard NC)", async () => {
 		// The markup layer (`disabled`) is pinned by the two tests above. This
-		// one pins the *handler* guard: the attribute is stripped so the click
-		// really reaches `handleExport`, and only the `if (!consent) return`
-		// can keep the command from running.
-		const user = userEvent.setup();
+		// one pins the *handler* guard, and it has to reach the handler for
+		// real. Stripping the `disabled` attribute and clicking does NOT work:
+		// React re-renders between `removeAttribute` and the `click` event and
+		// re-applies the prop, so the click dies on the attribute (the previous
+		// version of this test stayed green even with a `throw` on the first
+		// line of `handleExport` — it measured the render attribute, not the
+		// guard).
+		//
+		// So the handler is invoked the way React would invoke it — through the
+		// `onClick` prop of the button — while consent is **false** (the
+		// checkbox was never ticked). Only the handler's own
+		// `if (!consent) return;` can keep the command from running here.
+		//
+		// Mutation check (see the report): deleting that guard makes the
+		// `not.toHaveBeenCalled()` assertions below fail.
 		renderModal();
 
+		expect(consentCheckbox().checked).toBe(false);
 		const button = exportButton();
-		button.removeAttribute("disabled");
-		expect(button).not.toBeDisabled();
+		expect(button).toBeDisabled();
 
-		await user.click(button);
+		// The React props object React attaches to the host element; its
+		// `onClick` is exactly the `handleExport` the component rendered.
+		const propsKey = Object.keys(button).find((key) =>
+			key.startsWith("__reactProps$"),
+		);
+		expect(propsKey).toBeDefined();
+		const onClick = (
+			button as unknown as Record<string, { onClick?: () => void }>
+		)[propsKey as string].onClick;
+		expect(typeof onClick).toBe("function");
 
-		expect(mockExportCxf).not.toHaveBeenCalled();
+		// React 18 wraps the handler in an event; calling it directly is the
+		// same code path a consented click takes.
+		await act(async () => {
+			onClick?.();
+		});
+
 		expect(mockDialogSave).not.toHaveBeenCalled();
+		expect(mockExportCxf).not.toHaveBeenCalled();
 		expect(mockWriteTextFile).not.toHaveBeenCalled();
 	});
 
