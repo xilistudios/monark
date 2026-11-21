@@ -1,5 +1,5 @@
 use crate::commands::errors::{CommandError, CommandResult};
-use crate::models::Entry;
+use crate::models::EntryView;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Error as IoError, ErrorKind};
@@ -76,8 +76,10 @@ impl Default for VaultSummary {
 pub struct VaultVolatile {
     #[serde(default)]
     pub credential: String,
+    /// Sanitized IPC entries: the volatile mirror can never hold a passkey
+    /// private key (see `models::EntryView`).
     #[serde(default)]
-    pub entries: Vec<Entry>,
+    pub entries: Vec<EntryView>,
     #[serde(default)]
     #[zeroize(skip)]
     pub navigation_path: Option<String>,
@@ -267,4 +269,129 @@ pub async fn save_vault_state(
         .set(new_state)
         .await
         .map_err(|_err| CommandError::State("Failed to persist vault state".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{EntryView, PasskeyView};
+    use chrono::{DateTime, Utc};
+    use serde_json::Value;
+
+    fn fixed_time() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .expect("fixed timestamp parses")
+            .with_timezone(&Utc)
+    }
+
+    fn sample_passkey_view() -> PasskeyView {
+        PasskeyView {
+            id: uuid::Uuid::from_bytes([0x11; 16]),
+            name: "GitHub".to_string(),
+            created_at: fixed_time(),
+            updated_at: fixed_time(),
+            tags: vec!["work".to_string()],
+            rp_id: "github.com".to_string(),
+            rp_name: "GitHub".to_string(),
+            credential_id: vec![0xde, 0xad, 0xbe, 0xef],
+            user_handle: vec![0x01, 0x02, 0x03, 0x04],
+            user_name: "octocat".to_string(),
+            user_display_name: "The Octocat".to_string(),
+            algorithm: -7,
+            sign_count: 0,
+            discoverable: true,
+            transports: vec!["internal".to_string()],
+            aaguid: uuid::Uuid::nil(),
+        }
+    }
+
+    fn sample_state() -> VaultStateData {
+        VaultStateData {
+            vaults: vec![VaultSummary {
+                id: "vault-1".to_string(),
+                name: "Personal".to_string(),
+                path: "/tmp/personal.monark".to_string(),
+                volatile: Some(VaultVolatile {
+                    credential: "secret-credential".to_string(),
+                    entries: vec![
+                        EntryView::Group {
+                            id: uuid::Uuid::from_bytes([0x33; 16]),
+                            name: "Root".to_string(),
+                            data_type: "group".to_string(),
+                            children: vec![EntryView::Passkey(sample_passkey_view())],
+                        },
+                        EntryView::Passkey(sample_passkey_view()),
+                    ],
+                    navigation_path: Some("/".to_string()),
+                    encrypted_data: None,
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// Acceptance criterion 4: the volatile mirror round-trips a passkey view and
+    /// its JSON never contains a private key.
+    #[test]
+    fn vault_state_volatile_sanitized() {
+        let state = sample_state();
+        let json = serde_json::to_string(&state).expect("state serializes");
+
+        assert!(
+            !json.contains("private_key"),
+            "the persisted volatile mirror must not contain a private_key key: {json}"
+        );
+        assert!(
+            json.contains("\"entry_type\":\"passkey\""),
+            "the passkey view must survive serialization: {json}"
+        );
+
+        let back: VaultStateData = serde_json::from_str(&json).expect("state deserializes");
+        assert_eq!(back.vaults.len(), 1);
+        let volatile = back.vaults[0]
+            .volatile
+            .as_ref()
+            .expect("volatile survives the round-trip");
+        assert_eq!(volatile.entries.len(), 2);
+        assert_eq!(volatile.credential, "secret-credential");
+    }
+
+    /// Negative control: a payload that *does* carry a private key cannot be
+    /// represented by the mirror — the field has no counterpart in `EntryView`,
+    /// so it is dropped on the way in and never re-serialized on the way out.
+    #[test]
+    fn vault_state_drops_private_key_field() {
+        let mut value: Value =
+            serde_json::to_value(sample_state()).expect("state serializes to a value");
+        value["vaults"][0]["volatile"]["entries"][1]["private_key"] = Value::String("AAAA".into());
+
+        let parsed: VaultStateData =
+            serde_json::from_value(value).expect("unknown fields are ignored by serde");
+        let reserialized = serde_json::to_string(&parsed).expect("state re-serializes");
+        assert!(
+            !reserialized.contains("private_key"),
+            "the view type has no private_key field, so it can never be persisted: {reserialized}"
+        );
+    }
+
+    /// `merge_volatile` still blanks the credential (unchanged behaviour) and
+    /// now returns sanitized entries.
+    #[test]
+    fn merge_volatile_blanks_credential() {
+        let state = sample_state();
+        let (persistable, volatile) = VaultStateManager::partition_volatile(state);
+        assert!(
+            persistable.vaults[0].volatile.is_none(),
+            "volatile data is never persisted"
+        );
+
+        let merged = VaultStateManager::merge_volatile(persistable, &volatile);
+        let merged_volatile = merged.vaults[0]
+            .volatile
+            .as_ref()
+            .expect("volatile is merged back");
+        assert_eq!(merged_volatile.credential, "");
+        assert_eq!(merged_volatile.entries.len(), 2);
+    }
 }

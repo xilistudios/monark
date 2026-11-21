@@ -1,6 +1,11 @@
 import { useState, useCallback, useContext, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type Entry, isGroupEntry } from '../../interfaces/vault.interface';
+import {
+  type Entry,
+  isDataEntry,
+  isGroupEntry,
+  isPasskeyEntry,
+} from '../../interfaces/vault.interface';
 import { VaultManager } from '../../services/vault';
 import { VaultModalContext } from './VaultContext';
 import { Modal } from '../UI/Modal';
@@ -91,7 +96,9 @@ const TreeNode = ({
       onNavigate(vaultId, currentPath);
     } else if (onEntrySelect) {
       onEntrySelect(entry);
-    } else {
+    } else if (isDataEntry(entry) || isPasskeyEntry(entry)) {
+      // Both leaf kinds have a details view: data entries render the generic
+      // fields block, passkeys render the read-only PasskeyDetailsSection.
       openEntryDetails(entry);
     }
   }, [
@@ -171,6 +178,22 @@ const TreeNode = ({
                     d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
                   />
                 </svg>
+              ) : isPasskeyEntry(entry) ? (
+                <svg
+                  className="w-5 h-5 sm:w-4 sm:h-4 mr-3 sm:mr-2 text-info flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  data-testid="passkey-tree-icon"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                  />
+                </svg>
               ) : (
                 <svg
                   className="w-5 h-5 sm:w-4 sm:h-4 mr-3 sm:mr-2 text-secondary flex-shrink-0"
@@ -236,9 +259,13 @@ const TreeNode = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      isGroupEntry(entry)
-                        ? openEditGroup(entry)
-                        : openEditEntry(entry);
+                      if (isGroupEntry(entry)) {
+                        openEditGroup(entry);
+                      } else if (isDataEntry(entry) || isPasskeyEntry(entry)) {
+                        // The edit modal renders the restricted passkey form
+                        // when the entry is a passkey.
+                        openEditEntry(entry);
+                      }
                     }}
                   >
                     {t('vault.tree.edit')}
@@ -356,7 +383,7 @@ const VaultTree = ({
         </div>
       </div>
     ),
-    [vaultId, t]
+    [t]
   );
 
   // Sort entries: groups first, then by name

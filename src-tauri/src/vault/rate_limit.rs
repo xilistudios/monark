@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use crate::commands::errors::CommandError;
 
 /// Number of attempts allowed before any delay is imposed.
-const MAX_FREE_ATTEMPTS: u32 = 3;
+pub(crate) const MAX_FREE_ATTEMPTS: u32 = 3;
 /// Maximum enforced delay between attempts.
 const MAX_DELAY_SECS: u64 = 60;
 /// Entries idle for longer than this are pruned.
@@ -123,6 +123,24 @@ pub fn reset_attempts(key: &str) {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     limiter.reset(key);
+}
+
+/// Number of failed attempts currently recorded for `key` (0 when untracked).
+///
+/// Test-only observability: the limiter's state is what the gate reads, so a
+/// test can assert that a path which must *not* count as a password attempt
+/// (e.g. an unsupported vault version) leaves the state untouched. Not part of
+/// the runtime API.
+#[cfg(test)]
+pub fn failure_count(key: &str) -> u32 {
+    let limiter = RATE_LIMITER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    limiter
+        .attempts
+        .get(key)
+        .map(|record| record.failures)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

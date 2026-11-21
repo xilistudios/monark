@@ -260,7 +260,10 @@
       "authRefreshFailed": "Could not renew the cloud session. Check your connection and try again.",
       "authenticationExpired": "Authentication has expired. Please re-authenticate in Settings.",
       "insufficientPermissions": "Insufficient permissions. Please check your cloud storage permissions.",
-      "storageQuotaExceeded": "Storage quota exceeded. Please free up space."
+      "storageQuotaExceeded": "Storage quota exceeded. Please free up space.",
+      "syncError": "Failed to sync the vault with cloud storage. Your local copy is unchanged; try again.",
+      "passkeyReconciled": "These passkeys are not present in the cloud copy this device could read (they may have been deleted on another device) and have been removed from this device's view: {{names}}",
+      "dismiss": "Dismiss"
     },
     "addVault": {
       "title": "Create New Vault",
@@ -344,6 +347,7 @@
         "sshKey": "SSH Key",
         "otp": "OTP / 2FA",
         "note": "Note",
+        "passkey": "Passkey",
         "custom": "Custom"
       },
       "entryTitle": "Entry Title",
@@ -416,6 +420,7 @@
         "addEntry": "Add Entry",
         "addGroup": "Add Group",
         "importCsv": "Import CSV",
+        "exportPasskeys": "Export passkeys",
         "entries": "Entries",
         "groups": "Groups",
         "lock": "Lock",
@@ -490,6 +495,7 @@
         "dataType": "Data Type",
         "createdAt": "Created At",
         "updatedAt": "Updated At",
+        "notTracked": "Not tracked for groups",
         "tags": "Tags",
         "noTags": "No Tags",
         "fields": "Fields",
@@ -507,7 +513,8 @@
           "title": "No Vault Selected",
           "description": "Select a vault from the sidebar to get started"
         }
-      }
+      },
+      "passkeyWriteBlocked": "A passkey in this vault is not present in the cloud copy this device could read (it may have been deleted on another device). Sync this vault to refresh the view, then try again."
     },
     "errors": {
       "missingFields": "Please fill in all fields",
@@ -580,6 +587,94 @@
         "title": "Danger Zone",
         "deleteVault": "Delete Vault",
         "deleteVaultDescription": "Permanently delete this vault and optionally its file from disk. This action cannot be undone."
+      }
+    },
+    "passkey": {
+      "uvPrompt": "Verify your identity to use a passkey",
+      "uvPromptTitle": "Passkey",
+      "uvPromptSubtitle": "Confirm it is you to use a passkey in {{vaultName}}",
+      "uvPromptCancel": "Cancel",
+      "uvFailed": "User verification failed. Please try again.",
+      "badge": "PASSKEY",
+      "details": {
+        "title": "Passkey",
+        "relyingParty": "Relying party",
+        "userName": "User name",
+        "userDisplayName": "Display name",
+        "credentialId": "Credential ID",
+        "algorithm": "Algorithm",
+        "signCount": "Sign count",
+        "discoverable": "Discoverable",
+        "discoverableYes": "Yes",
+        "discoverableNo": "No",
+        "transports": "Transports",
+        "noTransports": "None reported",
+        "copied": "Credential ID copied",
+        "copyFailed": "Could not copy the credential ID",
+        "delete": "Delete passkey",
+        "deleteConfirmTitle": "Delete passkey",
+        "deleteConfirm": "Delete the passkey for “{{name}}”? This cannot be undone; the relying party will no longer accept it.",
+        "deleteCancel": "Cancel",
+        "deleteConfirmAction": "Delete",
+        "deleting": "Deleting...",
+        "deleteFailed": "Failed to delete the passkey"
+      },
+      "edit": {
+        "title": "Edit Passkey",
+        "name": "Name",
+        "userName": "User name",
+        "userDisplayName": "Display name",
+        "tags": "Tags",
+        "tagPlaceholder": "Enter tag",
+        "addTag": "Add Tag",
+        "removeTag": "Remove tag {{tag}}",
+        "immutableNotice": "The credential itself (relying party, credential ID, key) cannot be changed. Only the fields above are editable.",
+        "save": "Save",
+        "saving": "Saving...",
+        "cancel": "Cancel",
+        "errors": {
+          "validationFailed": "Please check the fields above",
+          "saveFailed": "Failed to update the passkey"
+        }
+      },
+      "import": {
+        "title": "Import passkeys",
+        "description": "Import passkeys from a CXF file exported by another password manager. Passkeys you already have are skipped.",
+        "selectFile": "Choose CXF file",
+        "importing": "Importing...",
+        "close": "Close",
+        "selectedFile": "File: {{fileName}}",
+        "imported": "Imported",
+        "duplicates": "Already in vault",
+        "nothingImported": "Nothing was imported from this file.",
+        "lossy": {
+          "title": "{{count}} passkey(s) imported with data ignored",
+          "row": "{{itemTitle}}: {{reason}}"
+        },
+        "skipped": {
+          "title": "{{count}} credential(s) not imported",
+          "row": "{{credentialType}}: {{reason}}"
+        },
+        "errors": {
+          "locked": "Unlock the vault before importing passkeys.",
+          "importFailed": "Could not import the file.",
+          "unexpectedReport": "The import finished but its result could not be read. Reopen the vault to check what was imported.",
+          "refreshFailed": "The passkeys were imported, but the vault view could not be refreshed. Lock and unlock the vault to see them."
+        }
+      },
+      "export": {
+        "title": "Export passkeys",
+        "warning": "This file contains your passkeys' private keys UNENCRYPTED. Anyone with the file can sign in as you. Store it securely and delete it after use.",
+        "consent": "I understand that this file is not encrypted and that anyone who obtains it can sign in as me.",
+        "export": "Export",
+        "exporting": "Exporting...",
+        "close": "Close",
+        "success": "Passkeys exported to {{fileName}}",
+        "deleteReminder": "Delete the file once you are done with it.",
+        "errors": {
+          "locked": "Unlock the vault before exporting passkeys.",
+          "exportFailed": "Could not export the passkeys."
+        }
       }
     }
   }

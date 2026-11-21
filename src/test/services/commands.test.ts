@@ -70,6 +70,39 @@ describe('VaultCommands', () => {
 
 			expect(mockInvoke).toHaveBeenCalledWith('delete_vault', { filePath });
 		});
+
+		it('should change local vault password through the dedicated command', async () => {
+			mockInvoke.mockResolvedValue(undefined);
+
+			await VaultCommands.changePassword(
+				'/path/to/vault.monark',
+				'old-password',
+				'new-password'
+			);
+
+			expect(mockInvoke).toHaveBeenCalledWith('change_vault_password', {
+				filePath: '/path/to/vault.monark',
+				oldPassword: 'old-password',
+				newPassword: 'new-password'
+			});
+			// The legacy write path must not be involved in a password change.
+			expect(mockInvoke).not.toHaveBeenCalledWith(
+				'write_vault',
+				expect.anything()
+			);
+		});
+
+		it('should propagate a rejected password change', async () => {
+			mockInvoke.mockRejectedValue({ Crypto: 'Invalid Password or Corrupted Vault' });
+
+			await expect(
+				VaultCommands.changePassword(
+					'/path/to/vault.monark',
+					'wrong-old',
+					'new-password'
+				)
+			).rejects.toEqual({ Crypto: 'Invalid Password or Corrupted Vault' });
+		});
 	});
 
 	describe('Cloud Vault Operations', () => {
@@ -103,7 +136,7 @@ describe('VaultCommands', () => {
 				vaultName: 'test-vault',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},
@@ -129,7 +162,7 @@ describe('VaultCommands', () => {
 				vaultId: 'vault-1',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},
@@ -257,11 +290,9 @@ describe('VaultCommands', () => {
 				vaultId: vaultPath,
 				vaultName,
 				password,
-				vaultContent: {
-					updatedAt: vaultContent.updated_at,
-					hmac: vaultContent.hmac,
-					entries: vaultContent.entries,
-				},
+				// The backend `VaultView` is snake_case: the payload is forwarded
+				// unchanged (no camelCase `updatedAt`).
+				vaultContent,
 				providerName
 			});
 			expect(result).toBe('vault-1');
@@ -364,7 +395,7 @@ describe('VaultCommands', () => {
 					vaultName: 'test-vault',
 					password: 'password',
 					vaultContent: {
-						updatedAt: '2023-01-01T00:00:00Z',
+						updated_at: '2023-01-01T00:00:00Z',
 						hmac: 'test-hmac',
 						entries: []
 					},
@@ -392,7 +423,7 @@ describe('VaultCommands', () => {
 				vaultId: 'vault-1',
 				password: 'test-password',
 				vaultContent: {
-					updatedAt: '2023-01-01T00:00:00Z',
+					updated_at: '2023-01-01T00:00:00Z',
 					hmac: 'test-hmac',
 					entries: []
 				},

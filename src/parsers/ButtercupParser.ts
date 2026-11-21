@@ -3,7 +3,7 @@
 import type { Field, FieldType } from '../interfaces/vault.interface';
 import type { ParsedEntry } from '../interfaces/parsers.interface';
 import type { ICsvParser } from '../interfaces/csv.interface';
-import type { GroupEntry, DataEntry } from '../interfaces/vault.interface';
+import type { GroupEntry, DataEntry, Entry } from '../interfaces/vault.interface';
 import { parseCSV } from '../utils/csv';
 export class ButtercupParser implements ICsvParser {
   getName() {
@@ -125,8 +125,6 @@ export class ButtercupParser implements ICsvParser {
           entry_type: 'group',
           name: entry.name,
           data_type: 'group',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           children: [],
         };
 
@@ -190,7 +188,7 @@ export class ButtercupParser implements ICsvParser {
    * Flatten a hierarchy of groups and entries into path-based arrays.
    */
   private flattenHierarchy(
-    entries: (GroupEntry | DataEntry)[],
+    entries: Entry[],
     basePath: string[] = []
   ): {
     groups: Array<{ path: string[]; entry: GroupEntry }>;
@@ -220,9 +218,10 @@ export class ButtercupParser implements ICsvParser {
         );
         groups.push(...childResults.groups);
         dataEntries.push(...childResults.entries);
-      } else {
-        const dataEntry = entry as DataEntry;
-        dataEntries.push({ path: basePath, entry: dataEntry });
+      } else if (entry.entry_type === 'entry') {
+        // Only data entries are imported; other leaf kinds (e.g. passkeys) have
+        // no CSV representation and are skipped.
+        dataEntries.push({ path: basePath, entry });
       }
     }
 

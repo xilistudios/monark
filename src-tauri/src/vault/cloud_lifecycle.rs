@@ -1,15 +1,25 @@
+//! Cloud (provider-backed) vault lifecycle.
+//!
+//! Like the local lifecycle, this module only orchestrates: provider IO, the
+//! offline cache, rate limiting, the version gate and the write-path merge. The
+//! cryptographic steps are the shared ones in [`crate::vault::keys`] (T07), so a
+//! local and a cloud vault are unwrapped, decrypted and re-wrapped by exactly
+//! the same code.
+
 use crate::commands::errors::CommandError;
 use crate::commands::storage::StorageState;
-use crate::crypto;
-use crate::models::{Argon2Params, EncryptedData, Vault, VaultFile};
+use crate::models::{Vault, VaultFile, VaultView};
 use crate::storage::providers::{CreateFileRequest, StorageFile, UpdateFileRequest};
 use crate::storage::StorageManager;
+use crate::vault::keys;
+use crate::vault::merge::merge_vault_view;
+use crate::vault::version;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 static CLOUD_CACHE_BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -18,13 +28,7 @@ pub fn set_cloud_cache_path(path: PathBuf) {
     let _ = CLOUD_CACHE_BASE_DIR.set(path);
 }
 
-const CURRENT_VAULT_VERSION: &str = "1.0";
-const KEY_LENGTH: usize = 32;
 const VAULT_EXTENSION: &str = "monark";
-
-const ARGON2_MEMORY_COST_KIB: u32 = 65536;
-const ARGON2_ITERATIONS: u32 = 3;
-const ARGON2_PARALLELISM: u32 = 4;
 
 fn sanitize_path_component(input: &str) -> String {
     let sanitized: String = input
@@ -57,7 +61,11 @@ fn cloud_cache_file_path(provider: &str, vault_id: &str) -> PathBuf {
         .join(format!("{}.monark", sanitize_path_component(vault_id)))
 }
 
-fn cache_vault_bytes(provider: &str, vault_id: &str, data: &[u8]) -> Result<(), CommandError> {
+pub(crate) fn cache_vault_bytes(
+    provider: &str,
+    vault_id: &str,
+    data: &[u8],
+) -> Result<(), CommandError> {
     let path = cloud_cache_file_path(provider, vault_id);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -88,7 +96,7 @@ fn map_provider_name_for_cache(provider_name: &str) -> String {
     }
 }
 
-async fn resolve_provider_name(
+pub(crate) async fn resolve_provider_name(
     storage_manager: &Arc<StorageManager>,
     provider_name: &Option<String>,
 ) -> Result<String, CommandError> {
@@ -105,14 +113,38 @@ async fn resolve_provider_name(
 pub async fn write_cloud_vault(
     vault_name: String,
     password: String,
-    vault_content: Vault,
+    vault_content: VaultView,
     provider_name: Option<String>,
     parent_id: Option<String>,
     vault_id: Option<String>,
     state: tauri::State<'_, StorageState>,
 ) -> Result<String, CommandError> {
-    let storage_manager = &state.manager;
+    write_cloud_vault_with(
+        vault_name,
+        password,
+        vault_content,
+        provider_name,
+        parent_id,
+        vault_id,
+        &state.manager,
+    )
+    .await
+}
 
+/// Body of [`write_cloud_vault`], taking the storage manager directly.
+///
+/// The `tauri::State` wrapper only exists for IPC; keeping the logic here lets
+/// the write-path merge be tested end to end against a real (local) provider
+/// without building a Tauri app.
+pub(crate) async fn write_cloud_vault_with(
+    vault_name: String,
+    password: String,
+    vault_content: VaultView,
+    provider_name: Option<String>,
+    parent_id: Option<String>,
+    vault_id: Option<String>,
+    storage_manager: &Arc<StorageManager>,
+) -> Result<String, CommandError> {
     // If vault_id is provided, directly update the existing vault
     if let Some(id) = vault_id {
         update_existing_cloud_vault(
@@ -200,14 +232,28 @@ pub async fn write_cloud_vault(
     }
 }
 
+/// Reads and decrypts a cloud vault, returning the **sanitized** IPC view.
+///
+/// Same rule as `lifecycle::read_vault`: the decrypted [`Vault`] (which holds
+/// passkey private keys) is converted to [`VaultView`] and dropped (zeroized)
+/// before returning.
 #[tauri::command(async)]
 pub async fn read_cloud_vault(
     vault_id: String,
     password: String,
     provider_name: Option<String>,
     state: tauri::State<'_, StorageState>,
-) -> Result<Vault, CommandError> {
-    let storage_manager = &state.manager;
+) -> Result<VaultView, CommandError> {
+    read_cloud_vault_with(vault_id, password, provider_name, &state.manager).await
+}
+
+/// Body of [`read_cloud_vault`], taking the storage manager directly.
+pub(crate) async fn read_cloud_vault_with(
+    vault_id: String,
+    password: String,
+    provider_name: Option<String>,
+    storage_manager: &Arc<StorageManager>,
+) -> Result<VaultView, CommandError> {
     let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
 
     let vault_data = match storage_manager
@@ -255,9 +301,12 @@ pub async fn read_cloud_vault(
     };
 
     let vault_file = parse_vault_from_bytes(&vault_data)?;
+    // Fail fast on a format this build cannot read, before the rate-limit gate
+    // and the Argon2 derivation (see `vault::version`).
+    version::check_version(&vault_file.version)?;
 
     crate::vault::rate_limit::check_attempts(&vault_id)?;
-    let master_key = match derive_and_decrypt_master_key(&password, &vault_file) {
+    let master_key = match keys::derive_and_decrypt_master_key(&password, &vault_file) {
         Ok(key) => {
             crate::vault::rate_limit::reset_attempts(&vault_id);
             key
@@ -267,20 +316,11 @@ pub async fn read_cloud_vault(
             return Err(err);
         }
     };
+    let master_key = Zeroizing::new(master_key);
 
-    let vault_nonce = URL_SAFE_NO_PAD
-        .decode(&vault_file.vault.nonce)
-        .map_err(|_e| CommandError::Crypto("Failed to decode vault nonce".to_string()))?;
+    let vault = keys::decrypt_vault_content(&master_key, &vault_file)?;
 
-    let vault_ciphertext = URL_SAFE_NO_PAD
-        .decode(&vault_file.vault.ciphertext)
-        .map_err(|_e| CommandError::Crypto("Failed to decode vault ciphertext".to_string()))?;
-
-    let vault_json_bytes =
-        crypto::chacha::decrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_ciphertext)?;
-
-    serde_json::from_slice(&vault_json_bytes)
-        .map_err(|_e| CommandError::Io("Failed to deserialize vault".to_string()))
+    Ok(VaultView::from(&vault))
 }
 
 #[tauri::command(async)]
@@ -331,50 +371,19 @@ pub async fn change_cloud_vault_password(
 
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
 
-    // Decrypt the master key with the OLD password
-    crate::vault::rate_limit::check_attempts(&vault_id)?;
-    let master_key = match derive_and_decrypt_master_key(&old_password, &vault_file) {
-        Ok(key) => {
-            crate::vault::rate_limit::reset_attempts(&vault_id);
-            key
-        }
+    // Prove the OLD password before touching anything: a wrong password is a
+    // failed attempt, a right one clears the counter.
+    match keys::derive_and_decrypt_master_key(&old_password, &vault_file) {
+        Ok(_) => crate::vault::rate_limit::reset_attempts(&vault_id),
         Err(err) => {
             crate::vault::rate_limit::record_failure(&vault_id);
             return Err(err);
         }
-    };
+    }
 
-    // Generate new salt and derive new key with NEW password
-    let user_salt = crypto::random::generate_salt()?;
-    let argon2_params = Argon2Params {
-        salt: URL_SAFE_NO_PAD.encode(&user_salt),
-        memory_cost_kib: ARGON2_MEMORY_COST_KIB,
-        iterations: ARGON2_ITERATIONS,
-        parallelism: ARGON2_PARALLELISM,
-    };
-
-    let mut new_kdf_key = crypto::argon2::derive_key_argon2id(
-        new_password.as_bytes(),
-        &user_salt,
-        argon2_params.memory_cost_kib,
-        argon2_params.iterations,
-        argon2_params.parallelism,
-        KEY_LENGTH as u32,
-    )?;
-
-    // Re-encrypt the master key with the NEW password
-    let mk_nonce = crypto::random::generate_nonce()?;
-    let mk_ciphertext =
-        crypto::chacha::encrypt_xchacha20poly1305(&new_kdf_key, &mk_nonce, &master_key)?;
-    new_kdf_key.zeroize(); // Clear intermediate key material from memory
-    let new_credentials = EncryptedData {
-        nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
-        ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
-    };
-
-    // Update the vault file with new credentials and salt
-    vault_file.argon2_params = argon2_params;
-    vault_file.credentials = new_credentials;
+    // Fresh salt + default Argon2id parameters; the master key is re-wrapped
+    // (never re-derived) so the stored blob stays readable.
+    keys::rewrap_master_key(&old_password, &new_password, &mut vault_file)?;
 
     let vault_bytes = create_vault_bytes(&vault_file)?;
     let cached_bytes = vault_bytes.clone();
@@ -419,55 +428,30 @@ async fn create_new_cloud_vault(
     vault_name: &str,
     vault_path: &str,
     password: &str,
-    mut initial_vault_content: Vault,
+    initial_vault_content: VaultView,
     parent_id: Option<String>,
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<String, CommandError> {
+    // A brand-new vault has no stored key material, so any passkey in the
+    // creation payload fails closed here (see `merge_vault_view`).
+    let empty_disk_vault = Vault {
+        updated_at: Utc::now(),
+        hmac: String::new(),
+        entries: Vec::new(),
+    };
+    let mut initial_vault_content = merge_vault_view(initial_vault_content, &empty_disk_vault)?;
+
     let provider_cache_key = resolve_provider_name(storage_manager, &provider_name).await?;
-    let master_key_vec = crypto::random::generate_key()?;
-    let master_key: [u8; KEY_LENGTH] = master_key_vec
-        .try_into()
-        .map_err(|_| CommandError::Crypto("Invalid generated master key length".to_string()))?;
-    let user_salt = crypto::random::generate_salt()?;
 
-    let argon2_params = Argon2Params {
-        salt: URL_SAFE_NO_PAD.encode(&user_salt),
-        memory_cost_kib: ARGON2_MEMORY_COST_KIB,
-        iterations: ARGON2_ITERATIONS,
-        parallelism: ARGON2_PARALLELISM,
-    };
-
-    let mut kdf_key = crypto::argon2::derive_key_argon2id(
-        password.as_bytes(),
-        &user_salt,
-        argon2_params.memory_cost_kib,
-        argon2_params.iterations,
-        argon2_params.parallelism,
-        KEY_LENGTH as u32,
-    )?;
-
-    let mk_nonce = crypto::random::generate_nonce()?;
-    let mk_ciphertext =
-        crypto::chacha::encrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &master_key)?;
-    kdf_key.zeroize(); // Clear intermediate key material from memory
-    let credentials = EncryptedData {
-        nonce: URL_SAFE_NO_PAD.encode(mk_nonce),
-        ciphertext: URL_SAFE_NO_PAD.encode(mk_ciphertext),
-    };
+    let (argon2_params, credentials, master_key) = keys::create_key_material(password)?;
+    let master_key = Zeroizing::new(master_key);
 
     initial_vault_content.updated_at = Utc::now();
-    let vault_json_bytes = serde_json::to_vec(&initial_vault_content)?;
-    let vault_nonce = crypto::random::generate_nonce()?;
-    let vault_ciphertext =
-        crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
-    let vault_encrypted = EncryptedData {
-        nonce: URL_SAFE_NO_PAD.encode(vault_nonce),
-        ciphertext: URL_SAFE_NO_PAD.encode(vault_ciphertext),
-    };
+    let vault_encrypted = keys::encrypt_vault_content(&master_key, &initial_vault_content)?;
 
     let vault_file = VaultFile {
-        version: CURRENT_VAULT_VERSION.to_string(),
+        version: version::CURRENT_VAULT_VERSION.to_string(),
         argon2_params,
         credentials,
         vault: vault_encrypted,
@@ -504,7 +488,7 @@ async fn create_new_cloud_vault(
 async fn update_existing_cloud_vault(
     vault_id: &str,
     password: &str,
-    mut new_vault_content: Vault,
+    new_vault_content: VaultView,
     provider_name: Option<String>,
     storage_manager: &Arc<StorageManager>,
 ) -> Result<(), CommandError> {
@@ -515,17 +499,23 @@ async fn update_existing_cloud_vault(
         .map_err(|_e| CommandError::Io("Failed to read existing vault".to_string()))?;
 
     let mut vault_file = parse_vault_from_bytes(&vault_data)?;
+    // Refuse to re-encrypt a format this build cannot read (review finding
+    // E14b): a future format must not be silently rewritten by today's
+    // serializer. Same error and same position as the read paths.
+    version::check_version(&vault_file.version)?;
 
-    let master_key = derive_and_decrypt_master_key(password, &vault_file)?;
+    let master_key = Zeroizing::new(keys::derive_and_decrypt_master_key(password, &vault_file)?);
 
-    new_vault_content.updated_at = Utc::now();
-    let vault_json_bytes = serde_json::to_vec(&new_vault_content)?;
-    let vault_nonce = crypto::random::generate_nonce()?;
-    let vault_ciphertext =
-        crypto::chacha::encrypt_xchacha20poly1305(&master_key, &vault_nonce, &vault_json_bytes)?;
+    // Re-attach the passkey secrets that only exist in the stored file, and
+    // keep every passkey this (possibly stale) view does not mention.
+    let disk_vault = keys::decrypt_vault_content(&master_key, &vault_file)?;
+    let mut merged_vault = merge_vault_view(new_vault_content, &disk_vault)?;
+    merged_vault.updated_at = Utc::now();
 
-    vault_file.vault.nonce = URL_SAFE_NO_PAD.encode(vault_nonce);
-    vault_file.vault.ciphertext = URL_SAFE_NO_PAD.encode(vault_ciphertext);
+    vault_file.vault = keys::encrypt_vault_content(&master_key, &merged_vault)?;
+    // Keep the stored version unless the merged content now holds a passkey, in
+    // which case the file becomes 1.1 (unreadable by pre-passkey clients).
+    vault_file.version = version::version_for_content(&vault_file.version, &merged_vault);
 
     let vault_bytes = create_vault_bytes(&vault_file)?;
     let cached_bytes = vault_bytes.clone();
@@ -551,7 +541,7 @@ async fn update_existing_cloud_vault(
     Ok(())
 }
 
-fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> {
+pub(crate) fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> {
     // Convert bytes to string
     let vault_data_str = String::from_utf8(vault_data.to_vec())
         .map_err(|_e| CommandError::Io("Failed to convert vault data".to_string()))?;
@@ -569,40 +559,7 @@ fn parse_vault_from_bytes(vault_data: &[u8]) -> Result<VaultFile, CommandError> 
         .map_err(|_e| CommandError::Io("Failed to deserialize vault file".to_string()))
 }
 
-fn create_vault_bytes(vault_file: &VaultFile) -> Result<Vec<u8>, CommandError> {
+pub(crate) fn create_vault_bytes(vault_file: &VaultFile) -> Result<Vec<u8>, CommandError> {
     let signed_vault = crate::io::signature::sign_vault(vault_file);
     Ok(signed_vault.into_bytes())
-}
-
-fn derive_and_decrypt_master_key(
-    password: &str,
-    vault_file: &VaultFile,
-) -> Result<[u8; KEY_LENGTH], CommandError> {
-    let user_salt = URL_SAFE_NO_PAD
-        .decode(&vault_file.argon2_params.salt)
-        .map_err(|_e| CommandError::Crypto("Failed to decode salt".to_string()))?;
-
-    let mut kdf_key = crypto::argon2::derive_key_argon2id(
-        password.as_bytes(),
-        &user_salt,
-        vault_file.argon2_params.memory_cost_kib,
-        vault_file.argon2_params.iterations,
-        vault_file.argon2_params.parallelism,
-        KEY_LENGTH as u32,
-    )?;
-
-    let mk_nonce = URL_SAFE_NO_PAD
-        .decode(&vault_file.credentials.nonce)
-        .map_err(|_e| CommandError::Crypto("Failed to decode master key nonce".to_string()))?;
-    let mk_ciphertext = URL_SAFE_NO_PAD
-        .decode(&vault_file.credentials.ciphertext)
-        .map_err(|_e| CommandError::Crypto("Failed to decode master key ciphertext".to_string()))?;
-
-    let master_key_vec =
-        crypto::chacha::decrypt_xchacha20poly1305(&kdf_key, &mk_nonce, &mk_ciphertext)?;
-    kdf_key.zeroize(); // Clear intermediate key material from memory
-
-    master_key_vec
-        .try_into()
-        .map_err(|_| CommandError::Crypto("Invalid decrypted master key length".to_string()))
 }

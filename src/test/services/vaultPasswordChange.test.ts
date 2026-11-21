@@ -114,18 +114,14 @@ describe('Vault Password Change', () => {
       
       const vaultInstance = new VaultInstance(localVault, mockDispatch, mockGetState);
       
-      mockVaultCommands.write.mockResolvedValue();
+      mockVaultCommands.changePassword.mockResolvedValue();
       
       await vaultInstance.changePassword('new-password');
       
-      expect(mockVaultCommands.write).toHaveBeenCalledWith(
+      expect(mockVaultCommands.changePassword).toHaveBeenCalledWith(
         '/path/to/local.vault',
+        'old-password',
         'new-password',
-        {
-          updated_at: expect.any(String),
-          hmac: '',
-          entries: localVault.volatile!.entries,
-        }
       );
       
       expect(mockSetVaultCredential).toHaveBeenCalledWith({
@@ -200,11 +196,51 @@ describe('Vault Password Change', () => {
       
       const vaultInstance = new VaultInstance(localVault, mockDispatch, mockGetState);
       
-      mockVaultCommands.write.mockRejectedValue(new Error('File system error'));
+      mockVaultCommands.changePassword.mockRejectedValue(new Error('File system error'));
       
       await expect(vaultInstance.changePassword('new-password')).rejects.toThrow(
         'Failed to change vault password: File system error'
       );
+    });
+
+    it('should not update the credential if the local password change fails', async () => {
+      const localVault = {
+        ...mockVault,
+        storageType: 'local' as const,
+        providerId: undefined,
+        cloudMetadata: undefined,
+        path: '/path/to/local.vault',
+      };
+
+      mockGetState.mockReturnValue({
+        vault: {
+          vaults: [localVault],
+          providers: [],
+          defaultProvider: null,
+          providerStatus: {},
+        },
+      });
+
+      const vaultInstance = new VaultInstance(localVault, mockDispatch, mockGetState);
+
+      // Negative control: the backend rejects (e.g. wrong old password), so the
+      // in-memory credential must NOT be switched to the new password.
+      mockVaultCommands.changePassword.mockRejectedValue(
+        new Error('Crypto Error: Invalid Password or Corrupted Vault')
+      );
+
+      await expect(vaultInstance.changePassword('new-password')).rejects.toThrow(
+        'Failed to change vault password'
+      );
+
+      expect(mockVaultCommands.changePassword).toHaveBeenCalledWith(
+        '/path/to/local.vault',
+        'old-password',
+        'new-password',
+      );
+      expect(mockSetVaultCredential).not.toHaveBeenCalled();
+      // The legacy write path must never be used for a password change.
+      expect(mockVaultCommands.write).not.toHaveBeenCalled();
     });
   });
 

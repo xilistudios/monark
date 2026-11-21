@@ -510,7 +510,7 @@ export function createMockCloudVaultRequest(
 		vaultName,
 		password,
 		vaultContent: {
-			updatedAt: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
 			hmac: 'mock-hmac',
 			entries: mockVaultContent.entries
 		},
@@ -530,7 +530,7 @@ export function createMockCloudVaultUpdateRequest(
 		vaultId,
 		password,
 		vaultContent: {
-			updatedAt: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
 			hmac: 'updated-hmac',
 			entries: [...mockVaultContent.entries, {
 				id: 'entry-3',

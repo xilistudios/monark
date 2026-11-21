@@ -1,22 +1,31 @@
-import { useTranslation } from 'react-i18next';
-import type { DataEntry, GroupEntry } from '../../interfaces/vault.interface';
+import { useTranslation } from "react-i18next";
+import type { Entry } from "../../interfaces/vault.interface";
+import { isDataEntry, isPasskeyEntry } from "../../interfaces/vault.interface";
 
 interface EntryDetailsHeaderProps {
-  entry: DataEntry | GroupEntry;
-  editMode: boolean;
-  isDataEntry: (e: DataEntry | GroupEntry | null) => e is DataEntry;
+	entry: Entry;
+	editMode: boolean;
 }
 
+/**
+ * Header of the entry details panel: the entry name plus a type badge.
+ *
+ * The badge is derived from the entry kind (T13):
+ * - passkey → `home:passkey.badge` ("PASSKEY") with the info palette;
+ * - data entry → its `data_type` (login / credit card / …);
+ * - group → `vault.entry.type.group`.
+ */
 export function EntryDetailsHeader({
 	entry,
 	editMode,
-	isDataEntry,
 }: EntryDetailsHeaderProps) {
 	const { t } = useTranslation("home");
 
 	const getBadgeClasses = () => {
 		if (editMode) return "bg-primary/10 text-primary border-primary/20";
-		if (!isDataEntry(entry)) return "bg-warning/10 text-warning border-warning/20";
+		if (isPasskeyEntry(entry)) return "bg-info/10 text-info border-info/20";
+		if (!isDataEntry(entry))
+			return "bg-warning/10 text-warning border-warning/20";
 
 		switch (entry.data_type?.toLowerCase()) {
 			case "login":
@@ -35,8 +44,17 @@ export function EntryDetailsHeader({
 	};
 
 	const getBadgeText = () => {
+		if (isPasskeyEntry(entry)) return t("passkey.badge");
 		if (!isDataEntry(entry)) return t("vault.entry.type.group");
-		return entry.data_type ? entry.data_type.toUpperCase() : t("vault.entry.type.entry");
+		return entry.data_type
+			? entry.data_type.toUpperCase()
+			: t("vault.entry.type.entry");
+	};
+
+	const getTitle = () => {
+		if (!editMode) return entry.name;
+		if (isPasskeyEntry(entry)) return t("passkey.edit.title");
+		return t(isDataEntry(entry) ? "editEntry.title" : "editGroup.title");
 	};
 
 	return (
@@ -44,9 +62,7 @@ export function EntryDetailsHeader({
 			<div className="flex items-center justify-between">
 				<div>
 					<h2 className="text-2xl font-bold tracking-tight text-base-content">
-						{editMode
-							? t(isDataEntry(entry) ? "editEntry.title" : "editGroup.title")
-							: entry.name}
+						{getTitle()}
 					</h2>
 					<div className="flex items-center mt-1.5">
 						<span

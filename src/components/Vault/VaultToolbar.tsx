@@ -22,7 +22,8 @@ interface Vault {
  * @param {Function} props.setIsSearchActive - Function to set search active state
  * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
-import { useContext } from 'react';
+import { useContext, useMemo } from 'react';
+import { flattenEntries, isPasskeyEntry } from '../../interfaces/vault.interface';
 import { VaultModalContext } from './VaultContext';
 
 /**
@@ -36,7 +37,7 @@ import { VaultModalContext } from './VaultContext';
  * @param {Function} props.onSearchToggle - Function to toggle search modal
  */
 const VaultToolbar = ({
-  currentVault: _currentVault,
+  currentVault,
   currentPath,
   handleLockVault,
   t,
@@ -55,7 +56,17 @@ const VaultToolbar = ({
     throw new Error(
       'VaultModalContext must be used within a VaultModalProvider'
     );
-  const { openAddEntryModal, openAddGroupModal, openImportCsvModal } = context;
+  const { openAddEntryModal, openAddGroupModal, openImportCsvModal, openPasskeyExport } = context;
+
+  // The export button only makes sense when there is something to export.
+  // `flattenEntries` from `interfaces/vault.interface.ts` walks groups AND
+  // keeps passkeys; the `utils/vaultSearch.ts` helper is typed for data entries
+  // and drops them, so it must not be used here.
+  const hasPasskeys = useMemo(
+    () =>
+      flattenEntries(currentVault?.volatile?.entries ?? []).some(isPasskeyEntry),
+    [currentVault]
+  );
 
 	return (
 		<div className="flex items-center justify-between px-6 py-3.5 bg-base-100">
@@ -72,6 +83,7 @@ const VaultToolbar = ({
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
 						<path
 							strokeLinecap="round"
@@ -94,6 +106,7 @@ const VaultToolbar = ({
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
 						<path
 							strokeLinecap="round"
@@ -116,6 +129,7 @@ const VaultToolbar = ({
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
 						<path
 							strokeLinecap="round"
@@ -125,6 +139,33 @@ const VaultToolbar = ({
 						/>
 					</svg>
 				</button>
+
+				{/* Export passkeys (T18): only when the unlocked vault holds at
+				    least one passkey — there is nothing to export otherwise. */}
+				{hasPasskeys && (
+					<button
+						className="btn btn-outline btn-sm border-info/20 hover:bg-info/10 text-info active:scale-95 transition-all duration-150"
+						onClick={() => openPasskeyExport()}
+						type="button"
+						title={t("vault.manager.exportPasskeys")}
+						aria-label={t("vault.manager.exportPasskeys")}
+					>
+						<svg
+							className="w-4 h-4"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+							/>
+						</svg>
+					</button>
+				)}
 
 				<button
 					className="btn btn-ghost btn-sm btn-circle text-base-content/70 hover:text-base-content hover:bg-base-200/80 transition-all duration-150"
@@ -137,6 +178,7 @@ const VaultToolbar = ({
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
 						<path
 							strokeLinecap="round"
@@ -160,6 +202,7 @@ const VaultToolbar = ({
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
 						<path
 							strokeLinecap="round"
@@ -187,6 +230,7 @@ const VaultToolbar = ({
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
 						<path
 							strokeLinecap="round"

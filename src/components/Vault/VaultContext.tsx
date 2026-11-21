@@ -1,7 +1,12 @@
 import type React from "react";
 import { createContext, type ReactNode, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import type { DataEntry, GroupEntry } from "../../interfaces/vault.interface";
+import type {
+	DataEntry,
+	Entry,
+	GroupEntry,
+	PasskeyEntry,
+} from "../../interfaces/vault.interface";
 import { clearOAuthState, setProviderStatus } from "../../redux/actions/vault";
 import { selectOAuthState } from "../../redux/selectors/vaultSelectors";
 import { CloudStorageCommands } from "../../services/cloudStorage";
@@ -30,8 +35,12 @@ interface VaultModalState {
 	importCsvPath: string[];
 	/** Success callback for import CSV modal */
 	importCsvOnSuccess?: () => void;
-	/** Currently selected entry for details/editing */
-	selectedEntry: DataEntry | GroupEntry | null;
+	/**
+	 * Currently selected entry for details/editing. Widened to the full `Entry`
+	 * union in T13: a passkey is a first-class item with its own read-only detail
+	 * view and a restricted edit form.
+	 */
+	selectedEntry: Entry | null;
 	/** Whether the entry details modal is open */
 	isDetailsModalOpen: boolean;
 	/** Whether the edit entry modal is open */
@@ -48,6 +57,10 @@ interface VaultModalState {
 	isEditVaultModalOpen: boolean;
 	/** Whether the add provider modal is open */
 	isAddProviderModalOpen: boolean;
+	/** Whether the passkey (CXF) import modal is open */
+	isPasskeyImportModalOpen: boolean;
+	/** Whether the passkey (CXF) export modal is open */
+	isPasskeyExportModalOpen: boolean;
 }
 
 /**
@@ -61,9 +74,13 @@ interface VaultModalActions {
 	/** Opens the import CSV modal with the specified path */
 	openImportCsvModal: (path: string[], onSuccess?: () => void) => void;
 	/** Opens the entry details modal with the specified entry */
-	openEntryDetails: (entry: DataEntry | GroupEntry) => void;
-	/** Opens the edit entry modal with the specified entry */
-	openEditEntry: (entry: DataEntry) => void;
+	openEntryDetails: (entry: Entry) => void;
+	/**
+	 * Opens the edit entry modal with the specified entry. Passkeys are edited
+	 * through the same modal, which renders a restricted form (name, tags,
+	 * user_name, user_display_name only).
+	 */
+	openEditEntry: (entry: DataEntry | PasskeyEntry) => void;
 	/** Opens the edit group modal with the specified entry */
 	openEditGroup: (entry: GroupEntry) => void;
 	/** Closes the add entry modal and resets its path */
@@ -90,6 +107,19 @@ interface VaultModalActions {
 	openAddProviderModal: () => void;
 	/** Closes the add provider modal */
 	closeAddProviderModal: () => void;
+	/**
+	 * Opens the passkey (CXF) import modal.
+	 *
+	 * Takes no path: `import_cxf` always stores imported passkeys at the vault
+	 * root (ruling Q12), so there is no destination to choose.
+	 */
+	openPasskeyImport: () => void;
+	/** Closes the passkey import modal */
+	closePasskeyImport: () => void;
+	/** Opens the passkey (CXF) export modal */
+	openPasskeyExport: () => void;
+	/** Closes the passkey export modal */
+	closePasskeyExport: () => void;
 }
 
 /**
@@ -129,9 +159,7 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 	const [addGroupPath, setAddGroupPath] = useState<string[]>([]);
 	const [isImportCsvModalOpen, setIsImportCsvModalOpen] = useState(false);
 	const [importCsvPath, setImportCsvPath] = useState<string[]>([]);
-	const [selectedEntry, setSelectedEntry] = useState<
-		DataEntry | GroupEntry | null
-	>(null);
+	const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
 	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 	const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
 	const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
@@ -140,6 +168,10 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 	const [isEditVaultModalOpen, setIsEditVaultModalOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isAddProviderModalOpen, setIsAddProviderModalOpen] = useState(false);
+	const [isPasskeyImportModalOpen, setIsPasskeyImportModalOpen] =
+		useState(false);
+	const [isPasskeyExportModalOpen, setIsPasskeyExportModalOpen] =
+		useState(false);
 
 	/**
 	 * Opens the add entry modal with the specified path
@@ -170,18 +202,18 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 
 	/**
 	 * Opens the entry details modal with the specified entry
-	 * @param entry - The entry or group entry to display details for
+	 * @param entry - The entry, group or passkey to display details for
 	 */
-	const openEntryDetails = (entry: DataEntry | GroupEntry) => {
+	const openEntryDetails = (entry: Entry) => {
 		setSelectedEntry(entry);
 		setIsDetailsModalOpen(true);
 	};
 
 	/**
 	 * Opens the edit entry modal with the specified entry
-	 * @param entry - The data entry to edit
+	 * @param entry - The data entry or passkey to edit
 	 */
-	const openEditEntry = (entry: DataEntry) => {
+	const openEditEntry = (entry: DataEntry | PasskeyEntry) => {
 		setSelectedEntry(entry);
 		setIsEditEntryModalOpen(true);
 	};
@@ -234,6 +266,8 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 		setIsEditEntryModalOpen(false);
 		setIsEditGroupModalOpen(false);
 		setIsAddVaultModalOpen(false);
+		setIsPasskeyImportModalOpen(false);
+		setIsPasskeyExportModalOpen(false);
 	};
 
 	const handleOAuthSuccess = () => {
@@ -291,6 +325,8 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 			isAddVaultModalOpen,
 			isEditVaultModalOpen,
 			isAddProviderModalOpen,
+			isPasskeyImportModalOpen,
+			isPasskeyExportModalOpen,
 			// Actions
 			openAddEntryModal: (path: string[]) => {
 				setAddEntryPath(path);
@@ -331,6 +367,18 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 			closeAddProviderModal: () => {
 				setIsAddProviderModalOpen(false);
 			},
+			openPasskeyImport: () => {
+				setIsPasskeyImportModalOpen(true);
+			},
+			closePasskeyImport: () => {
+				setIsPasskeyImportModalOpen(false);
+			},
+			openPasskeyExport: () => {
+				setIsPasskeyExportModalOpen(true);
+			},
+			closePasskeyExport: () => {
+				setIsPasskeyExportModalOpen(false);
+			},
 		}),
 		[
 			isAddEntryModalOpen,
@@ -348,6 +396,8 @@ const VaultModalProvider: React.FC<VaultModalProviderProps> = ({
 			isAddVaultModalOpen,
 			isEditVaultModalOpen,
 			isAddProviderModalOpen,
+			isPasskeyImportModalOpen,
+			isPasskeyExportModalOpen,
 			openAddEntryModal,
 			openAddGroupModal,
 			openImportCsvModal,

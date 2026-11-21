@@ -6,6 +6,22 @@
  * compatible with Tauri's invoke() calls.
  */
 
+import type { Entry } from "./vault.interface";
+
+/**
+ * Vault content as the backend expects it on write.
+ *
+ * Mirrors the Rust `VaultView` (the sanitized IPC shape): snake_case keys, and
+ * entries carry no passkey private key. The backend re-attaches passkey secrets
+ * from the stored vault by entry id, so this payload is exactly what
+ * `read_vault`/`read_cloud_vault` returned.
+ */
+export interface VaultContentView {
+	updated_at: string; // ISO 8601 string from Rust DateTime<Utc>
+	hmac: string;
+	entries: Entry[];
+}
+
 /**
  * Storage provider types supported by the system
  * Matches Rust StorageProviderType enum
@@ -149,11 +165,7 @@ export interface CloudVaultOperation {
  */
 export interface CreateCloudVaultRequest extends CloudVaultOperation {
 	vaultName: string;
-	vaultContent: {
-		updatedAt: string;
-		hmac: string;
-		entries: any[];
-	};
+	vaultContent: VaultContentView;
 	parentId?: string;
 }
 
@@ -161,11 +173,7 @@ export interface CreateCloudVaultRequest extends CloudVaultOperation {
  * Request to update an existing cloud vault
  */
 export interface UpdateCloudVaultRequest extends CloudVaultOperation {
-	vaultContent: {
-		updatedAt: string;
-		hmac: string;
-		entries: any[];
-	};
+	vaultContent: VaultContentView;
 }
 
 /**

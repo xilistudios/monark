@@ -1,0 +1,78 @@
+{
+	"version": { "major": 1, "minor": 0 },
+	"exporterRpId": "example.com",
+	"exporterDisplayName": "Example Exporter",
+	"timestamp": 1705228800,
+	"accounts": [
+		{
+			"id": "bWlzc2luZy1maWVsZHMtYWNjb3VudA",
+			"username": "johndoe",
+			"email": "johndoe@example.com",
+			"collections": [],
+			"items": [
+				{
+					"id": "bWlzc2luZy1maWVsZHMtaXRlbS1ycGlk",
+					"title": "Missing rpId",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "bWlzc2luZy1ycGlkLWNyZWQ",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "bWlzc2luZy1ycGlkLXVzZXI",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "bWlzc2luZy1maWVsZHMtaXRlbS1rZXk",
+					"title": "Missing key",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "bWlzc2luZy1rZXktY3JlZA",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "bWlzc2luZy1rZXktdXNlcg"
+						}
+					]
+				},
+				{
+					"id": "bWlzc2luZy1maWVsZHMtaXRlbS10eXBl",
+					"title": "Missing credential type",
+					"credentials": [
+						{
+							"credentialId": "bWlzc2luZy10eXBlLWNyZWQ",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "bWlzc2luZy10eXBlLXVzZXI",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "bWlzc2luZy1maWVsZHMtaXRlbS13cm9uZy10eXBl",
+					"title": "Wrong JSON type for credentialId",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": 42,
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "d3JvbmctdHlwZS11c2Vy",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "bWlzc2luZy1maWVsZHMtaXRlbS1ub3Qtb2JqZWN0",
+					"title": "Credential is not an object",
+					"credentials": ["passkey"]
+				}
+			]
+		}
+	]
+}

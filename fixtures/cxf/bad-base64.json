@@ -1,0 +1,61 @@
+{
+	"version": { "major": 1, "minor": 0 },
+	"exporterRpId": "example.com",
+	"exporterDisplayName": "Example Exporter",
+	"timestamp": 1705228800,
+	"accounts": [
+		{
+			"id": "YmFkLWJhc2U2NC1hY2NvdW50",
+			"username": "johndoe",
+			"email": "johndoe@example.com",
+			"collections": [],
+			"items": [
+				{
+					"id": "YmFkLWJhc2U2NC1pdGVtLW9uZQ",
+					"title": "Padded credential id",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "Y3JlZGVudGlhbElkRXhhbXBsZQ==",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "cnEzaNHWcYK3coWZjvoaV1Hj9gnI12mKe2dL2HZVFlY",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "YmFkLWJhc2U2NC1pdGVtLXR3bw",
+					"title": "Standard-alphabet user handle",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "c2Vjb25kLWNyZWRlbnRpYWwtaWQ",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "ab+/cd==",
+							"key": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgARu_0sCt20EpgVxb4Puq3Ga5VVLpuTY75ngvZlyq3X6hRANCAASmdk1xLsK0oOlhxIPp0d1ZuS0sT9nf6BZtSelhqvLBW0fOL33l_bXgsr_STUHjCLn8l6gcRJwe7OQvbQubZ1dY"
+						}
+					]
+				},
+				{
+					"id": "YmFkLWJhc2U2NC1pdGVtLXRocmVl",
+					"title": "Garbage key",
+					"credentials": [
+						{
+							"type": "passkey",
+							"credentialId": "dGhpcmQtY3JlZGVudGlhbC1pZA",
+							"rpId": "webauthn.io",
+							"username": "johndoe",
+							"userDisplayName": "John Doe",
+							"userHandle": "dGhpcmQtdXNlci1oYW5kbGU",
+							"key": "not base64 at all!!!"
+						}
+					]
+				}
+			]
+		}
+	]
+}

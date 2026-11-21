@@ -1,17 +1,19 @@
 // EntryDetailsSidebar.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DataEntry, GroupEntry } from '../../interfaces/vault.interface';
+import type { DataEntry, Entry, GroupEntry } from '../../interfaces/vault.interface';
+import { isDataEntry, isGroupEntry, isPasskeyEntry } from '../../interfaces/vault.interface';
 import { EmptyState } from './EmptyState';
 import { EntryDetailsHeader } from './EntryDetailsHeader';
 import { EntryBasicInfo } from './EntryBasicInfo';
 import { EntryFieldsSection } from './EntryFieldsSection';
 import { EntryTagsSection } from './EntryTagsSection';
 import { CopyToast } from './CopyToast';
+import { PasskeyDetailsSection } from './PasskeyDetailsSection';
 import { copySensitive } from '../../utils/clipboard';
 
 interface EntryDetailsSidebarProps {
-  entry: DataEntry | GroupEntry | null;
+  entry: Entry | null;
   mode?: 'view' | 'edit';
   onEdit?: () => void;
   onSave?: (updated: DataEntry | GroupEntry) => void;
@@ -19,6 +21,14 @@ interface EntryDetailsSidebarProps {
   className?: string;
 }
 
+/**
+ * Sidebar panel showing the details of the selected entry.
+ *
+ * A passkey (T13) is rendered read-only through {@link PasskeyDetailsSection}:
+ * it has no `data_type` and no editable credential material, so the generic
+ * edit mode (basic info + fields + tags) is not offered for it. Editing a
+ * passkey goes through the restricted form in `EditEntryModal`.
+ */
 export function EntryDetailsSidebar({
   entry,
   mode = 'view',
@@ -28,12 +38,15 @@ export function EntryDetailsSidebar({
   className = '',
 }: EntryDetailsSidebarProps) {
   const { t } = useTranslation('home');
-  const [editMode, setEditMode] = useState(mode === 'edit');
+  const isPasskey = entry !== null && isPasskeyEntry(entry);
+  const [editMode, setEditMode] = useState(mode === 'edit' && !isPasskey);
   const [entryTitle, setEntryTitle] = useState(entry?.name || '');
-  const [dataType, setDataType] = useState(entry?.data_type || '');
+  const [dataType, setDataType] = useState(
+    entry && !isPasskeyEntry(entry) ? entry.data_type : ''
+  );
   const nextFieldId = useRef(0);
   const [fields, setFields] = useState<any[]>( // Using any[] as FormField is in EntryFieldsSection
-    isDataEntry(entry)
+    entry !== null && isDataEntry(entry)
       ? entry.fields.map((f) => ({
           ...f,
           id: f.property || `field-${nextFieldId.current++}`,
@@ -41,7 +54,7 @@ export function EntryDetailsSidebar({
       : []
   );
   const [tags, setTags] = useState<string[]>(
-    isDataEntry(entry) ? entry.tags : []
+    entry !== null && isDataEntry(entry) ? entry.tags : []
   );
   const [newTag, setNewTag] = useState('');
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
@@ -52,13 +65,15 @@ export function EntryDetailsSidebar({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setEditMode(mode === 'edit');
-  }, [mode]);
+    // A passkey never enters the generic edit mode: its mutable fields live in
+    // the restricted edit modal, not in this panel.
+    setEditMode(mode === 'edit' && !(entry !== null && isPasskeyEntry(entry)));
+  }, [mode, entry]);
 
   useEffect(() => {
     if (entry) {
       setEntryTitle(entry.name);
-      setDataType(entry.data_type);
+      setDataType(isPasskeyEntry(entry) ? '' : entry.data_type);
       if (isDataEntry(entry)) {
         setFields(
           entry.fields.map((f) => ({
@@ -70,13 +85,6 @@ export function EntryDetailsSidebar({
       }
     }
   }, [entry]);
-
-  function isDataEntry(e: DataEntry | GroupEntry | null): e is DataEntry {
-    return !!e && (e as DataEntry).fields !== undefined;
-  }
-  function isGroupEntry(e: DataEntry | GroupEntry | null): e is GroupEntry {
-    return !!e && (e as GroupEntry).entry_type === 'group';
-  }
 
   const toggleReveal = (property: string) => {
     setRevealed((prev) => ({
@@ -150,7 +158,7 @@ export function EntryDetailsSidebar({
       setLoading(false);
       return;
     }
-    if (isDataEntry(entry)) {
+    if (entry !== null && isDataEntry(entry)) {
       const updated: DataEntry = {
         ...entry,
         name: entryTitle,
@@ -159,7 +167,7 @@ export function EntryDetailsSidebar({
         tags,
       };
       onSave?.(updated);
-    } else if (isGroupEntry(entry)) {
+    } else if (entry !== null && isGroupEntry(entry)) {
       const updated: GroupEntry = {
         ...entry,
         name: entryTitle,
@@ -186,11 +194,7 @@ export function EntryDetailsSidebar({
     >
       {editMode ? (
         <>
-          <EntryDetailsHeader
-            entry={entry}
-            editMode={editMode}
-            isDataEntry={isDataEntry}
-          />
+          <EntryDetailsHeader entry={entry} editMode={editMode} />
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
             <EntryBasicInfo
@@ -313,13 +317,18 @@ export function EntryDetailsSidebar({
         </>
       ) : (
         <>
-          <EntryDetailsHeader
-            entry={entry}
-            editMode={editMode}
-            isDataEntry={isDataEntry}
-          />
+          <EntryDetailsHeader entry={entry} editMode={editMode} />
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+            {isPasskeyEntry(entry) && (
+              <PasskeyDetailsSection
+                entry={entry}
+                // The parent owns the selection: clearing it (via onCancel)
+                // removes the deleted passkey from the panel.
+                onDeleted={() => onCancel?.()}
+              />
+            )}
+
             {isDataEntry(entry) && entry.fields.length > 0 && (
               <EntryFieldsSection
                 fields={entry.fields.map((f, idx) => ({

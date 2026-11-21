@@ -1,4 +1,4 @@
-export type EntryType = "group" | "entry";
+export type EntryType = "group" | "entry" | "passkey";
 
 // Field types for vault entries
 export type FieldType = 'text' | 'url' | 'note' | 'otp' | 'password' | 'ssh key';
@@ -13,9 +13,21 @@ export interface BaseEntry {
 	updated_at: string; // ISO 8601 string
 }
 
-// Group entry interface with nested children
-export interface GroupEntry extends BaseEntry {
+// Group entry interface with nested children.
+//
+// Mirrors the Rust `EntryView::Group` (and `Entry::Group` on disk) field-for-field:
+// a group carries **no** `created_at`/`updated_at`. It therefore does NOT extend
+// `BaseEntry`. This is deliberate and load-bearing for sync: the merge rule for
+// groups cannot be "newest `updated_at` wins" because the wire never carries a
+// group timestamp — see `services/vaultMerge.ts` (group metadata is
+// cloud-authoritative). Do not add the timestamps here without also adding them
+// to the Rust model; a type that promises them makes an inert comparison
+// type-check.
+export interface GroupEntry {
+	id: string; // UUID v4 string from Rust
 	entry_type: "group";
+	name: string;
+	data_type: string;
 	children: Entry[]; // Nested entry structure
 }
 
@@ -26,8 +38,34 @@ export interface DataEntry extends BaseEntry {
 	tags: string[];
 }
 
+// Passkey entry interface.
+//
+// Mirrors the Rust `PasskeyView` (the sanitized IPC view) field-for-field: the
+// private key is deliberately absent, because it never crosses the IPC boundary.
+// It does NOT extend `BaseEntry`: the Rust variant has no `data_type`.
+export interface PasskeyEntry {
+	id: string; // UUID v4 string from Rust
+	entry_type: "passkey";
+	name: string;
+	created_at: string; // ISO 8601 string
+	updated_at: string; // ISO 8601 string
+	tags: string[];
+	rp_id: string;
+	rp_name: string;
+	credential_id: string; // base64url
+	user_handle: string; // base64url
+	user_name: string;
+	user_display_name: string;
+	algorithm: number; // COSE algorithm id (-7 = ES256)
+	sign_count: number;
+	discoverable: boolean;
+	transports: string[];
+	aaguid: string; // UUID string (nil in F0/F1)
+	// NO private_key — mirrors PasskeyView exactly
+}
+
 // Union type for all possible entries
-export type Entry = GroupEntry | DataEntry;
+export type Entry = GroupEntry | DataEntry | PasskeyEntry;
 
 export interface VaultContent {
 	updated_at: string; // ISO 8601 string from Rust DateTime<Utc>
@@ -50,6 +88,10 @@ export function isDataEntry(entry: Entry): entry is DataEntry {
 
 export function isGroupEntry(entry: Entry): entry is GroupEntry {
 	return entry.entry_type === "group";
+}
+
+export function isPasskeyEntry(entry: Entry): entry is PasskeyEntry {
+	return entry.entry_type === "passkey";
 }
 
 // Utility functions for nested vault operations

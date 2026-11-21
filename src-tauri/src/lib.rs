@@ -11,6 +11,7 @@ pub mod commands;
 pub mod crypto;
 pub mod io;
 pub mod models;
+pub mod passkey;
 pub mod state;
 pub mod storage;
 #[cfg(desktop)]
@@ -256,6 +257,7 @@ fn build_app() {
             vault::lifecycle::write_vault,
             vault::lifecycle::read_vault,
             vault::lifecycle::delete_vault,
+            vault::lifecycle::change_vault_password,
             vault::cloud_lifecycle::write_cloud_vault,
             vault::cloud_lifecycle::read_cloud_vault,
             vault::cloud_lifecycle::delete_cloud_vault,
@@ -282,6 +284,12 @@ fn build_app() {
             commands::storage::get_google_drive_oauth_url,
             commands::storage::handle_google_drive_oauth_callback,
             commands::storage::test_webdav_connection,
+            commands::passkey::passkey_create,
+            commands::passkey::passkey_assert,
+            commands::passkey::passkey_list_for_rp,
+            commands::passkey::passkey_delete,
+            commands::passkey_export::export_cxf,
+            commands::passkey_import::import_cxf,
             commands::totp::generate_totp,
             commands::updater::get_update_context,
             commands::updater::install_system_update,

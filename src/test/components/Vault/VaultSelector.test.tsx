@@ -8,10 +8,32 @@ import { StorageProviderType } from '../../../interfaces/cloud-storage.interface
 import { VaultManager } from '../../../services/vault';
 import { vi } from 'vitest';
 
-// Mock the translation hook
+// Mock the translation hook.
+//
+// Mirrors i18next's call shapes: `t(key, fallback)` (the component's usual form)
+// and `t(key, { defaultValue, ...vars })` (used by the passkey reconciliation
+// notice, which interpolates `{{names}}`). Returning the raw options object
+// would make React throw on it, so the mock interpolates like i18next does.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback || key,
+    t: (
+      key: string,
+      options?: string | Record<string, unknown>,
+      maybeOptions?: Record<string, unknown>,
+    ) => {
+      const fallback = typeof options === 'string' ? options : undefined;
+      const vars =
+        typeof options === 'object' && options !== null
+          ? options
+          : (maybeOptions ?? {});
+      const template =
+        typeof vars.defaultValue === 'string'
+          ? vars.defaultValue
+          : fallback || key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
+        String(vars[name] ?? ''),
+      );
+    },
   }),
 }));
 
@@ -301,6 +323,142 @@ describe('VaultSelector', () => {
     // Migrate to cloud should be disabled
     const migrateToCloudOption = screen.getByText('vaultSelector.migrateToCloud');
     expect(migrateToCloudOption.closest('button')).toBeDisabled();
+  });
+
+  it('surfaces a failed sync instead of swallowing it (E13c)', async () => {
+    const mockVaultSync = vi
+      .fn()
+      .mockRejectedValue(new Error('Failed to sync with cloud: quota exceeded'));
+    mockVaultManagerInstance.getInstance.mockReturnValue({
+      syncWithCloud: mockVaultSync,
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
+    });
+
+    // Open the vault dropdown and trigger the sync action.
+    const vaultDropdownButton = screen.getAllByRole('button')[1];
+    fireEvent.click(vaultDropdownButton);
+    fireEvent.click(screen.getByText('vaultSelector.syncNow'));
+
+    await waitFor(() => {
+      expect(mockVaultSync).toHaveBeenCalled();
+    });
+
+    // The failure is visible to the user. This file mocks `useTranslation`
+    // with `t: (key, fallback) => fallback || key`, so the rendered text is the
+    // English fallback passed at the call site.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /Failed to sync the vault with cloud storage/,
+      );
+    });
+    // ...and sanitized: the underlying error text never reaches the UI or logs.
+    expect(screen.getByRole('alert')).not.toHaveTextContent('quota exceeded');
+    for (const call of consoleError.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('quota exceeded');
+    }
+    consoleError.mockRestore();
+  });
+
+  it('clears the sync error when dismissed', async () => {
+    const mockVaultSync = vi.fn().mockRejectedValue(new Error('boom'));
+    mockVaultManagerInstance.getInstance.mockReturnValue({
+      syncWithCloud: mockVaultSync,
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+      },
+    });
+
+    const vaultDropdownButton = screen.getAllByRole('button')[1];
+    fireEvent.click(vaultDropdownButton);
+    fireEvent.click(screen.getByText('vaultSelector.syncNow'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Dismiss'));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * MAYOR-1: a sync that dropped passkey views (absent from the cloud copy this
+   * device could read — deleted on another device, or a stale offline cache)
+   * leaves a non-fatal notice in Redux. It is rendered apart from the error
+   * banner and names the passkeys from our own dropped views.
+   */
+  it('renders the passkey reconciliation notice for the current vault', () => {
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+        currentVaultId: mockCloudVault.id,
+        syncNotice: {
+          vaultId: mockCloudVault.id,
+          passkeys: [
+            { id: 'pk-1', name: 'GitHub' },
+            { id: 'pk-2', name: 'Example' },
+          ],
+        },
+      },
+    });
+
+    const notice = screen.getByRole('status');
+    // NIT-3: the wording does not assert a deletion it cannot know about.
+    expect(notice).toHaveTextContent(
+      /These passkeys are not present in the cloud copy this device could read/,
+    );
+    expect(notice).toHaveTextContent(/may have been deleted on another device/);
+    expect(notice).toHaveTextContent('GitHub, Example');
+  });
+
+  it('hides the reconciliation notice for another vault', () => {
+    renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+        currentVaultId: 'some-other-vault',
+        syncNotice: {
+          vaultId: mockCloudVault.id,
+          passkeys: [{ id: 'pk-1', name: 'GitHub' }],
+        },
+      },
+    });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('clears the reconciliation notice when dismissed', () => {
+    const { store } = renderWithProviders(<VaultSelector {...defaultProps} />, {
+      initialState: {
+        vaults: [mockCloudVault],
+        providers: mockProviders,
+        currentVaultId: mockCloudVault.id,
+        syncNotice: {
+          vaultId: mockCloudVault.id,
+          passkeys: [{ id: 'pk-1', name: 'GitHub' }],
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByText('Dismiss'));
+
+    expect(store.getState().vault.syncNotice).toBeNull();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('shows error message when refresh fails', async () => {

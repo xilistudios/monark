@@ -3,6 +3,7 @@ import { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import {
+	clearSyncNotice,
 	isCloudVault,
 	setCurrentVault,
 	updateLastAccessed,
@@ -32,6 +33,10 @@ const VaultSelector = ({
 		(state: RootState) => state.vault.cloudVaultsRefreshing,
 	);
 	const error = useSelector((state: RootState) => state.vault.error);
+	// Non-fatal reconciliation notice (MAYOR-1): a sync dropped passkey views
+	// because the cloud file no longer holds them. Built from our own dropped
+	// views (id + name), never from a raw backend payload (E13c).
+	const syncNotice = useSelector((state: RootState) => state.vault.syncNotice);
 	const providers = useSelector((state: RootState) => state.vault.providers);
 	const providerStatus = useSelector(
 		(state: RootState) => state.vault.providerStatus,
@@ -40,6 +45,11 @@ const VaultSelector = ({
 
 	const [syncingVaults, setSyncingVaults] = useState<Set<string>>(new Set());
 	const [refreshError, setRefreshError] = useState<string | null>(null);
+	// E13c: `syncWithCloud` used to fail into a silent catch, so a failed sync
+	// looked exactly like a successful one. The message is a fixed, translated
+	// string: the underlying error may quote vault content or provider payloads,
+	// so it is neither rendered nor logged here.
+	const [syncError, setSyncError] = useState<string | null>(null);
 
 	// Note: Cloud vaults are initialized in Home.tsx — no duplicate init here
 
@@ -64,15 +74,21 @@ const VaultSelector = ({
 		if (!isCloudVault(vault)) return;
 
 		try {
+			setSyncError(null);
 			setSyncingVaults((prev) => new Set(prev).add(vault.id));
 
 			const vaultInstance = VaultManager.getInstance().getInstance(vault.id);
 			if (vaultInstance) {
 				await vaultInstance.syncWithCloud();
 			}
-		} catch (error) {
-			console.error("Failed to sync vault:", error);
-			// Could show a toast or error message here
+		} catch {
+			// Sanitized: no error text, no vault content in the message or logs.
+			setSyncError(
+				t(
+					"vaultSelector.syncError",
+					"Failed to sync the vault with cloud storage. Your local copy is unchanged; try again.",
+				),
+			);
 		} finally {
 			setSyncingVaults((prev) => {
 				const newSet = new Set(prev);
@@ -159,6 +175,45 @@ const VaultSelector = ({
 			{error && (
 				<div className="alert alert-error mx-2 mb-2">
 					<span>{error}</span>
+				</div>
+			)}
+
+			{syncError && (
+				<div className="alert alert-warning mx-2 mb-2" role="alert">
+					<span>{syncError}</span>
+					<button
+						type="button"
+						className="btn btn-ghost btn-xs"
+						onClick={() => setSyncError(null)}
+					>
+						{t("vaultSelector.dismiss", "Dismiss")}
+					</button>
+				</div>
+			)}
+
+			{/* MAYOR-1: a sync removed passkey views the cloud copy this device
+			    could read does not hold (deleted on another device — or a stale
+			    offline cache, see docs/passkeys.md §6). Non-fatal, so it lives
+			    apart from the error banner and names the passkeys from our own
+			    view. */}
+			{syncNotice && syncNotice.vaultId === currentVaultId && (
+				<div className="alert alert-info mx-2 mb-2" role="status">
+					<span>
+						{t("vaultSelector.passkeyReconciled", {
+							defaultValue:
+								"These passkeys are not present in the cloud copy this device could read (they may have been deleted on another device) and have been removed from this device's view: {{names}}",
+							names: syncNotice.passkeys
+								.map((passkey) => passkey.name)
+								.join(", "),
+						})}
+					</span>
+					<button
+						type="button"
+						className="btn btn-ghost btn-xs"
+						onClick={() => dispatch(clearSyncNotice())}
+					>
+						{t("vaultSelector.dismiss", "Dismiss")}
+					</button>
 				</div>
 			)}
 

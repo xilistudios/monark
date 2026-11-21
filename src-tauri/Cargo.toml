@@ -51,6 +51,19 @@ url = "2.5"
 dirs = "5.0"
 urlencoding = "2.1"
 quick-xml = { version = "0.36", features = ["serialize"] }
+# WebAuthn passkey core (T02): ES256 signing/verification + CBOR (COSE_Key,
+# attestationObject). `ecdsa` enables the signing/verifying traits on P-256;
+# `rand_core 0.6` is already in the lockfile via `rand 0.8`, so no version split.
+p256 = { version = "0.13", features = ["ecdsa"] }
+ciborium = "0.2"
+# ASN.1 readers for the PKCS#8 / RFC 5915 layers of an imported ES256 key (T02):
+# `pkcs8` is the trait crate p256 re-exports, `sec1` reads the `ECPrivateKey`
+# inside it. Both are already in the lockfile through p256 (no new transitive
+# dependency); `sec1` is listed directly because `elliptic-curve` enables it
+# without its `der` feature, so the `ECPrivateKey` type is not reachable
+# through the `p256` re-export.
+pkcs8 = "0.10"
+sec1 = "0.7"
 
 [dev-dependencies]
 mockito = "1"

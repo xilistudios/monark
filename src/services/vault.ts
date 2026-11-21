@@ -4,11 +4,15 @@ import type {
 } from "../interfaces/cloud-storage.interface";
 import { StorageProviderType } from "../interfaces/cloud-storage.interface";
 import type { Entry, VaultContent } from "../interfaces/vault.interface";
-import { findEntryByPath, isGroupEntry } from "../interfaces/vault.interface";
-import { findPathById } from "../utils/vaultNavigation";
+import {
+	findEntryByPath,
+	isGroupEntry,
+	isPasskeyEntry,
+} from "../interfaces/vault.interface";
 import type { Vault } from "../redux/actions/vault";
 import {
 	addVault,
+	clearSyncNotice,
 	lockVault,
 	removeStorageProvider,
 	setCloudVaults,
@@ -17,21 +21,104 @@ import {
 	setOAuthState,
 	setProviderStatus,
 	setStorageProviders,
+	setSyncNotice,
 	setVaultCredential,
 	setVaultEntries,
 	setVaultLocked,
 	syncCloudVault,
 } from "../redux/actions/vault";
 import type { AppDispatch, RootState } from "../redux/store";
+import { findPathById } from "../utils/vaultNavigation";
+import { deleteVaultPassword, storeVaultPassword } from "./biometric";
 import { CloudStorageCommands } from "./cloudStorage";
-import { isAuthFailure } from "./cloudStorageErrors";
 import {
+	isAuthFailure,
+	isPasskeyNoKeyMaterialError,
+} from "./cloudStorageErrors";
+import VaultCommands from "./commands";
+import PasskeyCommands, { vaultRefFor } from "./passkey";
+import {
+	getProviderAuthState,
 	MANAGER_RETRY_POLICY,
 	NO_RETRY_POLICY,
-	getProviderAuthState,
 } from "./providerAuth";
-import { storeVaultPassword, deleteVaultPassword } from "./biometric";
-import VaultCommands from "./commands";
+import { mergeVaultEntries, reconcilePasskeysToCloud } from "./vaultMerge";
+import { isVaultLocked } from "./vaultState";
+
+/** i18n key of the actionable "sync this vault" message (namespace `home`). */
+export const PASSKEY_WRITE_BLOCKED_KEY = "home:vault.passkeyWriteBlocked";
+
+/**
+ * The configured i18next instance, resolved on demand.
+ *
+ * Deliberately a dynamic import: `src/i18n` imports the Redux store, so a static
+ * import here would make every consumer of this module (and every test that
+ * mocks the store) load it. The bundler caches the module after the first call,
+ * so the cost is one promise per process.
+ *
+ * @returns The shared i18next instance
+ */
+async function getI18n(): Promise<typeof import("../i18n").default> {
+	const module = await import("../i18n");
+	return module.default;
+}
+
+/**
+ * The localised, actionable message of {@link PasskeyWriteBlockedError}.
+ *
+ * The configured i18next instance (`src/i18n`) is imported **lazily**, inside
+ * the function: a static import would pull the Redux store into every module
+ * that touches `vault.ts` (and break suites that mock the store). The lookup
+ * runs at throw time, so a runtime language switch is honoured.
+ *
+ * The English literal is the i18next fallback for a missing key;
+ * `src/i18n/locales/{en,es}.json` both carry `vault.passkeyWriteBlocked`.
+ *
+ * @returns The user-facing message in the active language
+ */
+async function passkeyWriteBlockedMessage(): Promise<string> {
+	const i18n = await getI18n();
+	return i18n.t(PASSKEY_WRITE_BLOCKED_KEY, {
+		defaultValue:
+			"A passkey in this vault is not present in the cloud copy this device could read (it may have been deleted on another device). Sync this vault to refresh the view, then try again.",
+	});
+}
+
+/**
+ * Raised when a cloud write cannot be completed because the vault view names a
+ * passkey the cloud file no longer holds, and the one-shot reconciliation could
+ * not heal it (MAYOR-1, layer 2).
+ *
+ * The message is the user-facing, actionable instruction, localised from the
+ * `home:vault.passkeyWriteBlocked` key (see {@link PASSKEY_WRITE_BLOCKED_KEY}):
+ * the raw backend message is never rendered (E13c) — it travels in {@link cause}
+ * for debugging only.
+ *
+ * The wording deliberately says "not present in the cloud copy this device could
+ * read" rather than "deleted on another device": the cloud read can also be a
+ * stale offline cache (`docs/passkeys.md` §6), in which case nothing was deleted.
+ */
+export class PasskeyWriteBlockedError extends Error {
+	/**
+	 * Underlying failure, kept for debugging (`Error.cause`).
+	 *
+	 * Declared explicitly because the project targets ES2020, whose `Error` type
+	 * has no `cause` member (same pattern as `PasskeyCeremonyError`).
+	 */
+	readonly cause?: unknown;
+
+	/**
+	 * @param message - User-facing, actionable message (never a raw payload).
+	 * @param cause - Underlying failure, kept for debugging.
+	 */
+	constructor(message: string, cause?: unknown) {
+		super(message);
+		this.name = "PasskeyWriteBlockedError";
+		if (cause !== undefined) {
+			this.cause = cause;
+		}
+	}
+}
 
 export class VaultInstance {
 	public readonly id: string;
@@ -162,6 +249,65 @@ export class VaultInstance {
 	}
 
 	/**
+	 * Re-reads the vault from its backing store and refreshes the Redux entries.
+	 *
+	 * Needed after an **external** write: a passkey import (`import_cxf`, T16)
+	 * happens inside the backend, which writes the vault file itself. The
+	 * webview's `volatile.entries` is then stale — nothing in the Redux slice
+	 * knows about the new passkeys until they are re-read.
+	 *
+	 * Unlike {@link unlock} this does **not** touch the credential or the locked
+	 * flag: the caller is already unlocked and holds the session password, so
+	 * re-deriving them would be a redundant state transition (and a second
+	 * chance to flip `isLocked` on a transient read failure).
+	 *
+	 * - **local** vaults: `read_vault(path, credential)` then
+	 *   `setVaultEntries` — the same read `unlock` performs.
+	 * - **cloud** vaults: {@link syncWithCloud}, which re-reads the cloud file,
+	 *   union-merges it with the local view and pushes the merged result back.
+	 *   A plain re-read would drop entries created on this device since the last
+	 *   push, so the merge is the correct refresh for cloud.
+	 *
+	 * @throws Error if the vault is locked — `isVaultLocked` is true when either
+	 *   the `isLocked` flag is set or there is no session credential (locking
+	 *   clears the credential, so both hold in practice) — or the read/sync
+	 *   fails.
+	 */
+	async refreshEntries(): Promise<void> {
+		const state = this.getState();
+		const vault = state.vault.vaults.find((v) => v.id === this.id);
+
+		if (!vault || isVaultLocked(vault)) {
+			throw new Error("Vault must be unlocked to refresh entries");
+		}
+		const credential = vault.volatile?.credential;
+		if (!credential) {
+			// Unreachable: `isVaultLocked` already rejects a missing credential.
+			// Kept so the type narrows without a cast.
+			throw new Error("Vault must be unlocked to refresh entries");
+		}
+
+		if (vault.storageType === "cloud") {
+			await this.syncWithCloud();
+			return;
+		}
+
+		try {
+			const vaultContent = await VaultCommands.read(vault.path, credential);
+			this.dispatch(
+				setVaultEntries({
+					vaultId: this.id,
+					entries: vaultContent.entries,
+				}),
+			);
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			throw new Error(`Failed to refresh vault entries: ${errorMessage}`);
+		}
+	}
+
+	/**
 	 * Adds a new entry to the vault at the specified path
 	 * @param path - Array representing the path where to add the entry
 	 * @param newEntry - The entry to add
@@ -269,10 +415,16 @@ export class VaultInstance {
 		const targetEntry = findEntryByPath(newEntries, path);
 
 		if (targetEntry) {
-			// Update the entry properties
-			Object.assign(targetEntry, updates, {
-				updated_at: new Date().toISOString(),
-			});
+			// Update the entry properties. `updated_at` is stamped only on the
+			// entry kinds that carry it on the wire: a group has no timestamp in
+			// the vault format (Rust `Entry::Group`), so stamping one here would
+			// put a field into the persisted file that the type does not have and
+			// the backend would drop on the next read.
+			Object.assign(
+				targetEntry,
+				updates,
+				isGroupEntry(targetEntry) ? {} : { updated_at: new Date().toISOString() },
+			);
 
 			// Dispatch setVaultEntries with the new, updated entries
 			this.dispatch(setVaultEntries({ vaultId: this.id, entries: newEntries }));
@@ -307,9 +459,20 @@ export class VaultInstance {
 	}
 
 	/**
-	 * Deletes an entry at the specified path
+	 * Deletes an entry at the specified path.
+	 *
+	 * Two deletion paths, chosen by the entry kind:
+	 *
+	 * - **passkey** → `passkey_delete` (T13). The backend write-merge preserves
+	 *   every passkey it finds on disk, so a generic full-vault write that omits
+	 *   one does NOT remove it: the explicit command is the only way to delete a
+	 *   passkey. The disk is already updated when the command returns, so this
+	 *   path deliberately returns **without** `_saveVault()`.
+	 * - **data entry / group** → edit the in-memory tree and persist it with
+	 *   `_saveVault()` (unchanged behaviour).
+	 *
 	 * @param path - Array representing the path to the entry to delete
-	 * @throws Error if entry not found or save fails
+	 * @throws Error if entry not found, the vault is locked, or the delete fails
 	 */
 	async deleteEntry(path: string[]): Promise<void> {
 		// Get the current entries from the Redux store using getState()
@@ -326,6 +489,45 @@ export class VaultInstance {
 
 		const entryId = path[path.length - 1];
 		const parentPath = path.slice(0, -1);
+
+		// Passkey branch: resolve the target first, because the deletion has to go
+		// through `passkey_delete` instead of a full-vault write.
+		const target = findEntryByPath(newEntries, path);
+		if (target && isPasskeyEntry(target)) {
+			const credential = vault?.volatile?.credential;
+			if (!vault || !credential) {
+				throw new Error("No credential available for vault");
+			}
+			await PasskeyCommands.delete(vaultRefFor(vault), credential, entryId);
+
+			// The vault file is already updated by the backend; only the in-memory
+			// view has to follow. Returning here (instead of falling through to
+			// `_saveVault`) is what keeps the delete from being a no-op: the
+			// write-merge would re-attach the passkey we just removed.
+			if (parentPath.length === 0) {
+				this.dispatch(
+					setVaultEntries({
+						vaultId: this.id,
+						entries: newEntries.filter((entry) => entry.id !== entryId),
+					}),
+				);
+			} else {
+				const parentEntry = findEntryByPath(newEntries, parentPath);
+				if (parentEntry && isGroupEntry(parentEntry)) {
+					parentEntry.children = parentEntry.children.filter(
+						(child) => child.id !== entryId,
+					);
+					this.dispatch(
+						setVaultEntries({ vaultId: this.id, entries: newEntries }),
+					);
+				} else {
+					throw new Error(
+						`Parent group not found at path: ${parentPath.join("/")}`,
+					);
+				}
+			}
+			return;
+		}
 
 		if (parentPath.length === 0) {
 			// Delete from root level
@@ -402,19 +604,124 @@ export class VaultInstance {
 				);
 			}
 
-			await CloudStorageCommands.writeCloudVault({
+			await this._writeCloudVaultWithPasskeyRecovery({
 				vaultId: cloudFileId,
 				vaultName: vault.name,
 				password: password,
-				vaultContent: vaultContent, // Already in snake_case format
+				// Already in the backend's snake_case `VaultView` shape. Passkey
+				// secrets are absent by design: the backend re-attaches them from
+				// the stored vault by entry id.
+				vaultContent: vaultContent,
 				providerName: vault.providerId,
-			} as any);
+			});
 
 			// Update sync timestamp
 			this.dispatch(syncCloudVault(this.id));
 		} else {
 			// Use local vault commands for local vaults
 			await VaultCommands.write(vault.path, password, vaultContent);
+		}
+	}
+
+	/**
+	 * Pushes a cloud vault, recovering **once** from the fail-closed passkey
+	 * rejection (MAYOR-1, layer 2).
+	 *
+	 * The backend write-merge refuses a view that names a passkey id the stored
+	 * cloud file no longer holds (`restore_passkey`, `merge.rs:231-240`) — the
+	 * signature of a passkey deleted on another device. Layer 1
+	 * ({@link syncWithCloud}) reconciles that away during a sync, but a Data edit
+	 * pushed *before* the first sync after the remote delete, or a delete that
+	 * lands between our cloud read and our push (TOCTOU), still hits it. This
+	 * wrapper turns that one failure into a self-heal:
+	 *
+	 * 1. re-read the cloud file (the authority) — a read failure propagates;
+	 * 2. reconcile the **current** Redux view against it, which drops only
+	 *    cloud-absent passkeys and keeps the user's just-saved Data edits;
+	 * 3. if nothing was dropped the error is not ours: re-throw it (no blind
+	 *    retry);
+	 * 4. otherwise dispatch the reconciled view + the notice and retry the write
+	 *    **directly** (never `_saveVault`, so there is no recursion). A second
+	 *    failure propagates.
+	 *
+	 * Every other failure (auth, quota, IO) is re-thrown untouched, so the D1
+	 * auth routing in `syncWithCloud` keeps working. When the recovery cannot
+	 * apply, the caller gets the actionable i18n error with the original as
+	 * `cause` — never the raw backend message (E13c).
+	 *
+	 * @param request - The exact `writeCloudVault` payload built by `_saveVault`.
+	 * @throws Error the actionable "sync this vault" error, or the original one
+	 */
+	private async _writeCloudVaultWithPasskeyRecovery(request: {
+		vaultId: string;
+		vaultName: string;
+		password: string;
+		vaultContent: { updated_at: string; hmac: string; entries: Entry[] };
+		providerName: string;
+	}): Promise<void> {
+		try {
+			await CloudStorageCommands.writeCloudVault(request);
+			return;
+		} catch (error) {
+			if (!isPasskeyNoKeyMaterialError(error)) {
+				throw error;
+			}
+
+			try {
+				const fresh = await CloudStorageCommands.readCloudVault({
+					vaultId: request.vaultId,
+					password: request.password,
+					providerName: request.providerName,
+				});
+
+				const current =
+					this.getState().vault.vaults.find((v) => v.id === this.id)?.volatile
+						?.entries ?? [];
+				const { entries: reconciled, dropped } = reconcilePasskeysToCloud(
+					current,
+					fresh.entries ?? [],
+				);
+
+				// Nothing to heal ⇒ this is not the cross-device case; a retry
+				// would send the identical payload and fail identically. The user
+				// still gets the actionable message (same situation from their
+				// point of view, just unhealable) instead of the raw JSON blob.
+				if (dropped.length === 0) {
+					throw new PasskeyWriteBlockedError(
+						await passkeyWriteBlockedMessage(),
+						error,
+					);
+				}
+
+				this.dispatch(
+					setVaultEntries({ vaultId: this.id, entries: reconciled }),
+				);
+				this.dispatch(
+					setSyncNotice({
+						vaultId: this.id,
+						passkeys: dropped.map((passkey) => ({
+							id: passkey.id,
+							name: passkey.name,
+						})),
+					}),
+				);
+
+				await CloudStorageCommands.writeCloudVault({
+					...request,
+					vaultContent: { ...request.vaultContent, entries: reconciled },
+				});
+			} catch (recoveryError) {
+				// Already mapped above (the unhealable branch): do not re-wrap.
+				if (recoveryError instanceof PasskeyWriteBlockedError) {
+					throw recoveryError;
+				}
+				// The original fail-closed error is the interesting one when the
+				// recovery could not apply; keep it as the cause either way.
+				throw new PasskeyWriteBlockedError(
+					await passkeyWriteBlockedMessage(),
+					recoveryError === error ? error : recoveryError,
+				);
+			}
 		}
 	}
 
@@ -453,13 +760,55 @@ export class VaultInstance {
 				providerName: vault.providerId,
 			});
 
-			// Update local entries with cloud version
-			this.dispatch(
-				setVaultEntries({ vaultId: this.id, entries: vaultContent.entries }),
+			// Union merge instead of pull-only last-write-wins: entries created
+			// locally since the last push survive the sync. Same-id data/passkey
+			// conflicts go to the newest `updated_at`; same-id group conflicts are
+			// cloud-authoritative for the group's own metadata (groups carry no
+			// timestamp in the vault format) while their children are unioned.
+			// See `services/vaultMerge.ts` for the rules.
+			const merged = mergeVaultEntries(
+				vault.volatile.entries ?? [],
+				vaultContent.entries ?? [],
 			);
 
-			// Update sync timestamp
-			this.dispatch(syncCloudVault(this.id));
+			// Layer 1 of the MAYOR-1 fix: the cloud file is the authority on which
+			// passkeys exist (key material never crosses IPC, and the backend
+			// write-merge fails closed on an id the file lacks). The union merge
+			// deliberately keeps local-only ids, so a passkey deleted on another
+			// device would otherwise survive here and make the push below fail —
+			// wedging every write on this device. Reconcile against the same fresh
+			// read before pushing: only cloud-absent passkey views are dropped
+			// (Data entries and groups are untouched), and the user is told.
+			const { entries: reconciled, dropped } = reconcilePasskeysToCloud(
+				merged,
+				vaultContent.entries ?? [],
+			);
+			this.dispatch(setVaultEntries({ vaultId: this.id, entries: reconciled }));
+			if (dropped.length > 0) {
+				this.dispatch(
+					setSyncNotice({
+						vaultId: this.id,
+						passkeys: dropped.map((passkey) => ({
+							id: passkey.id,
+							name: passkey.name,
+						})),
+					}),
+				);
+			} else {
+				// Symmetric with layer 2: a drop-free sync dismisses a stale
+				// banner instead of leaving it up until the user closes it.
+				this.dispatch(clearSyncNotice());
+			}
+
+			// Push the merged view back so the cloud file converges with this
+			// device. The backend write-merge re-attaches passkey secrets from the
+			// stored cloud vault by entry id; the view carries no key material.
+			// If this fails the error propagates: Redux keeps the merged entries
+			// and the next sync retries the push.
+			//
+			// `_saveVault` also dispatches `syncCloudVault` (the sync timestamp),
+			// so it must not be dispatched again here.
+			await this._saveVault();
 		} catch (error) {
 			const errorMessage =
 				(error as any)?.message ||
@@ -503,16 +852,8 @@ export class VaultInstance {
 		}
 
 		const oldPassword = vault.volatile.credential;
-		const entries = vault.volatile.entries ?? [];
 
 		try {
-			// Create the vault content with current entries
-			const vaultContent = {
-				updated_at: new Date().toISOString(),
-				hmac: "",
-				entries: entries,
-			};
-
 			if (vault.storageType === "cloud") {
 				if (!vault.providerId) {
 					throw new Error(
@@ -533,8 +874,16 @@ export class VaultInstance {
 				// Update sync timestamp
 				this.dispatch(syncCloudVault(this.id));
 			} else {
-				// For local vaults, use the regular write command with new password
-				await VaultCommands.write(vault.path, newPassword, vaultContent);
+				// For local vaults, re-wrap the master key under the new password.
+				// `write_vault` cannot do this: it derives the master key from the
+				// supplied password, which fails against the old-password-wrapped
+				// credentials (and would silently create a fresh vault if the file
+				// were missing).
+				await VaultCommands.changePassword(
+					vault.path,
+					oldPassword,
+					newPassword,
+				);
 			}
 
 			// Update the stored credential with the new password
@@ -655,6 +1004,24 @@ export class VaultManager {
 	initialize(dispatch: AppDispatch, getState: () => RootState): void {
 		this._dispatch = dispatch;
 		this._getState = getState;
+	}
+
+	/**
+	 * Reads the current Redux state through the manager's store binding.
+	 *
+	 * The single accessor for services that need vault records but are not a
+	 * `VaultInstance` (e.g. `services/passkeyCeremony.ts`, which resolves the
+	 * session credential for a passkey command). It throws the same error
+	 * `getInstance` throws when the manager was never initialized, so callers
+	 * have one failure mode to handle.
+	 *
+	 * @throws Error if the manager has not been initialized.
+	 */
+	getState(): RootState {
+		if (!this._getState) {
+			throw new Error("VaultManager not initialized. Call initialize() first.");
+		}
+		return this._getState();
 	}
 
 	/**

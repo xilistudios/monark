@@ -33,7 +33,8 @@ Monark operates on a strict zero-knowledge security model. All cryptographic pro
 ## 🚀 Key Features
 
 *   **Offline-First & Local-First:** Complete data ownership. Your vault is stored locally and encrypted at rest.
-*   **Cross-Platform Architecture:** Built on Tauri v2 to support Windows, macOS, Linux, Android, and iOS natively from a single codebase.
+*   **Passkeys (F0 + F1):** Store and exchange passkeys (CXF); system/browser autofill integration planned. Monark acts as a software WebAuthn authenticator — ES256 discoverable credentials, created and used inside the app, with the private keys sealed in the vault like any other secret. **F1 adds CXF import/export**, so passkeys can be migrated in and out of Monark as a `.cxf.json` document: import brings in passkey credentials from a file another manager exported, and export writes your passkeys to a file **after an explicit unencrypted-file warning** (the exported file is not encrypted). Support is a **subset of the CXF 1.0 review draft (2025-03-13)**: passkey credentials with ES256/P-256 keys only — other credential types and other key algorithms are reported per credential, not converted, and there is no CXP/HPKE encrypted exchange. See [Passkeys](docs/passkeys.md) for the exact scope, the per-credential rules and its documented limitations.
+*   **Cross-Platform Architecture:** Built on Tauri v2 to support Windows, macOS, Linux, and Android natively from a single codebase. **iOS: not yet available** (there is no `src-tauri/gen/apple` target yet).
 *   **Modern Frontend Stack:** Powered by React, TypeScript, TanStack Router for type-safe routing, and Tailwind CSS v4 / DaisyUI for highly responsive styling.
 *   **Rigorous Verification:** Robust type safety across the Rust-TypeScript boundary, combined with comprehensive test coverage.
 
@@ -44,10 +45,10 @@ Monark operates on a strict zero-knowledge security model. All cryptographic pro
 Detailed specifications and architectural guides are available in the `docs` directory:
 
 *   [Cryptographic Architecture](docs/crypto-architecture.md) — Mathematical parameters, key derivation, and cipher implementations.
-*   [Vault Storage Format](docs/vault-format.md) — Disk serialization formats, HMAC verification, and Rust-to-TypeScript type mappings.
+*   [Vault Storage Format](docs/vault-format.md) — Disk serialization formats, format versions, and Rust-to-TypeScript type mappings.
+*   [Passkeys](docs/passkeys.md) — WebAuthn ceremony model, disk vs IPC types, user-verification limits, sync semantics, the F0 threat model, and the CXF import/export subset (§11).
 *   [Cloud Storage & Sync](docs/cloud-storage-architecture.md) — Design documents for remote backup and synchronization.
 *   [Testing & Quality Assurance](docs/testing-cloud-storage.md) — Integration testing strategies for the storage layer.
-*   [Security Audit Results](docs/security-audit.md) — Vulnerability checklist and verification of crypto implementations.
 *   [State Management & Store](docs/redux-state.md) — Redux Toolkit slice structure and application state flow.
 *   [Internationalization (i18n)](docs/i18n-system.md) — Localization framework and translation setup.
 *   [Accessibility Guide](docs/accessibility-guide.md) — WCAG compliance guidelines and focus management patterns.

@@ -47,8 +47,6 @@ export const AddGroupModal = () => {
         entry_type: 'group',
         name: groupName.trim(),
         data_type: 'group',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         children: [],
       };
 

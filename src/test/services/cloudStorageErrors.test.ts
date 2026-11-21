@@ -18,11 +18,15 @@
 
 import { describe, expect, it } from "vitest";
 import { CloudStorageErrorType } from "../../interfaces/cloud-storage.interface";
+import { CloudStorageCommands } from "../../services/cloudStorage";
 import {
 	classifyCloudErrorType,
 	classifyCloudFailure,
+	extractCommandErrorVariant,
 	isAccessTokenExpired,
 	isAuthFailure,
+	isPasskeyNoKeyMaterialError,
+	PASSKEY_NO_KEY_MATERIAL_SIGNATURE,
 } from "../../services/cloudStorageErrors";
 
 /**
@@ -386,5 +390,221 @@ describe("isAuthFailure", () => {
 		["a 403 status", { status: 403 }, false],
 	] as const)("raw error: %s ⇒ %s", (_label, error, expected) => {
 		expect(isAuthFailure(error)).toBe(expected);
+	});
+});
+/**
+ * T7 — the fail-closed passkey classifier (MAYOR-1).
+ *
+ * The backend rejects a vault view that names a passkey id the stored file does
+ * not contain (`restore_passkey`, `src-tauri/src/vault/merge.rs:231-240`). The
+ * front end keys its one-shot self-heal on that exact failure, so the match has
+ * to be **precise**: matching an auth/quota/IO failure would silently retry a
+ * write that can never succeed, and missing the real one would leave the wedge
+ * in place.
+ *
+ * **The wire is the serde enum, not the `Display` string.** `CommandError`
+ * derives `Serialize` with no serde attribute (`commands/errors.rs:8-32`), so
+ * tauri sends `{ Validation: "Passkey entry has no stored key material; create
+ * or import it first" }`; `"Validation Error: {0}"` is the `#[error(...)]`
+ * `Display` text and never crosses IPC. `handleError` then wraps that object
+ * into a `CloudStorageError` whose `message` is its pretty-printed JSON. The
+ * suite below therefore pins the **real envelope** (asserted byte-for-byte
+ * against the `merge.rs:237` producer text) and runs it through the **real**
+ * `handleError`; the `Display` form is kept as a documented fallback only.
+ *
+ * Two-sided pin: the envelope literal below is the exact producer text of
+ * `restore_passkey`, which the Rust side pins in `vault/merge.rs` and
+ * `vault/tests/cloud_merge.rs`. Change all three together.
+ */
+describe("isPasskeyNoKeyMaterialError", () => {
+	/** The exact `restore_passkey` text (`src-tauri/src/vault/merge.rs:237`). */
+	const FAIL_CLOSED_TEXT =
+		"Passkey entry has no stored key material; create or import it first";
+
+	/**
+	 * The exact IPC wire value: the externally-tagged serde enum of
+	 * `CommandError::Validation(String)`.
+	 */
+	const FAIL_CLOSED_ENVELOPE = { Validation: FAIL_CLOSED_TEXT } as const;
+
+	/**
+	 * The legacy `Display` form (`#[error("Validation Error: {0}")]`). It is NOT
+	 * what tauri sends; it is only accepted as a fallback.
+	 */
+	const FAIL_CLOSED_MESSAGE = `Validation Error: ${FAIL_CLOSED_TEXT}`;
+
+	/** Wraps a raw wire value through the REAL `CloudStorageCommands.handleError`. */
+	const wrapThroughRealHandleError = (raw: unknown) => {
+		const handleError = (
+			CloudStorageCommands as unknown as {
+				handleError: (error: unknown, fallback: string) => unknown;
+			}
+		).handleError;
+		return handleError(raw, "Failed to write cloud vault");
+	};
+
+	it("pins the backend signature constant", () => {
+		expect(PASSKEY_NO_KEY_MATERIAL_SIGNATURE).toBe("no stored key material");
+		expect(FAIL_CLOSED_TEXT).toContain(PASSKEY_NO_KEY_MATERIAL_SIGNATURE);
+	});
+
+	it("pins the full real wire envelope (cross-language pin)", () => {
+		// The exact producer text of `restore_passkey` (merge.rs:237) inside the
+		// exact serde envelope `CommandError::Validation(String)` produces.
+		expect(FAIL_CLOSED_ENVELOPE).toEqual({
+			Validation:
+				"Passkey entry has no stored key material; create or import it first",
+		});
+		// ...and the classifier reads THAT shape, not the Display string.
+		expect(isPasskeyNoKeyMaterialError(FAIL_CLOSED_ENVELOPE)).toBe(true);
+	});
+
+	it("matches the raw wire envelope", () => {
+		expect(isPasskeyNoKeyMaterialError(FAIL_CLOSED_ENVELOPE)).toBe(true);
+	});
+
+	it("matches the CloudStorageError the real handleError builds from the envelope", () => {
+		const wrapped = wrapThroughRealHandleError(FAIL_CLOSED_ENVELOPE) as {
+			message: string;
+		};
+		// Anti-vacuity: the wrapper really does carry the pretty-printed enum and
+		// NOT the Display string — the exact shape that used to defeat the
+		// classifier.
+		expect(wrapped.message).toContain('"Validation"');
+		expect(wrapped.message).not.toContain("Validation Error:");
+		expect(isPasskeyNoKeyMaterialError(wrapped)).toBe(true);
+	});
+
+	it("matches the legacy Display string form (fallback)", () => {
+		expect(isPasskeyNoKeyMaterialError(new Error(FAIL_CLOSED_MESSAGE))).toBe(
+			true,
+		);
+	});
+
+	it("matches when the failure is a plain string", () => {
+		expect(isPasskeyNoKeyMaterialError(FAIL_CLOSED_MESSAGE)).toBe(true);
+	});
+
+	it("matches a message-shaped object", () => {
+		expect(isPasskeyNoKeyMaterialError({ message: FAIL_CLOSED_MESSAGE })).toBe(
+			true,
+		);
+	});
+
+	it.each([
+		["an invalid-password rejection", "Invalid Password or Corrupted Vault"],
+		["an IO failure", "Failed to update vault file"],
+		["a quota failure", "Storage quota exceeded. Please free up space."],
+		["an auth failure", "authentication failed: invalid_grant"],
+		[
+			"a Data-only Validation error",
+			"Validation Error: Duplicate entry id in vault content",
+		],
+		// Both parts of the match are load-bearing: the phrase alone (without the
+		// Validation variant) is not the fail-closed rejection.
+		["the phrase without the Validation variant", "no stored key material"],
+		["an empty message", ""],
+	] as const)("rejects %s", (_label, message) => {
+		expect(isPasskeyNoKeyMaterialError(new Error(message))).toBe(false);
+	});
+
+	it.each([
+		// Real wire envelopes of the OTHER variants must never match, even when
+		// the payload quotes the signature (an auth/IO/quota failure is not ours).
+		["an Authentication envelope", { Authentication: null }],
+		[
+			"an Io envelope quoting the signature",
+			{ Io: `Failed to read vault file: ${FAIL_CLOSED_TEXT}` },
+		],
+		[
+			"a Data-only Validation envelope",
+			{ Validation: "Duplicate entry id in vault content" },
+		],
+		[
+			"a Validation envelope without the signature",
+			{ Validation: "Only ES256 is supported" },
+		],
+		// A two-key object is not a serde enum: refuse to guess.
+		[
+			"an ambiguous two-variant envelope",
+			{ Validation: FAIL_CLOSED_TEXT, Io: "boom" },
+		],
+	] as const)("rejects %s", (_label, envelope) => {
+		expect(isPasskeyNoKeyMaterialError(envelope)).toBe(false);
+		// ...and the same, once wrapped by the real handleError.
+		expect(
+			isPasskeyNoKeyMaterialError(wrapThroughRealHandleError(envelope)),
+		).toBe(false);
+	});
+
+	it("rejects a non-error value", () => {
+		expect(isPasskeyNoKeyMaterialError(undefined)).toBe(false);
+		expect(isPasskeyNoKeyMaterialError(null)).toBe(false);
+		expect(isPasskeyNoKeyMaterialError(42)).toBe(false);
+	});
+});
+
+/**
+ * `extractCommandErrorVariant` — the structural reader of the serde envelope.
+ *
+ * It is the load-bearing half of `isPasskeyNoKeyMaterialError`: the variant must
+ * come from the real wire shape (`{"Validation": …}`), from the
+ * `CloudStorageError` the real `handleError` builds out of it, or from the
+ * legacy `Display` string — and never be guessed.
+ */
+describe("extractCommandErrorVariant", () => {
+	const TEXT =
+		"Passkey entry has no stored key material; create or import it first";
+
+	it("reads the raw serde envelope", () => {
+		expect(extractCommandErrorVariant({ Validation: TEXT })).toBe("Validation");
+		expect(extractCommandErrorVariant({ Authentication: null })).toBe(
+			"Authentication",
+		);
+		expect(
+			extractCommandErrorVariant({ Io: "Failed to read vault file" }),
+		).toBe("Io");
+	});
+
+	it("reads the pretty-printed envelope handleError wraps into .message", () => {
+		const wrapped = (
+			CloudStorageCommands as unknown as {
+				handleError: (error: unknown, fallback: string) => unknown;
+			}
+		).handleError({ Validation: TEXT }, "Failed to write cloud vault") as {
+			message: string;
+			originalError: string;
+		};
+
+		expect(wrapped.message).toBe(JSON.stringify({ Validation: TEXT }, null, 2));
+		expect(extractCommandErrorVariant(wrapped)).toBe("Validation");
+	});
+
+	it("reads the legacy Display form", () => {
+		expect(extractCommandErrorVariant(`Validation Error: ${TEXT}`)).toBe(
+			"Validation",
+		);
+		expect(
+			extractCommandErrorVariant("Invalid Password or Corrupted Vault"),
+		).toBe("Authentication");
+		expect(
+			extractCommandErrorVariant("IO Error: Failed to read vault file"),
+		).toBe("Io");
+	});
+
+	it("returns null for anything it cannot recognise", () => {
+		expect(extractCommandErrorVariant(undefined)).toBeNull();
+		expect(extractCommandErrorVariant(null)).toBeNull();
+		expect(extractCommandErrorVariant(42)).toBeNull();
+		expect(extractCommandErrorVariant("")).toBeNull();
+		expect(extractCommandErrorVariant("boom")).toBeNull();
+		// An unknown key is not a CommandError variant.
+		expect(extractCommandErrorVariant({ Bogus: TEXT })).toBeNull();
+		// Two known variants in one object is not a serde enum: refuse to guess.
+		expect(
+			extractCommandErrorVariant({ Validation: TEXT, Io: "boom" }),
+		).toBeNull();
+		// A message that is not JSON must not throw.
+		expect(extractCommandErrorVariant({ message: "{not json" })).toBeNull();
 	});
 });
